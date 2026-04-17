@@ -30,15 +30,13 @@ def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_pitcher_team_lookup(sc: pd.DataFrame) -> pd.DataFrame:
-    """
-    Infer pitcher team and opponent for each pitcher-game from pitch-level rows.
-    Requires 'inning_topbot' in the Statcast dataframe.
-    """
-    temp = sc.copy()
+    temp = sc.reset_index(drop=True).copy()
 
-    temp["batting_team"] = temp["home_team"]
-    temp.loc[temp["inning_topbot"] == "Top", "batting_team"] = temp["away_team"]
-    temp.loc[temp["inning_topbot"] == "Bot", "batting_team"] = temp["home_team"]
+    temp["batting_team"] = np.where(
+        temp["inning_topbot"] == "Top",
+        temp["away_team"],
+        temp["home_team"],
+    )
 
     temp["pitching_team"] = np.where(
         temp["batting_team"] == temp["home_team"],
@@ -74,14 +72,13 @@ def add_pitcher_team_info(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd.D
 
 
 def build_team_offense_k_table(sc: pd.DataFrame) -> pd.DataFrame:
-    """
-    Build team offensive strikeout tendencies by game, then rolling opponent features.
-    """
-    temp = sc.copy()
+    temp = sc.reset_index(drop=True).copy()
 
-    temp["batting_team"] = temp["home_team"]
-    temp.loc[temp["inning_topbot"] == "Top", "batting_team"] = temp["away_team"]
-    temp.loc[temp["inning_topbot"] == "Bot", "batting_team"] = temp["home_team"]
+    temp["batting_team"] = np.where(
+        temp["inning_topbot"] == "Top",
+        temp["away_team"],
+        temp["home_team"],
+    )
 
     team_offense = (
         temp.groupby(["game_date", "game_pk", "batting_team"], as_index=False)

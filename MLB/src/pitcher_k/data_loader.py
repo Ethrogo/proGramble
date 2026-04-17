@@ -2,7 +2,7 @@ from pybaseball import statcast
 import pybaseball
 import pandas as pd
 
-pybaseball.cache.enable()
+
 
 STATCAST_COLUMNS = [
     "game_date", "game_pk", "pitcher", "player_name", "batter",
@@ -19,4 +19,6 @@ def load_statcast_data(start_dt: str, end_dt: str) -> pd.DataFrame:
     """
     sc = statcast(start_dt=start_dt, end_dt=end_dt)
     sc = sc[STATCAST_COLUMNS].copy()
+    print("Raw statcast columns:")
+    print(sc.columns.tolist())
     return sc
