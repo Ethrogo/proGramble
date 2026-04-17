@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import unicodedata
 
 
 def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
@@ -208,69 +209,48 @@ def _safe_div(numerator: float, denominator: float) -> float:
         return np.nan
     return numerator / denominator
 
+
 def build_tomorrow_features(
     slate_df: pd.DataFrame,
     pitcher_games: pd.DataFrame,
+    team_context: pd.DataFrame | None = None,
     min_career_starts: int = 5,
 ) -> pd.DataFrame:
-    """
-    Build model-ready features for tomorrow's slate using historical pitcher-game data.
-
-    Parameters
-    ----------
-    slate_df : pd.DataFrame
-        Tomorrow slate with one row per probable starter.
-        Expected columns:
-            game_date, game_pk, pitcher, player_name, team, opponent,
-            home_team, away_team, is_home, p_throws
-
-    pitcher_games : pd.DataFrame
-        Historical pitcher-game level dataframe.
-        Expected columns:
-            game_date, game_pk, pitcher, player_name, pitches, strikeouts,
-            whiffs, avg_velo, avg_spin, batters_faced, home_team, away_team,
-            p_throws, whiff_per_pitch
-
-    min_career_starts : int
-        Minimum number of prior starts required to keep a pitcher.
-
-    Returns
-    -------
-    pd.DataFrame
-        One row per tomorrow pitcher with engineered historical features.
-    """
-
     slate_df = slate_df.copy()
     pitcher_games = pitcher_games.copy()
 
     slate_df["game_date"] = pd.to_datetime(slate_df["game_date"])
     pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
 
-    # Sort once so rolling windows are correct
-    pitcher_games = pitcher_games.sort_values(["player_name", "game_date", "game_pk"])
+    slate_df["player_name_norm"] = slate_df["player_name"].apply(normalize_player_name)
+    pitcher_games["player_name_norm"] = pitcher_games["player_name"].apply(normalize_player_name)
+
+    pitcher_games = pitcher_games.sort_values(["player_name_norm", "game_date", "game_pk"])
 
     feature_rows = []
 
     for _, row in slate_df.iterrows():
         game_date = row["game_date"]
         pitcher_id = row.get("pitcher", np.nan)
-        player_name = row["player_name"]
+        player_name_norm = row["player_name_norm"]
 
-        # Prefer pitcher ID if available, otherwise fall back to player_name
+        hist = pd.DataFrame()
+
+        # only use ID if it actually matches something historical
         if pd.notna(pitcher_id) and str(pitcher_id).strip() != "":
             hist = pitcher_games[
-                (pitcher_games["pitcher"] == pitcher_id)
-                & (pitcher_games["game_date"] < game_date)
+            (pitcher_games["pitcher"] == pitcher_id)
+            & (pitcher_games["game_date"] < game_date)
             ].copy()
-        else:
+
+        # fallback to normalized name if ID match is empty
+        if hist.empty:
             hist = pitcher_games[
-                (pitcher_games["player_name"] == player_name)
-                & (pitcher_games["game_date"] < game_date)
-            ].copy()
+            (pitcher_games["player_name_norm"] == player_name_norm)
+            & (pitcher_games["game_date"] < game_date)].copy()
 
         hist = hist.sort_values(["game_date", "game_pk"])
 
-        # Skip rookies / tiny samples
         if len(hist) < min_career_starts:
             continue
 
@@ -278,96 +258,128 @@ def build_tomorrow_features(
         last5 = hist.tail(5)
         last10 = hist.tail(10)
 
-        out = row.to_dict()
+        feature_row = row.to_dict()
 
-        # Core counts
-        out["career_starts"] = len(hist)
-        out["starts_last3_available"] = len(last3)
-        out["starts_last5_available"] = len(last5)
-        out["starts_last10_available"] = len(last10)
+        feature_row["career_starts"] = len(hist)
+        feature_row["starts_last3_available"] = len(last3)
+        feature_row["starts_last5_available"] = len(last5)
+        feature_row["starts_last10_available"] = len(last10)
 
-        # Season / career-to-date features
-        out["strikeouts_per_game"] = hist["strikeouts"].mean()
-        out["pitches_per_game"] = hist["pitches"].mean()
-        out["batters_faced_per_game"] = hist["batters_faced"].mean()
-        out["whiffs_per_game"] = hist["whiffs"].mean()
+        feature_row["strikeouts_per_game"] = hist["strikeouts"].mean()
+        feature_row["pitches_per_game"] = hist["pitches"].mean()
+        feature_row["batters_faced_per_game"] = hist["batters_faced"].mean()
+        feature_row["whiffs_per_game"] = hist["whiffs"].mean()
 
-        out["k_per_pitch"] = _safe_div(hist["strikeouts"].sum(), hist["pitches"].sum())
-        out["k_rate"] = _safe_div(hist["strikeouts"].sum(), hist["batters_faced"].sum())
-        out["whiff_per_pitch_season"] = _safe_div(hist["whiffs"].sum(), hist["pitches"].sum())
+        feature_row["k_per_pitch"] = _safe_div(hist["strikeouts"].sum(), hist["pitches"].sum())
+        feature_row["k_rate"] = _safe_div(hist["strikeouts"].sum(), hist["batters_faced"].sum())
+        feature_row["whiff_per_pitch_season"] = _safe_div(hist["whiffs"].sum(), hist["pitches"].sum())
 
-        out["avg_velo_season"] = hist["avg_velo"].mean()
-        out["avg_spin_season"] = hist["avg_spin"].mean()
+        feature_row["avg_velo_season"] = hist["avg_velo"].mean()
+        feature_row["avg_spin_season"] = hist["avg_spin"].mean()
 
-        # Last 3
-        out["strikeouts_last3"] = last3["strikeouts"].mean()
-        out["pitches_last3"] = last3["pitches"].mean()
-        out["batters_faced_last3"] = last3["batters_faced"].mean()
-        out["whiffs_last3"] = last3["whiffs"].mean()
+        feature_row["strikeouts_last3"] = last3["strikeouts"].mean()
+        feature_row["pitches_last3"] = last3["pitches"].mean()
+        feature_row["batters_faced_last3"] = last3["batters_faced"].mean()
+        feature_row["whiffs_last3"] = last3["whiffs"].mean()
 
-        out["k_per_pitch_last3"] = _safe_div(last3["strikeouts"].sum(), last3["pitches"].sum())
-        out["k_rate_last3"] = _safe_div(last3["strikeouts"].sum(), last3["batters_faced"].sum())
-        out["whiff_per_pitch_last3"] = _safe_div(last3["whiffs"].sum(), last3["pitches"].sum())
+        feature_row["k_per_pitch_last3"] = _safe_div(last3["strikeouts"].sum(), last3["pitches"].sum())
+        feature_row["k_rate_last3"] = _safe_div(last3["strikeouts"].sum(), last3["batters_faced"].sum())
+        feature_row["whiff_per_pitch_last3"] = _safe_div(last3["whiffs"].sum(), last3["pitches"].sum())
 
-        out["avg_velo_last3"] = last3["avg_velo"].mean()
-        out["avg_spin_last3"] = last3["avg_spin"].mean()
+        feature_row["avg_velo_last3"] = last3["avg_velo"].mean()
+        feature_row["avg_spin_last3"] = last3["avg_spin"].mean()
 
-        # Last 5
-        out["strikeouts_last5"] = last5["strikeouts"].mean()
-        out["pitches_last5"] = last5["pitches"].mean()
-        out["batters_faced_last5"] = last5["batters_faced"].mean()
-        out["whiffs_last5"] = last5["whiffs"].mean()
+        feature_row["strikeouts_last5"] = last5["strikeouts"].mean()
+        feature_row["pitches_last5"] = last5["pitches"].mean()
+        feature_row["batters_faced_last5"] = last5["batters_faced"].mean()
+        feature_row["whiffs_last5"] = last5["whiffs"].mean()
 
-        out["k_per_pitch_last5"] = _safe_div(last5["strikeouts"].sum(), last5["pitches"].sum())
-        out["k_rate_last5"] = _safe_div(last5["strikeouts"].sum(), last5["batters_faced"].sum())
-        out["whiff_per_pitch_last5"] = _safe_div(last5["whiffs"].sum(), last5["pitches"].sum())
+        feature_row["k_per_pitch_last5"] = _safe_div(last5["strikeouts"].sum(), last5["pitches"].sum())
+        feature_row["k_rate_last5"] = _safe_div(last5["strikeouts"].sum(), last5["batters_faced"].sum())
+        feature_row["whiff_per_pitch_last5"] = _safe_div(last5["whiffs"].sum(), last5["pitches"].sum())
 
-        out["avg_velo_last5"] = last5["avg_velo"].mean()
-        out["avg_spin_last5"] = last5["avg_spin"].mean()
+        feature_row["avg_velo_last5"] = last5["avg_velo"].mean()
+        feature_row["avg_spin_last5"] = last5["avg_spin"].mean()
 
-        # Last 10
-        out["strikeouts_last10"] = last10["strikeouts"].mean()
-        out["pitches_last10"] = last10["pitches"].mean()
-        out["batters_faced_last10"] = last10["batters_faced"].mean()
-        out["whiffs_last10"] = last10["whiffs"].mean()
+        feature_row["strikeouts_last10"] = last10["strikeouts"].mean()
+        feature_row["pitches_last10"] = last10["pitches"].mean()
+        feature_row["batters_faced_last10"] = last10["batters_faced"].mean()
+        feature_row["whiffs_last10"] = last10["whiffs"].mean()
 
-        out["k_per_pitch_last10"] = _safe_div(last10["strikeouts"].sum(), last10["pitches"].sum())
-        out["k_rate_last10"] = _safe_div(last10["strikeouts"].sum(), last10["batters_faced"].sum())
-        out["whiff_per_pitch_last10"] = _safe_div(last10["whiffs"].sum(), last10["pitches"].sum())
+        feature_row["k_per_pitch_last10"] = _safe_div(last10["strikeouts"].sum(), last10["pitches"].sum())
+        feature_row["k_rate_last10"] = _safe_div(last10["strikeouts"].sum(), last10["batters_faced"].sum())
+        feature_row["whiff_per_pitch_last10"] = _safe_div(last10["whiffs"].sum(), last10["pitches"].sum())
 
-        out["avg_velo_last10"] = last10["avg_velo"].mean()
-        out["avg_spin_last10"] = last10["avg_spin"].mean()
+        feature_row["avg_velo_last10"] = last10["avg_velo"].mean()
+        feature_row["avg_spin_last10"] = last10["avg_spin"].mean()
 
-        # Trend features
-        out["k_trend_last3_vs_last10"] = out["strikeouts_last3"] - out["strikeouts_last10"]
-        out["velo_trend_last3_vs_last10"] = out["avg_velo_last3"] - out["avg_velo_last10"]
-        out["whiff_trend_last3_vs_last10"] = out["whiff_per_pitch_last3"] - out["whiff_per_pitch_last10"]
+        feature_row["k_trend_last3_vs_last10"] = (
+            feature_row["strikeouts_last3"] - feature_row["strikeouts_last10"]
+        )
+        feature_row["velo_trend_last3_vs_last10"] = (
+            feature_row["avg_velo_last3"] - feature_row["avg_velo_last10"]
+        )
+        feature_row["whiff_trend_last3_vs_last10"] = (
+            feature_row["whiff_per_pitch_last3"] - feature_row["whiff_per_pitch_last10"]
+        )
 
-        # Rest days
         last_game_date = hist["game_date"].max()
-        out["days_rest"] = (game_date - last_game_date).days if pd.notna(last_game_date) else np.nan
+        feature_row["days_rest"] = (
+            (game_date - last_game_date).days if pd.notna(last_game_date) else np.nan
+        )
 
-        # Home/away carry-through
-        out["is_home"] = int(row["is_home"])
+        feature_row["is_home"] = int(row["is_home"])
 
-        feature_rows.append(out)
+        # default opponent context as missing
+        feature_row["opp_strikeouts_per_game_last10"] = np.nan
+        feature_row["opp_k_rate_last10"] = np.nan
+
+        feature_rows.append(feature_row)
 
     features_df = pd.DataFrame(feature_rows)
 
     if features_df.empty:
         return features_df
 
-    # Optional cleanup / ordering
+    if team_context is not None:
+        tc = team_context.copy()
+        tc = tc.rename(columns={"opponent_team": "opponent"})
+        features_df = features_df.drop(
+            columns=["opp_strikeouts_per_game_last10", "opp_k_rate_last10"],
+            errors="ignore",
+        ).merge(
+            tc[["opponent", "opp_strikeouts_per_game_last10", "opp_k_rate_last10"]],
+            on="opponent",
+            how="left",
+        )
+
     base_cols = [
         "game_date", "game_pk", "pitcher", "player_name",
         "team", "opponent", "home_team", "away_team",
         "is_home", "p_throws"
     ]
-
     feature_cols = [c for c in features_df.columns if c not in base_cols]
     features_df = features_df[base_cols + feature_cols]
 
     return features_df
+
+
+def normalize_player_name(name: str) -> str:
+    if pd.isna(name):
+        return ""
+
+    name = str(name).strip()
+
+    if "," in name:
+        last, first = [part.strip() for part in name.split(",", 1)]
+        name = f"{first} {last}"
+
+    name = unicodedata.normalize("NFKD", name)
+    name = "".join(ch for ch in name if not unicodedata.combining(ch))
+
+    name = " ".join(name.split()).lower()
+    return name
+
 
 
 def build_model_df(pitcher_games: pd.DataFrame) -> pd.DataFrame:
@@ -392,3 +404,44 @@ def build_model_df(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     model_df = model_df.sort_values("game_date")
 
     return model_df
+
+def build_team_context(pitcher_games: pd.DataFrame, as_of_date: str | pd.Timestamp) -> pd.DataFrame:
+    """
+    Build latest available opponent context for each team prior to as_of_date.
+
+    Expects pitcher_games to already contain:
+        opponent_team,
+        opp_strikeouts_per_game_last10,
+        opp_k_rate_last10
+    """
+    df = pitcher_games.copy()
+    df["game_date"] = pd.to_datetime(df["game_date"])
+    as_of_date = pd.to_datetime(as_of_date)
+
+    required = [
+        "game_date",
+        "opponent_team",
+        "opp_strikeouts_per_game_last10",
+        "opp_k_rate_last10",
+    ]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"pitcher_games is missing required opponent context columns: {missing}")
+
+    df = df[df["game_date"] < as_of_date].copy()
+    df = df.sort_values(["opponent_team", "game_date", "game_pk"])
+
+    team_context = (
+        df.groupby("opponent_team", as_index=False)
+        .tail(1)[
+            [
+                "opponent_team",
+                "opp_strikeouts_per_game_last10",
+                "opp_k_rate_last10",
+            ]
+        ]
+        .drop_duplicates(subset=["opponent_team"])
+        .reset_index(drop=True)
+    )
+
+    return team_context
