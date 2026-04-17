@@ -10,6 +10,9 @@ BASE_FEATURES = [
     "avg_spin_last3",
     "k_per_pitch_last10",
     "k_rate_last10",
+    "opp_strikeouts_per_game_last10",
+    "opp_k_rate_last10",
+
 ]
 
 TARGET_COL = "strikeouts"

@@ -8,7 +8,8 @@ STATCAST_COLUMNS = [
     "game_date", "game_pk", "pitcher", "player_name", "batter",
     "pitch_type", "release_speed", "release_spin_rate",
     "description", "events", "inning", "outs_when_up",
-    "home_team", "away_team", "stand", "p_throws"
+    "home_team", "away_team", "stand", "p_throws",
+    "inning_topbot",
 ]
 
 
