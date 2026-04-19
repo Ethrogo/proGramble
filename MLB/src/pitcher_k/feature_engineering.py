@@ -28,28 +28,33 @@ def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_pitcher_team_lookup(sc: pd.DataFrame) -> pd.DataFrame:
-    temp = sc.reset_index(drop=True).copy()
+    df = sc[[
+        "game_date",
+        "game_pk",
+        "pitcher",
+        "home_team",
+        "away_team",
+        "inning_topbot",
+    ]].copy()
 
-    temp["batting_team"] = np.where(
-        temp["inning_topbot"] == "Top",
-        temp["away_team"],
-        temp["home_team"],
+    # infer pitching team
+    df["pitching_team"] = df.apply(
+        lambda row: row["home_team"] if row["inning_topbot"] == "Top" else row["away_team"],
+        axis=1
     )
 
-    temp["pitching_team"] = np.where(
-        temp["batting_team"] == temp["home_team"],
-        temp["away_team"],
-        temp["home_team"],
+    df["opponent_team"] = df.apply(
+        lambda row: row["away_team"] if row["pitching_team"] == row["home_team"] else row["home_team"],
+        axis=1
     )
 
-    team_lookup = (
-        temp.groupby(["game_date", "game_pk", "pitcher"], as_index=False)
-        .agg(
-            pitcher_team=("pitching_team", "first"),
-            opponent_team=("batting_team", "first"),
-            p_throws=("p_throws", "first"),
-        )
-    )
+    team_lookup = df.groupby(
+        ["game_date", "game_pk", "pitcher"],
+        as_index=False
+    ).agg({
+        "pitching_team": "first",
+        "opponent_team": "first"
+    })
 
     return team_lookup
 
@@ -65,7 +70,7 @@ def add_pitcher_team_info(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd.D
         on=["game_date", "game_pk", "pitcher"],
         how="left",
     )
-
+    
     return pitcher_games
 
 
@@ -106,10 +111,6 @@ def build_team_offense_k_table(sc: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_opponent_k_features(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add opponent offensive strikeout tendency features to pitcher-game table.
-    """
-    pitcher_games = add_pitcher_team_info(pitcher_games, sc)
     team_offense = build_team_offense_k_table(sc)
 
     opp_features = team_offense.rename(columns={"batting_team": "opponent_team"})[
