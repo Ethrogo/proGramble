@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   daily-card:
     runs-on: ubuntu-latest
@@ -23,28 +26,36 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: MLB/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pandas requests pybaseball xgboost python-dotenv
+          pip install -r requirements.txt
 
       - name: Run daily card
         run: |
           python -m jobs.run_daily_card
 
+      - name: List MLB files
+        if: always()
+        run: |
+          pwd
+          find . -maxdepth 5 -type f | sort
+
       - name: Upload outputs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: daily-mlb-card-output
+          if-no-files-found: warn
           path: |
             MLB/data/inputs/starters/today_starters.csv
             MLB/data/outputs/projections/today_projections.csv
