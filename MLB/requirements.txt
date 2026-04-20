@@ -1,0 +1,6 @@
+pandas
+requests
+pybaseball
+xgboost
+python-dotenv
+pytest
