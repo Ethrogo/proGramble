@@ -1,16 +1,13 @@
 name: Daily MLB Card
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 9 * * *'
-      timezone: 'America/New_York'
-
-permissions:
-  contents: read
+  workflow_dispatch
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
 
 jobs:
   daily-card:
@@ -26,19 +23,17 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: MLB/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install pytest pandas requests pybaseball xgboost python-dotenv
 
       - name: Run daily card
         run: |
@@ -52,7 +47,7 @@ jobs:
 
       - name: Upload outputs
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: daily-mlb-card-output
           if-no-files-found: warn
