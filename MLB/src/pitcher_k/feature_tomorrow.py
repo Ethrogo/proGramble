@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-from pitcher_k.feature_engineering import build_pitcher_game_table, add_pitcher_team_info, normalize_player_name, _safe_div
-from pitcher_k.feature_model import get_feature_columns
+from .feature_engineering import build_pitcher_game_table, add_pitcher_team_info, normalize_player_name, _safe_div
+from .feature_model import get_feature_columns
 def build_tomorrow_features(
     slate_df: pd.DataFrame,
     pitcher_games: pd.DataFrame,

@@ -3,7 +3,7 @@
 import pandas as pd
 import xgboost as xgb
 
-from pitcher_k.config import BASE_FEATURES
+from .config import BASE_FEATURES
 
 
 def predict_on_dataframe(model, df: pd.DataFrame, features: list[str] = BASE_FEATURES) -> pd.DataFrame:

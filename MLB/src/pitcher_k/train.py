@@ -3,7 +3,7 @@
 import pandas as pd
 import xgboost as xgb
 
-from pitcher_k.config import BASE_FEATURES, TARGET_COL, TRAIN_SPLIT_DATE, XGB_PARAMS
+from .config import BASE_FEATURES, TARGET_COL, TRAIN_SPLIT_DATE, XGB_PARAMS
 
 
 def time_split(model_df: pd.DataFrame, split_date: str = TRAIN_SPLIT_DATE):
