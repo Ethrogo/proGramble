@@ -1,0 +1,53 @@
+name: Daily MLB Card
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'
+      timezone: 'America/New_York'
+
+permissions:
+  contents: read
+
+jobs:
+  daily-card:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: MLB
+
+    env:
+      PYTHONPATH: src
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pandas requests pybaseball xgboost python-dotenv
+
+      - name: Run daily card
+        run: |
+          python -m jobs.run_daily_card
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-mlb-card-output
+          path: |
+            MLB/data/inputs/starters/today_starters.csv
+            MLB/data/outputs/projections/today_projections.csv
+            MLB/data/outputs/edges/today_joined_edges.csv
+            MLB/data/outputs/picks/today_all_picks.csv
+            MLB/data/outputs/picks/today_postable_picks.csv
