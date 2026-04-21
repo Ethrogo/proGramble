@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import pandas as pd
 
+from common.contracts import (
+    require_columns,
+    validate_joined_odds_contract,
+    validate_final_picks_contract,
+)
+
 
 OFFICIAL_EDGE_THRESHOLD = 0.75
 LEAN_EDGE_THRESHOLD = 0.40
@@ -14,13 +20,6 @@ def _normalize_side(value: str) -> str:
         return ""
     return value.strip().lower()
 
-
-def _pick_direction_from_edge(edge: float) -> str:
-    if edge >= LEAN_EDGE_THRESHOLD:
-        return "over"
-    if edge <= -LEAN_EDGE_THRESHOLD:
-        return "under"
-    return "pass"
 
 
 def _classify_pick_type(edge: float) -> str:
@@ -83,10 +82,13 @@ def _choose_best_market_for_player(player_df: pd.DataFrame) -> pd.Series:
     Choose the best market based on the player's strongest edge direction.
     Expects all rows in player_df to belong to the same player.
     """
-    predicted = float(player_df["predicted_strikeouts"].iloc[0])
+    require_columns(
+        player_df,
+        ["predicted_strikeouts", "side_norm", "line"],
+        "player_df",
+    )
 
-    over_rows = player_df[player_df["side_norm"] == "over"].copy()
-    under_rows = player_df[player_df["side_norm"] == "under"].copy()
+    predicted = float(player_df["predicted_strikeouts"].iloc[0])
 
     best_over = _select_best_over_market(player_df)
     best_under = _select_best_under_market(player_df)
@@ -157,6 +159,8 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
         else:
             raise ValueError("joined_df must include 'player_name_proj' or 'player_name'.")
 
+    validate_joined_odds_contract(df)
+
     required_cols = [
         "player_name_proj",
         "predicted_strikeouts",
@@ -170,6 +174,9 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"Missing required columns for pick creation: {missing}")
 
     df = df.dropna(subset=["player_name_proj", "predicted_strikeouts", "side", "line"])
+    if df.empty:
+        return pd.DataFrame()
+
     df["side_norm"] = df["side"].apply(_normalize_side)
     df["price_sort_key"] = df["price"].apply(_american_odds_sort_key)
 
@@ -186,11 +193,16 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
     picks = pd.DataFrame(best_rows).reset_index(drop=True)
     picks["pick_type"] = picks["edge"].apply(_classify_pick_type)
 
-    rename_map = {
-        "player_name_proj": "player_name",
-        "bookmaker": "book",
-    }
-    picks = picks.rename(columns=rename_map)
+    if "player_name" in picks.columns:
+        picks["player_name"] = picks["player_name_proj"].combine_first(picks["player_name"])
+    else:
+        picks["player_name"] = picks["player_name_proj"]
+
+    # Drop the proj column after merge
+    picks = picks.drop(columns=["player_name_proj"])
+
+    # Rename bookmaker → book
+    picks = picks.rename(columns={"bookmaker": "book"})
 
     preferred_cols = [
         "player_name",
@@ -208,18 +220,21 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
     existing_cols = [col for col in preferred_cols if col in picks.columns]
     other_cols = [col for col in picks.columns if col not in existing_cols]
 
-    picks = picks[existing_cols + other_cols].sort_values(
-        by=["pick_type", "edge"],
-        ascending=[True, False],
-    ).reset_index(drop=True)
+    picks = picks[existing_cols + other_cols]
 
     pick_type_order = {"official": 0, "lean": 1, "pass": 2}
     picks["pick_type_order"] = picks["pick_type"].map(pick_type_order).fillna(99)
-    picks = picks.sort_values(
-        by=["pick_type_order", "edge"],
-        ascending=[True, False],
-    ).drop(columns=["pick_type_order"]).reset_index(drop=True)
 
+    picks = (
+        picks.sort_values(
+            by=["pick_type_order", "edge"],
+            ascending=[True, False],
+        )
+        .drop(columns=["pick_type_order"])
+        .reset_index(drop=True)
+    )
+
+    validate_final_picks_contract(picks)
     return picks
 
 
@@ -234,7 +249,14 @@ def filter_postable_picks(
     if picks_df.empty:
         return picks_df.copy()
 
+    require_columns(picks_df, ["pick_type"], "picks_df")
+
     officials = picks_df[picks_df["pick_type"] == "official"].head(max_official)
     leans = picks_df[picks_df["pick_type"] == "lean"].head(max_leans)
 
-    return pd.concat([officials, leans], ignore_index=True)
+    result = pd.concat([officials, leans], ignore_index=True)
+
+    if not result.empty:
+        validate_final_picks_contract(result)
+
+    return result
