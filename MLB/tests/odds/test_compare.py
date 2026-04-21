@@ -1,6 +1,7 @@
 # MLB/tests/odds/test_compare.py
 
 import pandas as pd
+import pytest
 
 from odds.compare import (
     prepare_projection_df,
@@ -181,3 +182,71 @@ def test_join_projections_to_odds_returns_empty_when_no_match():
 
     assert isinstance(joined, pd.DataFrame)
     assert joined.empty
+
+def test_join_projections_to_odds_returns_empty_when_odds_df_is_empty():
+    projections = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.78,
+            }
+        ]
+    )
+
+    odds_df = pd.DataFrame()
+
+    joined = join_projections_to_odds(projections, odds_df)
+
+    assert isinstance(joined, pd.DataFrame)
+    assert joined.empty
+
+def test_best_over_edges_returns_empty_when_joined_is_empty():
+    joined = pd.DataFrame()
+
+    best = best_over_edges(joined)
+
+    assert isinstance(best, pd.DataFrame)
+    assert best.empty
+
+def test_best_over_edges_handles_null_side_values():
+    joined = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "bookmaker": "DraftKings",
+                "side": None,
+                "line": 6.5,
+                "price": -120,
+                "edge": 0.28,
+            },
+            {
+                "player_name_proj": "Joe Ryan",
+                "bookmaker": "FanDuel",
+                "side": "Over",
+                "line": 5.5,
+                "price": -110,
+                "edge": 0.75,
+            },
+        ]
+    )
+
+    best = best_over_edges(joined)
+
+    assert len(best) == 1
+    assert best.iloc[0]["player_name_proj"] == "Joe Ryan"
+
+def test_prepare_projection_df_raises_when_required_columns_missing():
+    projections = pd.DataFrame(
+        [
+            {
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.78,
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="projections_df is missing required columns"):
+        prepare_projection_df(projections)
