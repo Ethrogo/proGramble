@@ -1,7 +1,9 @@
 name: Daily MLB Card
 
 on:
-  workflow_dispatch
+  workflow_dispatch:
+  schedule:
+    - cron: '30 14 * * *'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
