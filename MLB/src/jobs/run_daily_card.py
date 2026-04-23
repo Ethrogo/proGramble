@@ -14,7 +14,14 @@ from pitcher_k.predict import predict_on_dataframe
 
 from odds.run_edges import run_edge_pipeline
 from odds.create_picks import build_daily_picks, filter_postable_picks
-
+from common.contracts import (
+    validate_starters_contract,
+    validate_pitcher_games_contract,
+    validate_joined_odds_contract,
+    validate_final_picks_contract,
+    assert_non_empty,
+    require_columns,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
@@ -41,6 +48,7 @@ def load_pitcher_games_artifact() -> pd.DataFrame:
 
     pitcher_games = pd.read_csv(PITCHER_GAMES_PATH)
     pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
+    validate_pitcher_games_contract(pitcher_games)
     return pitcher_games
 
 
@@ -54,6 +62,9 @@ def load_model_artifact():
 
 
 def build_today_predictions(starters_df: pd.DataFrame, pitcher_games: pd.DataFrame, model):
+    validate_starters_contract(starters_df)
+    validate_pitcher_games_contract(pitcher_games)
+
     as_of_date = starters_df["game_date"].min()
     team_context = build_team_context(pitcher_games, as_of_date=as_of_date)
 
@@ -66,7 +77,14 @@ def build_today_predictions(starters_df: pd.DataFrame, pitcher_games: pd.DataFra
     if today_features.empty:
         return today_features
 
-    return predict_on_dataframe(model, today_features)
+    today_preds = predict_on_dataframe(model, today_features)
+    assert_non_empty(today_preds, "today_preds")
+    require_columns(
+        today_preds,
+        ["player_name", "predicted_strikeouts"],
+        "today_preds",
+    )
+    return today_preds
 
 
 def save_outputs(
@@ -88,6 +106,7 @@ def run_daily_card() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataF
     ensure_output_dirs()
 
     starters_df = get_today_starters_df()
+    validate_starters_contract(starters_df)
     pitcher_games = load_pitcher_games_artifact()
     model = load_model_artifact()
 
@@ -101,8 +120,13 @@ def run_daily_card() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataF
         raise ValueError("No today predictions were generated.")
 
     joined_df, _ = run_edge_pipeline(today_preds)
+    validate_joined_odds_contract(joined_df)
+
     picks_df = build_daily_picks(joined_df)
+    validate_final_picks_contract(picks_df)
+
     post_df = filter_postable_picks(picks_df, max_official=3, max_leans=1)
+    validate_final_picks_contract(post_df)
 
     save_outputs(
         starters_df=starters_df,

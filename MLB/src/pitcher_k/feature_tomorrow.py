@@ -1,7 +1,18 @@
+# MLB/src/pitcher_k/feature_tomorrow.py
+
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
-from .feature_engineering import build_pitcher_game_table, add_pitcher_team_info, normalize_player_name, _safe_div
-from .feature_model import get_feature_columns
+
+from common.contracts import (
+    require_columns,
+    validate_starters_contract,
+    validate_pitcher_games_contract,
+)
+from .feature_engineering import normalize_player_name, _safe_div
+
+
 def build_tomorrow_features(
     slate_df: pd.DataFrame,
     pitcher_games: pd.DataFrame,
@@ -10,6 +21,33 @@ def build_tomorrow_features(
 ) -> pd.DataFrame:
     slate_df = slate_df.copy()
     pitcher_games = pitcher_games.copy()
+
+    validate_starters_contract(slate_df)
+    validate_pitcher_games_contract(pitcher_games)
+
+    require_columns(
+        pitcher_games,
+        [
+            "strikeouts",
+            "pitches",
+            "batters_faced",
+            "whiffs",
+            "avg_velo",
+            "avg_spin",
+        ],
+        "pitcher_games",
+    )
+
+    if team_context is not None:
+        require_columns(
+            team_context,
+            [
+                "opponent_team",
+                "opp_strikeouts_per_game_last10",
+                "opp_k_rate_last10",
+            ],
+            "team_context",
+        )
 
     slate_df["game_date"] = pd.to_datetime(slate_df["game_date"])
     pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
@@ -20,6 +58,7 @@ def build_tomorrow_features(
     pitcher_games = pitcher_games.sort_values(["player_name_norm", "game_date", "game_pk"])
 
     feature_rows = []
+    skipped_pitchers = 0
 
     for _, row in slate_df.iterrows():
         game_date = row["game_date"]
@@ -28,22 +67,22 @@ def build_tomorrow_features(
 
         hist = pd.DataFrame()
 
-        # only use ID if it actually matches something historical
         if pd.notna(pitcher_id) and str(pitcher_id).strip() != "":
             hist = pitcher_games[
-            (pitcher_games["pitcher"] == pitcher_id)
-            & (pitcher_games["game_date"] < game_date)
+                (pitcher_games["pitcher"] == pitcher_id)
+                & (pitcher_games["game_date"] < game_date)
             ].copy()
 
-        # fallback to normalized name if ID match is empty
         if hist.empty:
             hist = pitcher_games[
-            (pitcher_games["player_name_norm"] == player_name_norm)
-            & (pitcher_games["game_date"] < game_date)].copy()
+                (pitcher_games["player_name_norm"] == player_name_norm)
+                & (pitcher_games["game_date"] < game_date)
+            ].copy()
 
         hist = hist.sort_values(["game_date", "game_pk"])
 
         if len(hist) < min_career_starts:
+            skipped_pitchers += 1
             continue
 
         last3 = hist.tail(3)
@@ -122,7 +161,6 @@ def build_tomorrow_features(
 
         feature_row["is_home"] = int(row["is_home"])
 
-        # default opponent context as missing
         feature_row["opp_strikeouts_per_game_last10"] = np.nan
         feature_row["opp_k_rate_last10"] = np.nan
 
@@ -131,6 +169,7 @@ def build_tomorrow_features(
     features_df = pd.DataFrame(feature_rows)
 
     if features_df.empty:
+        features_df.attrs["skipped_pitchers"] = skipped_pitchers
         return features_df
 
     if team_context is not None:
@@ -146,11 +185,42 @@ def build_tomorrow_features(
         )
 
     base_cols = [
-        "game_date", "game_pk", "pitcher", "player_name",
-        "team", "opponent", "home_team", "away_team",
-        "is_home", "p_throws"
+        "game_date",
+        "game_pk",
+        "pitcher",
+        "player_name",
+        "team",
+        "opponent",
+        "home_team",
+        "away_team",
+        "is_home",
+        "p_throws",
     ]
     feature_cols = [c for c in features_df.columns if c not in base_cols]
     features_df = features_df[base_cols + feature_cols]
 
+    require_columns(
+        features_df,
+        [
+            "game_date",
+            "game_pk",
+            "pitcher",
+            "player_name",
+            "team",
+            "opponent",
+            "is_home",
+            "pitches_last3",
+            "pitches_last10",
+            "whiff_per_pitch_last3",
+            "avg_velo_last3",
+            "avg_spin_last3",
+            "k_per_pitch_last10",
+            "k_rate_last10",
+            "opp_strikeouts_per_game_last10",
+            "opp_k_rate_last10",
+        ],
+        "tomorrow_features_df",
+    )
+
+    features_df.attrs["skipped_pitchers"] = skipped_pitchers
     return features_df

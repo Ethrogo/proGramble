@@ -1,8 +1,5 @@
-# MLB/tests/jobs/test_run_daily_card.py
-
-from pathlib import Path
-
 import pandas as pd
+import pytest
 
 from jobs import run_daily_card as daily_card
 
@@ -32,32 +29,8 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
                 "game_pk": 111111,
                 "pitcher": 1,
                 "player_name": "Jacob deGrom",
-                "pitches": 95,
-                "strikeouts": 8,
-                "whiffs": 14,
-                "avg_velo": 97.2,
-                "avg_spin": 2450,
-                "batters_faced": 27,
-                "home_team": "TEX",
-                "away_team": "SEA",
-                "p_throws": "R",
-                "whiff_per_pitch": 14 / 95,
                 "pitching_team": "TEX",
                 "opponent_team": "SEA",
-                "strikeouts_last3": 7.0,
-                "strikeouts_last10": 6.8,
-                "pitches_last3": 92.0,
-                "pitches_last10": 94.0,
-                "batters_faced_last3": 25.0,
-                "batters_faced_last10": 26.0,
-                "whiff_per_pitch_last3": 0.14,
-                "whiff_per_pitch_last10": 0.135,
-                "avg_velo_last3": 97.0,
-                "avg_velo_last10": 96.8,
-                "avg_spin_last3": 2440.0,
-                "avg_spin_last10": 2435.0,
-                "k_per_pitch_last10": 6.8 / 94.0,
-                "k_rate_last10": 6.8 / 26.0,
                 "opp_strikeouts_per_game_last10": 9.4,
                 "opp_k_rate_last10": 0.255,
             }
@@ -110,8 +83,8 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     post_df = picks_df.copy()
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "build_historical_pitcher_games", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "train_pitcher_k_model", lambda pg: ("fake_model", pg))
+    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
     monkeypatch.setattr(
         daily_card,
         "build_today_predictions",
@@ -161,6 +134,7 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
     assert loaded_post.loc[0, "pick_type"] == "official"
 
+
 def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp_path):
     starters_df = pd.DataFrame(
         [
@@ -186,13 +160,17 @@ def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp
                 "game_pk": 111111,
                 "pitcher": 1,
                 "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "opp_strikeouts_per_game_last10": 9.4,
+                "opp_k_rate_last10": 0.255,
             }
         ]
     )
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "build_historical_pitcher_games", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "train_pitcher_k_model", lambda pg: ("fake_model", pg))
+    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
     monkeypatch.setattr(
         daily_card,
         "build_today_predictions",
@@ -205,7 +183,39 @@ def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp
     monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
     monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
 
-    import pytest
-
     with pytest.raises(ValueError, match="No today predictions were generated."):
+        daily_card.run_daily_card()
+
+def test_run_daily_card_raises_when_pitcher_games_artifact_is_missing(monkeypatch, tmp_path):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+
+    def raise_missing_pitcher_games():
+        raise FileNotFoundError("Missing pitcher_games artifact: fake/path/pitcher_games.csv")
+
+    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", raise_missing_pitcher_games)
+
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+
+    with pytest.raises(FileNotFoundError, match="Missing pitcher_games artifact"):
         daily_card.run_daily_card()

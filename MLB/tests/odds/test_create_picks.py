@@ -1,6 +1,7 @@
 # MLB/tests/odds/test_create_picks.py
 
 import pandas as pd
+import pytest
 
 from odds.create_picks import build_daily_picks, filter_postable_picks
 
@@ -76,7 +77,6 @@ def test_build_daily_picks_selects_best_under_market_when_under_edge_is_stronger
     assert picks.loc[0, "line"] == 3.5
     assert picks.loc[0, "edge"] == 3.5 - 1.2
 
-
 def test_build_daily_picks_assigns_official_lean_and_pass():
     joined_df = pd.DataFrame(
         [
@@ -121,7 +121,6 @@ def test_build_daily_picks_assigns_official_lean_and_pass():
     assert pick_types["Lean Guy"] == "lean"
     assert pick_types["Pass Guy"] == "pass"
 
-
 def test_build_daily_picks_prefers_better_price_when_lines_match():
     joined_df = pd.DataFrame(
         [
@@ -153,7 +152,6 @@ def test_build_daily_picks_prefers_better_price_when_lines_match():
     assert len(picks) == 1
     assert picks.loc[0, "book"] == "FanDuel"
 
-
 def test_build_daily_picks_raises_when_required_columns_missing():
     joined_df = pd.DataFrame(
         [
@@ -169,40 +167,63 @@ def test_build_daily_picks_raises_when_required_columns_missing():
 
     import pytest
 
-    with pytest.raises(ValueError, match="Missing required columns for pick creation"):
+    with pytest.raises(ValueError, match="joined_odds_df is missing required columns"):
         build_daily_picks(joined_df)
-
 
 def test_filter_postable_picks_limits_officials_and_leans():
     picks_df = pd.DataFrame(
         [
             {
                 "player_name": "A",
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -110,
                 "pick_type": "official",
                 "edge": 1.2,
             },
             {
                 "player_name": "B",
+                "book": "FanDuel",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -105,
                 "pick_type": "official",
                 "edge": 1.1,
             },
             {
                 "player_name": "C",
+                "book": "BetMGM",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": 100,
                 "pick_type": "official",
                 "edge": 1.0,
             },
             {
                 "player_name": "D",
+                "book": "Caesars",
+                "pick_side": "under",
+                "line": 6.5,
+                "price": -115,
                 "pick_type": "lean",
                 "edge": 0.6,
             },
             {
                 "player_name": "E",
+                "book": "DraftKings",
+                "pick_side": "under",
+                "line": 6.5,
+                "price": -110,
                 "pick_type": "lean",
                 "edge": 0.5,
             },
             {
                 "player_name": "F",
+                "book": "FanDuel",
+                "pick_side": "over",
+                "line": 4.5,
+                "price": -110,
                 "pick_type": "pass",
                 "edge": 0.1,
             },
@@ -214,7 +235,6 @@ def test_filter_postable_picks_limits_officials_and_leans():
     assert len(postable) == 3
     assert list(postable["player_name"]) == ["A", "B", "D"]
 
-
 def test_build_daily_picks_returns_empty_dataframe_for_empty_input():
     joined_df = pd.DataFrame()
 
@@ -222,3 +242,59 @@ def test_build_daily_picks_returns_empty_dataframe_for_empty_input():
 
     assert isinstance(picks, pd.DataFrame)
     assert picks.empty
+
+def test_build_daily_picks_drops_rows_with_null_side_and_returns_empty_if_nothing_left():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "bookmaker": "DraftKings",
+                "side": None,
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="has null values in required columns"):
+        build_daily_picks(joined_df)
+
+def test_build_daily_picks_uses_player_name_fallback_when_player_name_proj_missing():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
+
+    picks = build_daily_picks(joined_df)
+
+    assert len(picks) == 1
+    assert picks.loc[0, "player_name"] == "Jacob deGrom"
+    assert picks.loc[0, "book"] == "DraftKings"
+
+def test_filter_postable_picks_raises_when_pick_type_missing():
+    picks_df = pd.DataFrame(
+        [
+            {
+                "player_name": "A",
+                "edge": 1.2,
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="picks_df is missing required columns"):
+        filter_postable_picks(picks_df)
+
+
