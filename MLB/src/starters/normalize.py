@@ -1,6 +1,7 @@
 # MLB/src/starters/normalize.py
 
 from __future__ import annotations
+from common.contracts import require_columns
 
 import pandas as pd
 
@@ -26,8 +27,26 @@ def finalize_starters_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Enforce the slate structure expected by pitcher_k.
     """
-    out = df.copy()
 
+    require_columns(
+    df,
+    [
+        "game_date",
+        "game_pk",
+        "pitcher",
+        "player_name",
+        "team",
+        "opponent",
+        "home_team",
+        "away_team",
+        "is_home",
+        "p_throws",
+    ],
+    "raw_starters_df",
+    )
+
+    out = df.copy()
+    
     out["player_name"] = out["player_name"].map(normalize_player_name)
     out["team"] = out["team"].map(normalize_team_code)
     out["opponent"] = out["opponent"].map(normalize_team_code)

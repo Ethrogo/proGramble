@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from common.contracts import validate_starters_contract
 from .config import EASTERN_TZ, STARTERS_INPUT_DIR, TODAY_STARTERS_FILENAME
 from .normalize import finalize_starters_df
 from .validate import validate_starters_df
@@ -121,6 +122,7 @@ def build_today_starters_df(raw_df: pd.DataFrame) -> pd.DataFrame:
     """
     starters_df = finalize_starters_df(raw_df)
     validate_starters_df(starters_df)
+    validate_starters_contract(starters_df) # shared contract
     return starters_df
 
 
