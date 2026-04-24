@@ -146,7 +146,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+MLB/data/artifacts/_staging/
 # Spyder project settings
 .spyderproject
 .spyproject

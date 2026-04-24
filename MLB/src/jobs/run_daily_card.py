@@ -26,10 +26,13 @@ from common.contracts import (
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
-OUTPUT_DIR = DATA_DIR / "outputs"
+LATEST_ARTIFACTS_DIR = ARTIFACTS_DIR / "latest"
+PREVIOUS_ARTIFACTS_DIR = ARTIFACTS_DIR / "previous"
 
-MODEL_PATH = ARTIFACTS_DIR / "model.ubj"
-PITCHER_GAMES_PATH = ARTIFACTS_DIR / "pitcher_games.csv"
+MODEL_PATH = LATEST_ARTIFACTS_DIR / "model.ubj"
+PITCHER_GAMES_PATH = LATEST_ARTIFACTS_DIR / "pitcher_games.csv"
+
+OUTPUT_DIR = DATA_DIR / "outputs"
 
 PROJECTIONS_DIR = OUTPUT_DIR / "projections"
 EDGES_DIR = OUTPUT_DIR / "edges"
@@ -43,22 +46,40 @@ def ensure_output_dirs() -> None:
 
 
 def load_pitcher_games_artifact() -> pd.DataFrame:
-    if not PITCHER_GAMES_PATH.exists():
-        raise FileNotFoundError(f"Missing pitcher_games artifact: {PITCHER_GAMES_PATH}")
+    candidate_paths = [
+        LATEST_ARTIFACTS_DIR / "pitcher_games.csv",
+        PREVIOUS_ARTIFACTS_DIR / "pitcher_games.csv",
+    ]
 
-    pitcher_games = pd.read_csv(PITCHER_GAMES_PATH)
-    pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
-    validate_pitcher_games_contract(pitcher_games)
-    return pitcher_games
+    for path in candidate_paths:
+        if path.exists():
+            pitcher_games = pd.read_csv(path)
+            pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
+            validate_pitcher_games_contract(pitcher_games)
+            print(f"Loaded pitcher_games artifact from: {path}")
+            return pitcher_games
+
+    raise FileNotFoundError(
+        "Missing pitcher_games artifact in both latest/ and previous/."
+    )
 
 
 def load_model_artifact():
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Missing model artifact: {MODEL_PATH}")
+    candidate_paths = [
+        LATEST_ARTIFACTS_DIR / "model.ubj",
+        PREVIOUS_ARTIFACTS_DIR / "model.ubj",
+    ]
 
-    model = xgb.Booster()
-    model.load_model(str(MODEL_PATH))
-    return model
+    for path in candidate_paths:
+        if path.exists():
+            model = xgb.Booster()
+            model.load_model(str(path))
+            print(f"Loaded model artifact from: {path}")
+            return model
+
+    raise FileNotFoundError(
+        "Missing model artifact in both latest/ and previous/."
+    )
 
 
 def build_today_predictions(starters_df: pd.DataFrame, pitcher_games: pd.DataFrame, model):
