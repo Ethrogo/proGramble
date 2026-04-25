@@ -1,18 +1,12 @@
-name: Daily MLB Card
+name: Daily MLB Training + Card
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 14 * * *'
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-permissions:
-  contents: read
+    - cron: "30 11 * * *" # 7:30 AM ET during EDT
 
 jobs:
-  daily-card:
+  daily-training-card:
     runs-on: ubuntu-latest
 
     defaults:
@@ -22,13 +16,12 @@ jobs:
     env:
       PYTHONPATH: src
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -37,15 +30,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pandas requests pybaseball xgboost python-dotenv
 
+      - name: Build training artifacts
+        run: |
+          python -m jobs.build_training_artifacts
+
       - name: Run daily card
         run: |
           python -m jobs.run_daily_card
-
-      - name: List MLB files
-        if: always()
-        run: |
-          pwd
-          find . -maxdepth 5 -type f | sort
 
       - name: Upload outputs
         if: always()
@@ -54,6 +45,9 @@ jobs:
           name: daily-mlb-card-output
           if-no-files-found: warn
           path: |
+            MLB/data/artifacts/model.ubj
+            MLB/data/artifacts/pitcher_games.csv
+            MLB/data/artifacts/model_df.csv
             MLB/data/inputs/starters/today_starters.csv
             MLB/data/outputs/projections/today_projections.csv
             MLB/data/outputs/edges/today_joined_edges.csv
