@@ -37,7 +37,26 @@ jobs:
       - name: Run daily card
         run: |
           python -m jobs.run_daily_card
+      
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import os
+          from notifications.discord import DiscordNotification, send_discord_notification
 
+          send_discord_notification(
+            DiscordNotification(
+              status=os.getenv("JOB_STATUS", "unknown"),
+              run_url=os.getenv("RUN_URL"), 
+            )
+          )
+          PY     
+          
       - name: Upload outputs
         if: always()
         uses: actions/upload-artifact@v4
