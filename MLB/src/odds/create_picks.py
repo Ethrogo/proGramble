@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+from odds.value import american_to_implied_probability
 
 from common.contracts import (
     require_columns,
