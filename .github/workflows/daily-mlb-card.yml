@@ -3,7 +3,7 @@ name: Daily MLB Training + Card
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 11 * * *" # 7:30 AM ET during EDT
+    - cron: "29 11 * * *" # 7:30 AM ET during EDT
 
 jobs:
   daily-training-card:
