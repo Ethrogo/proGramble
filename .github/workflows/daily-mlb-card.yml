@@ -45,17 +45,16 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          python - <<'PY'
+          python -c '
           import os
           from notifications.discord import DiscordNotification, send_discord_notification
-
           send_discord_notification(
-            DiscordNotification(
-              status=os.getenv("JOB_STATUS", "unknown"),
-              run_url=os.getenv("RUN_URL"), 
-            )
+              DiscordNotification(
+                  status=os.getenv("JOB_STATUS", "unknown"),
+                  run_url=os.getenv("RUN_URL"),
+              )
           )
-          PY     
+          '
           
       - name: Upload outputs
         if: always()
