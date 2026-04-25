@@ -32,6 +32,15 @@ def _classify_pick_type(edge: float) -> str:
         return "lean"
     return "pass"
 
+def _classify_confidence_tier(value_score: float) -> str:
+    if value_score >= 0.50:
+        return "high"
+    if value_score >= 0.30:
+        return "medium"
+    if value_score >= 0.15:
+        return "low"
+    return "thin"
+
 
 def _american_odds_sort_key(price: float | int | None) -> float:
     """
@@ -180,6 +189,7 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
 
     df["side_norm"] = df["side"].apply(_normalize_side)
     df["price_sort_key"] = df["price"].apply(_american_odds_sort_key)
+    df["implied_probability"] = df["price"].apply(american_to_implied_probability)
 
     best_rows: list[pd.Series] = []
 
@@ -193,6 +203,8 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
 
     picks = pd.DataFrame(best_rows).reset_index(drop=True)
     picks["pick_type"] = picks["edge"].apply(_classify_pick_type)
+    picks["value_score"] = picks["edge"].abs() * (1 - picks["implied_probability"])
+    picks["confidence_tier"] = picks["value_score"].apply(_classify_confidence_tier)
 
     if "player_name" in picks.columns:
         picks["player_name"] = picks["player_name_proj"].combine_first(picks["player_name"])
@@ -215,6 +227,9 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
         "line",
         "price",
         "edge",
+        "implied_probability",
+        "value_score",
+        "confidence_tier",
         "pick_type",
     ]
 
@@ -228,7 +243,7 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
 
     picks = (
         picks.sort_values(
-            by=["pick_type_order", "edge"],
+            by=["pick_type_order", "value_score"],
             ascending=[True, False],
         )
         .drop(columns=["pick_type_order"])
