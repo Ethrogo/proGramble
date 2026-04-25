@@ -90,7 +90,7 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
         "build_today_predictions",
         lambda starters_df, pitcher_games, model: today_preds,
     )
-    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda preds: (joined_df, joined_df))
+    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda preds, market: (joined_df, joined_df),)
     monkeypatch.setattr(daily_card, "build_daily_picks", lambda joined: picks_df)
     monkeypatch.setattr(
         daily_card,

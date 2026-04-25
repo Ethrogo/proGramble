@@ -1,6 +1,7 @@
 RAW_STATCAST_START = "2023-03-27"
 RAW_STATCAST_END = "2025-09-30"
 TRAIN_SPLIT_DATE = "2025-08-01"
+PITCHER_K_PROP_MARKET = "pitcher_strikeouts"
 
 BASE_FEATURES = [
     "pitches_last3",

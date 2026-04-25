@@ -5,9 +5,9 @@ import os
 import pandas as pd
 import pytest
 
-from odds.odds_api import fetch_all_pitcher_strikeout_props
+from odds.odds_api import fetch_all_player_props
 from odds.normalize import odds_json_to_dataframe
-
+from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 pytestmark = pytest.mark.integration
 
@@ -23,7 +23,7 @@ def test_live_pitcher_strikeout_payload_normalizes():
     if not os.getenv("ODDS_API_KEY"):
         pytest.skip("ODDS_API_KEY is not set")
 
-    prop_events = fetch_all_pitcher_strikeout_props()
+    prop_events = fetch_all_player_props(PITCHER_K_PROP_MARKET)
 
     if not prop_events:
         pytest.skip("No live pitcher strikeout props available right now")

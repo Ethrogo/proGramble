@@ -11,6 +11,7 @@ from starters.today_starters import get_today_starters_df, save_today_starters_c
 from pitcher_k.feature_engineering import build_team_context
 from pitcher_k.feature_tomorrow import build_tomorrow_features
 from pitcher_k.predict import predict_on_dataframe
+from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 from odds.run_edges import run_edge_pipeline
 from odds.create_picks import build_daily_picks, filter_postable_picks
@@ -140,7 +141,7 @@ def run_daily_card() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataF
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
 
-    joined_df, _ = run_edge_pipeline(today_preds)
+    joined_df, _ = run_edge_pipeline(today_preds, PITCHER_K_PROP_MARKET)
     validate_joined_odds_contract(joined_df)
 
     picks_df = build_daily_picks(joined_df)

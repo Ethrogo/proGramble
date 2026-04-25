@@ -3,6 +3,7 @@
 import pandas as pd
 
 from odds import run_edges
+from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 
 def test_run_edge_pipeline_returns_joined_and_best_edges(monkeypatch):
@@ -29,7 +30,7 @@ def test_run_edge_pipeline_returns_joined_and_best_edges(monkeypatch):
                     "last_update": "2026-04-18T14:00:00Z",
                     "markets": [
                         {
-                            "key": "pitcher_strikeouts",
+                            "key": PITCHER_K_PROP_MARKET,
                             "outcomes": [
                                 {
                                     "name": "Over",
@@ -51,9 +52,20 @@ def test_run_edge_pipeline_returns_joined_and_best_edges(monkeypatch):
         }
     ]
 
-    monkeypatch.setattr(run_edges, "fetch_all_pitcher_strikeout_props", lambda: fake_events)
+    def fake_fetch_all_player_props(market):
+        assert market == PITCHER_K_PROP_MARKET
+        return fake_events
 
-    joined, best = run_edges.run_edge_pipeline(projections)
+    monkeypatch.setattr(
+        run_edges,
+        "fetch_all_player_props",
+        fake_fetch_all_player_props,
+    )
+
+    joined, best = run_edges.run_edge_pipeline(
+        projections,
+        market=PITCHER_K_PROP_MARKET,
+    )
 
     assert len(joined) == 2
     assert len(best) == 1
@@ -73,9 +85,20 @@ def test_run_edge_pipeline_returns_empty_when_no_odds(monkeypatch):
         ]
     )
 
-    monkeypatch.setattr(run_edges, "fetch_all_pitcher_strikeout_props", lambda: [])
+    def fake_fetch_all_player_props(market):
+        assert market == PITCHER_K_PROP_MARKET
+        return []
 
-    joined, best = run_edges.run_edge_pipeline(projections)
+    monkeypatch.setattr(
+        run_edges,
+        "fetch_all_player_props",
+        fake_fetch_all_player_props,
+    )
+
+    joined, best = run_edges.run_edge_pipeline(
+        projections,
+        market=PITCHER_K_PROP_MARKET,
+    )
 
     assert isinstance(joined, pd.DataFrame)
     assert isinstance(best, pd.DataFrame)
@@ -107,7 +130,7 @@ def test_run_edge_pipeline_returns_empty_when_odds_do_not_match_projection_names
                     "last_update": "2026-04-18T14:00:00Z",
                     "markets": [
                         {
-                            "key": "pitcher_strikeouts",
+                            "key": PITCHER_K_PROP_MARKET,
                             "outcomes": [
                                 {
                                     "name": "Over",
@@ -129,9 +152,20 @@ def test_run_edge_pipeline_returns_empty_when_odds_do_not_match_projection_names
         }
     ]
 
-    monkeypatch.setattr(run_edges, "fetch_all_pitcher_strikeout_props", lambda: fake_events)
+    def fake_fetch_all_player_props(market):
+        assert market == PITCHER_K_PROP_MARKET
+        return fake_events
 
-    joined, best = run_edges.run_edge_pipeline(projections)
+    monkeypatch.setattr(
+        run_edges,
+        "fetch_all_player_props",
+        fake_fetch_all_player_props,
+    )
+
+    joined, best = run_edges.run_edge_pipeline(
+        projections,
+        market=PITCHER_K_PROP_MARKET,
+    )
 
     assert joined.empty
     assert best.empty

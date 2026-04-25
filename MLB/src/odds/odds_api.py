@@ -9,7 +9,6 @@ from .config import (
     ODDS_API_KEY,
     ODDS_SPORT,
     EVENT_DISCOVERY_MARKET,
-    PLAYER_PROP_MARKET,
     BOOKMAKERS,
 )
 
@@ -48,8 +47,8 @@ def fetch_mlb_events(
 
 def fetch_event_player_props(
     event_id: str,
+    market: str,
     sport: str = ODDS_SPORT,
-    market: str = PLAYER_PROP_MARKET,
     bookmakers: list[str] | None = None,
     odds_format: str = "american",
     date_format: str = "iso",
@@ -78,12 +77,16 @@ def fetch_event_player_props(
     return response.json()
 
 
-def fetch_all_pitcher_strikeout_props() -> list[dict]:
+def fetch_all_player_props(
+    market: str,
+    sport: str = ODDS_SPORT,
+    bookmakers: list[str] | None = None,
+) -> list[dict]:
     """
-    Fetch pitcher strikeout props for all today's MLB events.
+    Fetch player prop odds for all today's MLB events for the given market.
     Returns a list of event-level prop payloads.
     """
-    events = fetch_mlb_events()
+    events = fetch_mlb_events(sport=sport)
     prop_events: list[dict] = []
 
     for event in events:
@@ -92,11 +95,17 @@ def fetch_all_pitcher_strikeout_props() -> list[dict]:
             continue
 
         try:
-            prop_data = fetch_event_player_props(event_id)
+            prop_data = fetch_event_player_props(
+                event_id=event_id,
+                sport=sport,
+                market=market,
+                bookmakers=bookmakers,
+            )
+
             if prop_data and prop_data.get("bookmakers"):
                 prop_events.append(prop_data)
+
         except requests.HTTPError:
-            # Skip games/books with no supported pitcher strikeout market
             continue
 
     return prop_events
