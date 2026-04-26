@@ -9,6 +9,13 @@ from pathlib import Path
 import pandas as pd
 
 from common.contracts import validate_pitcher_games_contract, require_columns
+from pitcher_k.evaluate import (
+    build_error_bucket_summary,
+    build_prediction_results,
+    evaluate_predictions,
+    fit_interval_calibration,
+    summarize_interval_coverage,
+)
 from pitcher_k.config import (
     BASE_FEATURES,
     RAW_STATCAST_START,
@@ -129,15 +136,44 @@ def _date_range(df: pd.DataFrame) -> dict[str, str | None]:
     }
 
 
-def _evaluation_metrics(train_output: dict) -> dict[str, float]:
+def _evaluation_metrics(train_output: dict) -> dict:
+    y_train = train_output["y_train"]
     y_test = train_output["y_test"]
-    y_pred = train_output["model"].predict(train_output["dtest"])
-    abs_errors = (y_pred - y_test).abs()
+    y_pred_train = train_output["model"].predict(train_output["dtrain"])
+    y_pred_test = train_output["model"].predict(train_output["dtest"])
+
+    test_results = build_prediction_results(
+        train_output["X_test"],
+        y_test,
+        y_pred_test,
+    )
+    interval_config = fit_interval_calibration(
+        train_output["X_train"],
+        y_train,
+        y_pred_train,
+    )
 
     return {
-        "mae": float(abs_errors.mean()),
-        "pred_min": float(y_pred.min()),
-        "pred_max": float(y_pred.max()),
+        "regression": evaluate_predictions(y_test, y_pred_test),
+        "bucketed_error": {
+            "bucket_by": "predicted_strikeouts",
+            "buckets": build_error_bucket_summary(test_results),
+        },
+        "uncertainty": summarize_interval_coverage(
+            train_output["X_test"],
+            y_test,
+            y_pred_test,
+            interval_config,
+        ),
+        "workflow_backtest": {
+            "available": False,
+            "reason": "historical_market_lines_not_provided",
+            "reproducible_path": "odds.backtest.run_pick_backtest",
+        },
+        "sample_sizes": {
+            "train_rows": int(len(train_output["X_train"])),
+            "test_rows": int(len(train_output["X_test"])),
+        },
     }
 
 
@@ -147,6 +183,11 @@ def build_training_metadata(
     test_df: pd.DataFrame,
     train_output: dict,
 ) -> dict:
+    uncertainty_model = fit_interval_calibration(
+        train_output["X_train"],
+        train_output["y_train"],
+        train_output["model"].predict(train_output["dtrain"]),
+    )
     return {
         "target": TARGET_COL,
         "features": BASE_FEATURES,
@@ -165,6 +206,7 @@ def build_training_metadata(
             "test_game_date_range": _date_range(test_df),
         },
         "evaluation_metrics": _evaluation_metrics(train_output),
+        "uncertainty_model": uncertainty_model,
     }
 
 

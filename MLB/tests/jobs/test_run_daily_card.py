@@ -540,3 +540,30 @@ def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_
     assert metadata["evaluation_metrics"]["mae"] == 0.9
     assert str(latest_dir / "metadata.json") in captured.out
     assert '"target": "strikeouts"' in captured.out
+
+
+def test_apply_metadata_uncertainty_uses_saved_interval_calibration():
+    today_preds = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "predicted_strikeouts": 6.8,
+                "std_dev": 1.0,
+                "lower_bound": 5.8,
+                "upper_bound": 7.8,
+            }
+        ]
+    )
+    metadata = {
+        "uncertainty_model": {
+            "interval_multiplier": 1.4,
+            "nominal_coverage": 0.8,
+        }
+    }
+
+    adjusted = daily_card.apply_metadata_uncertainty(today_preds, metadata)
+
+    assert adjusted.loc[0, "raw_std_dev"] == pytest.approx(1.0)
+    assert adjusted.loc[0, "std_dev"] == pytest.approx(1.4)
+    assert adjusted.loc[0, "lower_bound"] == pytest.approx(5.4)
+    assert adjusted.loc[0, "upper_bound"] == pytest.approx(8.2)
