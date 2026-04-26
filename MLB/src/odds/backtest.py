@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from common.contracts import require_columns, validate_joined_odds_contract
+from odds.compare import join_projections_to_historical_lines
 from odds.create_picks import build_daily_picks
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
 
@@ -190,3 +191,58 @@ def run_pick_backtest(
         "by_pick_side": _summarize_groups(graded, "pick_side"),
         "graded_picks": graded,
     }
+
+
+def summarize_backtest_for_metadata(backtest_result: dict) -> dict:
+    """
+    Strip non-serializable dataframe payloads from a backtest result.
+    """
+    summary = {
+        key: value
+        for key, value in backtest_result.items()
+        if key != "graded_picks"
+    }
+    graded = backtest_result.get("graded_picks")
+    summary["graded_pick_rows"] = int(len(graded)) if isinstance(graded, pd.DataFrame) else 0
+    return summary
+
+
+def run_historical_workflow_backtest(
+    projections: pd.DataFrame,
+    historical_lines_df: pd.DataFrame,
+    *,
+    participant_key: str = "player_name",
+    projection_join_key: str = "player_name_norm",
+    lines_join_key: str = "player_name_norm",
+    actual_column: str = "actual_strikeouts",
+    policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+) -> dict:
+    """
+    Join historical projections to curated native historical lines and run the
+    same workflow backtest used for live picks.
+    """
+    joined = join_projections_to_historical_lines(
+        projections,
+        historical_lines_df,
+        participant_key=participant_key,
+        projection_join_key=projection_join_key,
+        lines_join_key=lines_join_key,
+    )
+    if joined.empty:
+        return {
+            "available": False,
+            "reason": "no_matching_historical_lines_for_projections",
+            "overall": [],
+            "by_pick_type": [],
+            "by_confidence_tier": [],
+            "by_book": [],
+            "by_line_band": [],
+            "by_pick_side": [],
+            "graded_picks": pd.DataFrame(),
+        }
+
+    return run_pick_backtest(
+        joined,
+        actual_column=actual_column,
+        policy=policy,
+    )

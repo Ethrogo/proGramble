@@ -76,6 +76,57 @@ def join_projections_to_odds(
     return merged
 
 
+def join_projections_to_historical_lines(
+    projections: pd.DataFrame,
+    historical_lines_df: pd.DataFrame,
+    *,
+    participant_key: str = "player_name",
+    projection_join_key: str = "player_name_norm",
+    lines_join_key: str = "player_name_norm",
+    projection_date_key: str = "game_date",
+    lines_date_key: str = "game_date",
+) -> pd.DataFrame:
+    proj = prepare_projection_df(
+        projections,
+        participant_key=participant_key,
+        projection_join_key=projection_join_key,
+    )
+
+    if historical_lines_df.empty:
+        return pd.DataFrame()
+
+    require_columns(
+        historical_lines_df,
+        [lines_join_key, lines_date_key, "bookmaker", "side", "line", "price"],
+        "historical_lines_df",
+    )
+    require_columns(proj, [projection_date_key], "projections_df")
+
+    proj = proj.copy()
+    lines = historical_lines_df.copy()
+    proj[projection_date_key] = pd.to_datetime(proj[projection_date_key]).dt.strftime("%Y-%m-%d")
+    lines[lines_date_key] = pd.to_datetime(lines[lines_date_key]).dt.strftime("%Y-%m-%d")
+
+    merged = proj.merge(
+        lines,
+        left_on=[projection_join_key, projection_date_key],
+        right_on=[lines_join_key, lines_date_key],
+        how="inner",
+        suffixes=("_proj", "_line"),
+    )
+
+    if merged.empty:
+        return merged
+
+    require_columns(
+        merged,
+        ["predicted_strikeouts", "line"],
+        "joined_historical_lines_df",
+    )
+    merged["edge"] = merged["predicted_strikeouts"] - merged["line"]
+    return merged
+
+
 def best_over_edges(
     joined: pd.DataFrame,
     *,

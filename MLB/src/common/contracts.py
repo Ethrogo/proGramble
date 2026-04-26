@@ -51,6 +51,19 @@ FINAL_PICKS_REQUIRED_COLUMNS = [
     "confidence_tier",
 ]
 
+HISTORICAL_LINES_REQUIRED_COLUMNS = [
+    "game_date",
+    "player_name",
+    "player_name_norm",
+    "market_key",
+    "bookmaker",
+    "side",
+    "line",
+    "price",
+    "selection_rule",
+    "source",
+]
+
 
 def validate_dataframe_contract(
     df: pd.DataFrame,
@@ -196,4 +209,26 @@ def validate_final_picks_contract(df: pd.DataFrame) -> None:
             "edge",
             "pick_type",
         ],
+    )
+
+
+def validate_historical_lines_contract(df: pd.DataFrame) -> None:
+    validate_dataframe_contract(
+        df,
+        name="historical_lines_df",
+        required_columns=HISTORICAL_LINES_REQUIRED_COLUMNS,
+        non_null_columns=[
+            "game_date",
+            "player_name",
+            "player_name_norm",
+            "market_key",
+            "bookmaker",
+            "side",
+            "line",
+            "price",
+            "selection_rule",
+            "source",
+        ],
+        unique_keys=["game_date", "player_name_norm", "bookmaker", "side"],
+        require_non_empty_frame=False,
     )

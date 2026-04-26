@@ -9,6 +9,8 @@ from pathlib import Path
 import pandas as pd
 
 from common.contracts import validate_pitcher_games_contract, require_columns
+from odds.backtest import run_historical_workflow_backtest, summarize_backtest_for_metadata
+from odds.historical_lines import build_historical_lines_artifact_df, empty_historical_lines_df
 from pitcher_k.evaluate import (
     build_error_bucket_summary,
     build_prediction_results,
@@ -48,7 +50,9 @@ PREVIOUS_DIR = ARTIFACTS_DIR / "previous"
 MODEL_FILENAME = "model.ubj"
 PITCHER_GAMES_FILENAME = "pitcher_games.csv"
 MODEL_DF_FILENAME = "model_df.csv"
+HISTORICAL_LINES_FILENAME = "historical_lines.csv"
 METADATA_FILENAME = "metadata.json"
+RAW_HISTORICAL_LINES_DIR = DATA_DIR / "raw" / "historical_lines"
 
 
 def ensure_artifact_dirs() -> None:
@@ -62,6 +66,7 @@ def artifact_paths(base_dir: Path) -> dict[str, Path]:
         "model": base_dir / MODEL_FILENAME,
         "pitcher_games": base_dir / PITCHER_GAMES_FILENAME,
         "model_df": base_dir / MODEL_DF_FILENAME,
+        "historical_lines": base_dir / HISTORICAL_LINES_FILENAME,
         "metadata": base_dir / METADATA_FILENAME,
     }
 
@@ -112,7 +117,14 @@ def build_historical_pitcher_games() -> pd.DataFrame:
     return pitcher_games
 
 
-def train_pitcher_k_model(pitcher_games: pd.DataFrame):
+def build_native_historical_lines() -> pd.DataFrame:
+    return build_historical_lines_artifact_df(RAW_HISTORICAL_LINES_DIR)
+
+
+def train_pitcher_k_model(
+    pitcher_games: pd.DataFrame,
+    historical_lines_df: pd.DataFrame | None = None,
+):
     model_df = build_model_df(pitcher_games)
     train_df, test_df = time_split(model_df)
     train_output = train_model(train_df, test_df)
@@ -121,6 +133,7 @@ def train_pitcher_k_model(pitcher_games: pd.DataFrame):
         train_df=train_df,
         test_df=test_df,
         train_output=train_output,
+        historical_lines_df=historical_lines_df,
     )
     return train_output["model"], model_df, metadata
 
@@ -136,7 +149,40 @@ def _date_range(df: pd.DataFrame) -> dict[str, str | None]:
     }
 
 
-def _evaluation_metrics(train_output: dict) -> dict:
+def _build_workflow_backtest_summary(
+    *,
+    test_df: pd.DataFrame,
+    y_test: pd.Series,
+    y_pred_test,
+    historical_lines_df: pd.DataFrame | None,
+) -> dict:
+    if historical_lines_df is None or historical_lines_df.empty:
+        return {
+            "available": False,
+            "reason": "historical_market_lines_not_provided",
+            "reproducible_path": "odds.backtest.run_historical_workflow_backtest",
+        }
+
+    projections = test_df[["game_date", "player_name"]].copy()
+    projections["predicted_strikeouts"] = pd.Series(y_pred_test, index=test_df.index).values
+    projections["actual_strikeouts"] = pd.Series(y_test, index=test_df.index).values
+
+    backtest_result = run_historical_workflow_backtest(
+        projections,
+        historical_lines_df,
+        actual_column="actual_strikeouts",
+    )
+    backtest_summary = summarize_backtest_for_metadata(backtest_result)
+    backtest_summary["reproducible_path"] = "odds.backtest.run_historical_workflow_backtest"
+    return backtest_summary
+
+
+def _evaluation_metrics(
+    train_output: dict,
+    *,
+    test_df: pd.DataFrame,
+    historical_lines_df: pd.DataFrame | None = None,
+) -> dict:
     y_train = train_output["y_train"]
     y_test = train_output["y_test"]
     y_pred_train = train_output["model"].predict(train_output["dtrain"])
@@ -165,11 +211,12 @@ def _evaluation_metrics(train_output: dict) -> dict:
             y_pred_test,
             interval_config,
         ),
-        "workflow_backtest": {
-            "available": False,
-            "reason": "historical_market_lines_not_provided",
-            "reproducible_path": "odds.backtest.run_pick_backtest",
-        },
+        "workflow_backtest": _build_workflow_backtest_summary(
+            test_df=test_df,
+            y_test=y_test,
+            y_pred_test=y_pred_test,
+            historical_lines_df=historical_lines_df,
+        ),
         "sample_sizes": {
             "train_rows": int(len(train_output["X_train"])),
             "test_rows": int(len(train_output["X_test"])),
@@ -182,6 +229,7 @@ def build_training_metadata(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     train_output: dict,
+    historical_lines_df: pd.DataFrame | None = None,
 ) -> dict:
     uncertainty_model = fit_interval_calibration(
         train_output["X_train"],
@@ -205,8 +253,21 @@ def build_training_metadata(
             "train_game_date_range": _date_range(train_df),
             "test_game_date_range": _date_range(test_df),
         },
-        "evaluation_metrics": _evaluation_metrics(train_output),
+        "evaluation_metrics": _evaluation_metrics(
+            train_output,
+            test_df=test_df,
+            historical_lines_df=historical_lines_df,
+        ),
         "uncertainty_model": uncertainty_model,
+        "historical_lines_artifact": {
+            "selection_rule": "latest_pregame_snapshot_per_game_player_book_side",
+            "source_directory": str(RAW_HISTORICAL_LINES_DIR),
+            "rows": int(len(historical_lines_df)) if historical_lines_df is not None else 0,
+            "limitations": (
+                "v1 stores one selected line per game_date x player x sportsbook x side. "
+                "It does not persist full snapshot history or intraday replay data."
+            ),
+        },
     }
 
 
@@ -214,6 +275,7 @@ def save_artifacts_to_dir(
     output_dir: Path,
     pitcher_games: pd.DataFrame,
     model_df: pd.DataFrame,
+    historical_lines_df: pd.DataFrame,
     model,
     metadata: dict,
 ) -> dict[str, Path]:
@@ -222,6 +284,7 @@ def save_artifacts_to_dir(
 
     pitcher_games.to_csv(paths["pitcher_games"], index=False)
     model_df.to_csv(paths["model_df"], index=False)
+    historical_lines_df.to_csv(paths["historical_lines"], index=False)
     model.save_model(str(paths["model"]))
     paths["metadata"].write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
@@ -235,6 +298,7 @@ def validate_saved_artifacts(paths: dict[str, Path]) -> None:
 
     pitcher_games = pd.read_csv(paths["pitcher_games"])
     model_df = pd.read_csv(paths["model_df"])
+    historical_lines = pd.read_csv(paths["historical_lines"])
 
     if pitcher_games.empty:
         raise ValueError("Saved pitcher_games artifact is empty.")
@@ -242,18 +306,26 @@ def validate_saved_artifacts(paths: dict[str, Path]) -> None:
     if model_df.empty:
         raise ValueError("Saved model_df artifact is empty.")
 
+    if list(historical_lines.columns) != list(empty_historical_lines_df().columns):
+        raise ValueError("Saved historical_lines artifact does not match expected schema.")
+
 
 def build_training_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, Path, Path]:
     ensure_artifact_dirs()
     reset_dir(STAGING_DIR)
 
     pitcher_games = build_historical_pitcher_games()
-    model, model_df, metadata = train_pitcher_k_model(pitcher_games)
+    historical_lines_df = build_native_historical_lines()
+    model, model_df, metadata = train_pitcher_k_model(
+        pitcher_games,
+        historical_lines_df=historical_lines_df,
+    )
 
     staging_paths = save_artifacts_to_dir(
         output_dir=STAGING_DIR,
         pitcher_games=pitcher_games,
         model_df=model_df,
+        historical_lines_df=historical_lines_df,
         model=model,
         metadata=metadata,
     )
