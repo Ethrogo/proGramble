@@ -3,23 +3,14 @@
 import numpy as np
 import pandas as pd
 
+from .config import BASE_FEATURES
 
 
 def get_feature_columns() -> list[str]:
     """
     Return the current model feature list.
     """
-    return [
-        "pitches_last3",
-        "pitches_last10",
-        "whiff_per_pitch_last3",
-        "avg_velo_last3",
-        "avg_spin_last3",
-        "k_per_pitch_last10",
-        "k_rate_last10",
-        "opp_strikeouts_per_game_last10",
-        "opp_k_rate_last10",
-    ]
+    return list(BASE_FEATURES)
 
 
 

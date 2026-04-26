@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from common.contracts import validate_pitcher_games_contract, require_columns
-from pitcher_k.config import RAW_STATCAST_START, RAW_STATCAST_END
+from pitcher_k.config import BASE_FEATURES, RAW_STATCAST_START, RAW_STATCAST_END
 from pitcher_k.data_loader import load_statcast_data
 from pitcher_k.preprocessing import add_outcome_flags
 from pitcher_k.feature_engineering import (
@@ -88,17 +88,7 @@ def build_historical_pitcher_games() -> pd.DataFrame:
     validate_pitcher_games_contract(pitcher_games)
     require_columns(
         pitcher_games,
-        [
-            "pitches_last3",
-            "pitches_last10",
-            "whiff_per_pitch_last3",
-            "avg_velo_last3",
-            "avg_spin_last3",
-            "k_per_pitch_last10",
-            "k_rate_last10",
-            "opp_strikeouts_per_game_last10",
-            "opp_k_rate_last10",
-        ],
+        BASE_FEATURES,
         "pitcher_games",
     )
 

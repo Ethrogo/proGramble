@@ -10,6 +10,7 @@ from common.contracts import (
     validate_starters_contract,
     validate_pitcher_games_contract,
 )
+from .config import BASE_FEATURES
 from .feature_engineering import normalize_player_name, _safe_div
 
 
@@ -209,16 +210,8 @@ def build_tomorrow_features(
             "team",
             "opponent",
             "is_home",
-            "pitches_last3",
-            "pitches_last10",
-            "whiff_per_pitch_last3",
-            "avg_velo_last3",
-            "avg_spin_last3",
-            "k_per_pitch_last10",
-            "k_rate_last10",
-            "opp_strikeouts_per_game_last10",
-            "opp_k_rate_last10",
-        ],
+        ]
+        + BASE_FEATURES,
         "tomorrow_features_df",
     )
 
