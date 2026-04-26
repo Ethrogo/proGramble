@@ -10,10 +10,6 @@ import pandas as pd
 import xgboost as xgb
 
 from starters.today_starters import get_today_starters_df, save_today_starters_csv
-from pitcher_k.feature_engineering import build_team_context
-from pitcher_k.feature_tomorrow import build_tomorrow_features
-from pitcher_k.predict import predict_on_dataframe
-from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 from odds.run_edges import run_edge_pipeline
 from odds.create_picks import build_daily_picks, filter_postable_picks
@@ -25,6 +21,7 @@ from common.contracts import (
     assert_non_empty,
     require_columns,
 )
+from common.workflows import MLB_PITCHER_STRIKEOUT_WORKFLOW, ModelingWorkflowSpec
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
@@ -101,22 +98,30 @@ def load_model_metadata() -> dict:
 
 
 def build_today_predictions(starters_df: pd.DataFrame, pitcher_games: pd.DataFrame, model):
+    return build_today_predictions_for_workflow(
+        starters_df=starters_df,
+        pitcher_games=pitcher_games,
+        model=model,
+        workflow=MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    )
+
+
+def build_today_predictions_for_workflow(
+    *,
+    starters_df: pd.DataFrame,
+    pitcher_games: pd.DataFrame,
+    model,
+    workflow: ModelingWorkflowSpec,
+):
     validate_starters_contract(starters_df)
     validate_pitcher_games_contract(pitcher_games)
 
-    as_of_date = starters_df["game_date"].min()
-    team_context = build_team_context(pitcher_games, as_of_date=as_of_date)
-
-    today_features = build_tomorrow_features(
-        slate_df=starters_df,
-        pitcher_games=pitcher_games,
-        team_context=team_context,
-    )
+    today_features = workflow.feature_builder(starters_df, pitcher_games)
 
     if today_features.empty:
         return today_features
 
-    today_preds = predict_on_dataframe(model, today_features)
+    today_preds = workflow.predictor(model, today_features)
     assert_non_empty(today_preds, "today_preds")
     require_columns(
         today_preds,
@@ -143,21 +148,29 @@ def save_outputs(
 
 def run_daily_card(
     *,
-    market: str = PITCHER_K_PROP_MARKET,
+    workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    market: str | None = None,
     build_picks_fn: BuildPicksFn | None = None,
     filter_postable_picks_fn: FilterPostablePicksFn | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     ensure_output_dirs()
 
     if build_picks_fn is None:
-        build_picks_fn = build_daily_picks
+        def build_picks_fn(joined_df: pd.DataFrame) -> pd.DataFrame:
+            return build_daily_picks(
+                joined_df,
+                policy=workflow.pick_ranking_policy,
+            )
 
     if filter_postable_picks_fn is None:
+        postable_limits = workflow.resolved_postable_limits()
+
         def filter_postable_picks_fn(picks_df: pd.DataFrame) -> pd.DataFrame:
             return filter_postable_picks(
                 picks_df,
-                max_official=3,
-                max_leans=1,
+                max_official=postable_limits.max_official,
+                max_leans=postable_limits.max_leans,
+                policy=workflow.pick_ranking_policy,
             )
 
     starters_df = get_today_starters_df()
@@ -166,16 +179,24 @@ def run_daily_card(
     model = load_model_artifact()
     load_model_metadata()
 
-    today_preds = build_today_predictions(
+    today_preds = build_today_predictions_for_workflow(
         starters_df=starters_df,
         pitcher_games=pitcher_games,
         model=model,
+        workflow=workflow,
     )
 
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
 
-    joined_df, _ = run_edge_pipeline(today_preds, market)
+    selected_market = market or workflow.market_key
+    joined_df, _ = run_edge_pipeline(
+        today_preds,
+        selected_market,
+        participant_key=workflow.participant_key,
+        projection_join_key=workflow.projection_odds_join_keys.projection,
+        odds_join_key=workflow.projection_odds_join_keys.odds,
+    )
     validate_joined_odds_contract(joined_df)
 
     picks_df = build_picks_fn(joined_df)
