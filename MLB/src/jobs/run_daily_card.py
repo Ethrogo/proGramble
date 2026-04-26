@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +33,7 @@ PREVIOUS_ARTIFACTS_DIR = ARTIFACTS_DIR / "previous"
 
 MODEL_PATH = LATEST_ARTIFACTS_DIR / "model.ubj"
 PITCHER_GAMES_PATH = LATEST_ARTIFACTS_DIR / "pitcher_games.csv"
+METADATA_FILENAME = "metadata.json"
 
 OUTPUT_DIR = DATA_DIR / "outputs"
 
@@ -46,41 +48,52 @@ def ensure_output_dirs() -> None:
     PICKS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_pitcher_games_artifact() -> pd.DataFrame:
+def resolve_artifact_path(filename: str) -> Path:
     candidate_paths = [
-        LATEST_ARTIFACTS_DIR / "pitcher_games.csv",
-        PREVIOUS_ARTIFACTS_DIR / "pitcher_games.csv",
+        LATEST_ARTIFACTS_DIR / filename,
+        PREVIOUS_ARTIFACTS_DIR / filename,
     ]
 
     for path in candidate_paths:
         if path.exists():
-            pitcher_games = pd.read_csv(path)
-            pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
-            validate_pitcher_games_contract(pitcher_games)
-            print(f"Loaded pitcher_games artifact from: {path}")
-            return pitcher_games
+            return path
 
     raise FileNotFoundError(
-        "Missing pitcher_games artifact in both latest/ and previous/."
+        f"Missing {filename} artifact in both latest/ and previous/."
     )
+
+
+def load_pitcher_games_artifact() -> pd.DataFrame:
+    path = resolve_artifact_path("pitcher_games.csv")
+    pitcher_games = pd.read_csv(path)
+    pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
+    validate_pitcher_games_contract(pitcher_games)
+    print(f"Loaded pitcher_games artifact from: {path}")
+    return pitcher_games
 
 
 def load_model_artifact():
-    candidate_paths = [
-        LATEST_ARTIFACTS_DIR / "model.ubj",
-        PREVIOUS_ARTIFACTS_DIR / "model.ubj",
-    ]
+    path = resolve_artifact_path("model.ubj")
+    model = xgb.Booster()
+    model.load_model(str(path))
+    print(f"Loaded model artifact from: {path}")
+    return model
 
-    for path in candidate_paths:
-        if path.exists():
-            model = xgb.Booster()
-            model.load_model(str(path))
-            print(f"Loaded model artifact from: {path}")
-            return model
 
-    raise FileNotFoundError(
-        "Missing model artifact in both latest/ and previous/."
-    )
+def load_model_metadata() -> dict:
+    model_path = resolve_artifact_path("model.ubj")
+    metadata_path = model_path.with_name(METADATA_FILENAME)
+
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"Missing metadata artifact paired with model: {metadata_path}"
+        )
+
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    print(f"Loaded model metadata from: {metadata_path}")
+    print("Model metadata:")
+    print(json.dumps(metadata, indent=2))
+    return metadata
 
 
 def build_today_predictions(starters_df: pd.DataFrame, pitcher_games: pd.DataFrame, model):
@@ -131,6 +144,7 @@ def run_daily_card() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataF
     validate_starters_contract(starters_df)
     pitcher_games = load_pitcher_games_artifact()
     model = load_model_artifact()
+    load_model_metadata()
 
     today_preds = build_today_predictions(
         starters_df=starters_df,

@@ -89,6 +89,11 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
     monkeypatch.setattr(
         daily_card,
+        "load_model_metadata",
+        lambda: {"target": "strikeouts", "features": ["pitches_last3"]},
+    )
+    monkeypatch.setattr(
+        daily_card,
         "build_today_predictions",
         lambda starters_df, pitcher_games, model: today_preds,
     )
@@ -175,6 +180,11 @@ def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp
     monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
     monkeypatch.setattr(
         daily_card,
+        "load_model_metadata",
+        lambda: {"target": "strikeouts", "features": ["pitches_last3"]},
+    )
+    monkeypatch.setattr(
+        daily_card,
         "build_today_predictions",
         lambda starters_df, pitcher_games, model: pd.DataFrame(),
     )
@@ -221,3 +231,33 @@ def test_run_daily_card_raises_when_pitcher_games_artifact_is_missing(monkeypatc
 
     with pytest.raises(FileNotFoundError, match="Missing pitcher_games artifact"):
         daily_card.run_daily_card()
+
+
+def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_path, monkeypatch, capsys):
+    latest_dir = tmp_path / "artifacts" / "latest"
+    previous_dir = tmp_path / "artifacts" / "previous"
+    latest_dir.mkdir(parents=True, exist_ok=True)
+    previous_dir.mkdir(parents=True, exist_ok=True)
+
+    latest_model = latest_dir / "model.ubj"
+    latest_model.write_text("placeholder", encoding="utf-8")
+    (latest_dir / "metadata.json").write_text(
+        '{"target": "strikeouts", "features": ["pitches_last3"], "evaluation_metrics": {"mae": 0.9}}',
+        encoding="utf-8",
+    )
+    (previous_dir / "model.ubj").write_text("older-placeholder", encoding="utf-8")
+    (previous_dir / "metadata.json").write_text(
+        '{"target": "old_target"}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(daily_card, "LATEST_ARTIFACTS_DIR", latest_dir)
+    monkeypatch.setattr(daily_card, "PREVIOUS_ARTIFACTS_DIR", previous_dir)
+
+    metadata = daily_card.load_model_metadata()
+    captured = capsys.readouterr()
+
+    assert metadata["target"] == "strikeouts"
+    assert metadata["evaluation_metrics"]["mae"] == 0.9
+    assert str(latest_dir / "metadata.json") in captured.out
+    assert '"target": "strikeouts"' in captured.out
