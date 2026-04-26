@@ -6,6 +6,7 @@ import pytest
 from odds.compare import (
     prepare_projection_df,
     join_projections_to_odds,
+    join_projections_to_historical_lines,
     best_over_edges,
 )
 
@@ -312,3 +313,46 @@ def test_prepare_projection_df_raises_when_required_columns_missing():
 
     with pytest.raises(ValueError, match="projections_df is missing required columns"):
         prepare_projection_df(projections)
+
+
+def test_join_projections_to_historical_lines_matches_on_name_and_game_date():
+    projections = pd.DataFrame(
+        [
+            {
+                "game_date": "2025-08-02",
+                "player_name": "Jacob deGrom",
+                "predicted_strikeouts": 6.8,
+                "actual_strikeouts": 7,
+            }
+        ]
+    )
+    historical_lines = pd.DataFrame(
+        [
+            {
+                "game_date": "2025-08-02",
+                "player_name": "Jacob Degrom",
+                "player_name_norm": "jacob degrom",
+                "market_key": "pitcher_strikeouts",
+                "bookmaker": "DraftKings",
+                "bookmaker_key": "draftkings",
+                "side": "Over",
+                "line": 6.5,
+                "price": -120,
+                "event_id": "evt_1",
+                "commence_time": "2025-08-02T23:10:00Z",
+                "selection_rule": "latest_pregame_snapshot_per_game_player_book_side",
+                "source": "fixture",
+                "pulled_at": "2025-08-02T22:50:00Z",
+                "snapshot_type": "selected",
+                "is_closing_line": True,
+                "snapshot_rank": 1,
+            }
+        ]
+    )
+
+    joined = join_projections_to_historical_lines(projections, historical_lines)
+
+    assert len(joined) == 1
+    assert joined.loc[0, "player_name_proj"] == "Jacob deGrom"
+    assert joined.loc[0, "bookmaker"] == "DraftKings"
+    assert joined.loc[0, "edge"] == pytest.approx(0.3)

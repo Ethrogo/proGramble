@@ -22,6 +22,7 @@ from common.contracts import (
     require_columns,
 )
 from common.workflows import MLB_PITCHER_STRIKEOUT_WORKFLOW, ModelingWorkflowSpec
+from pitcher_k.evaluate import apply_interval_calibration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
@@ -131,6 +132,23 @@ def build_today_predictions_for_workflow(
     return today_preds
 
 
+def apply_metadata_uncertainty(
+    today_preds: pd.DataFrame,
+    metadata: dict | None,
+) -> pd.DataFrame:
+    """
+    Re-apply interval bounds using the saved calibration config when available.
+    """
+    if today_preds.empty:
+        return today_preds
+
+    interval_config = (metadata or {}).get("uncertainty_model")
+    if not interval_config:
+        return today_preds
+
+    return apply_interval_calibration(today_preds, interval_config)
+
+
 def save_outputs(
     starters_df: pd.DataFrame,
     today_preds: pd.DataFrame,
@@ -177,7 +195,7 @@ def run_daily_card(
     validate_starters_contract(starters_df)
     pitcher_games = load_pitcher_games_artifact()
     model = load_model_artifact()
-    load_model_metadata()
+    metadata = load_model_metadata()
 
     today_preds = build_today_predictions_for_workflow(
         starters_df=starters_df,
@@ -185,6 +203,7 @@ def run_daily_card(
         model=model,
         workflow=workflow,
     )
+    today_preds = apply_metadata_uncertainty(today_preds, metadata)
 
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
