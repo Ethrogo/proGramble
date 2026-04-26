@@ -136,10 +136,38 @@ def test_build_tomorrow_features_creates_expected_output_columns():
         "k_rate_last10",
         "opp_strikeouts_per_game_last10",
         "opp_k_rate_last10",
+        "strikeouts_stddev_last10",
+        "strikeouts_p25_last10",
+        "strikeouts_p75_last10",
     }
 
     assert expected_cols.issubset(features.columns)
     assert features.attrs["skipped_pitchers"] == 0
+
+
+def test_build_tomorrow_features_computes_recent_strikeout_uncertainty():
+    slate_df = _valid_slate_df()
+    pitcher_games = _valid_pitcher_games_df()
+    team_context = _valid_team_context_df()
+
+    features = build_tomorrow_features(
+        slate_df,
+        pitcher_games,
+        team_context=team_context,
+        min_career_starts=5,
+    )
+
+    recent_strikeouts = pitcher_games["strikeouts"]
+
+    assert features.loc[0, "strikeouts_stddev_last10"] == pytest.approx(
+        recent_strikeouts.std(ddof=0)
+    )
+    assert features.loc[0, "strikeouts_p25_last10"] == pytest.approx(
+        recent_strikeouts.quantile(0.25)
+    )
+    assert features.loc[0, "strikeouts_p75_last10"] == pytest.approx(
+        recent_strikeouts.quantile(0.75)
+    )
 
 
 def test_build_tomorrow_features_falls_back_to_name_match_when_pitcher_id_has_no_history():
