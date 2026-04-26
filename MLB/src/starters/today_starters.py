@@ -121,8 +121,8 @@ def build_today_starters_df(raw_df: pd.DataFrame) -> pd.DataFrame:
     expected by the pitcher_k pipeline.
     """
     starters_df = finalize_starters_df(raw_df)
+    validate_starters_contract(starters_df)
     validate_starters_df(starters_df)
-    validate_starters_contract(starters_df) # shared contract
     return starters_df
 
 

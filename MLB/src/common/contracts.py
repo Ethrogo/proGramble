@@ -52,6 +52,31 @@ FINAL_PICKS_REQUIRED_COLUMNS = [
 ]
 
 
+def validate_dataframe_contract(
+    df: pd.DataFrame,
+    *,
+    name: str,
+    required_columns: Sequence[str],
+    non_null_columns: Sequence[str] = (),
+    unique_keys: Sequence[str] = (),
+    boolean_like_int_columns: Sequence[str] = (),
+    require_non_empty_frame: bool = True,
+) -> None:
+    require_columns(df, required_columns, name)
+
+    if require_non_empty_frame:
+        assert_non_empty(df, name)
+
+    if non_null_columns:
+        assert_non_null_columns(df, non_null_columns, name)
+
+    if unique_keys:
+        assert_no_duplicate_keys(df, unique_keys, name)
+
+    for column in boolean_like_int_columns:
+        assert_boolean_like_int_column(df, column, name)
+
+
 def require_columns(df: pd.DataFrame, columns: Sequence[str], name: str) -> None:
     missing = [col for col in columns if col not in df.columns]
     if missing:
@@ -114,11 +139,11 @@ def assert_boolean_like_int_column(
 
 
 def validate_starters_contract(df: pd.DataFrame) -> None:
-    require_columns(df, STARTERS_REQUIRED_COLUMNS, "starters_df")
-    assert_non_empty(df, "starters_df")
-    assert_non_null_columns(
+    validate_dataframe_contract(
         df,
-        [
+        name="starters_df",
+        required_columns=STARTERS_REQUIRED_COLUMNS,
+        non_null_columns=[
             "game_date",
             "game_pk",
             "player_name",
@@ -128,46 +153,47 @@ def validate_starters_contract(df: pd.DataFrame) -> None:
             "away_team",
             "is_home",
         ],
-        "starters_df",
+        unique_keys=["game_date", "game_pk", "player_name"],
+        boolean_like_int_columns=["is_home"],
     )
-    assert_no_duplicate_keys(
-        df,
-        ["game_date", "game_pk", "player_name"],
-        "starters_df",
-    )
-    assert_boolean_like_int_column(df, "is_home", "starters_df")
 
 
 def validate_pitcher_games_contract(df: pd.DataFrame) -> None:
-    require_columns(df, PITCHER_GAMES_REQUIRED_COLUMNS, "pitcher_games")
-    assert_non_empty(df, "pitcher_games")
-    assert_non_null_columns(
+    validate_dataframe_contract(
         df,
-        ["game_date", "game_pk", "pitcher", "player_name"],
-        "pitcher_games",
-    )
-    assert_no_duplicate_keys(
-        df,
-        ["game_date", "game_pk", "pitcher"],
-        "pitcher_games",
+        name="pitcher_games",
+        required_columns=PITCHER_GAMES_REQUIRED_COLUMNS,
+        non_null_columns=["game_date", "game_pk", "pitcher", "player_name"],
+        unique_keys=["game_date", "game_pk", "pitcher"],
     )
 
 
 def validate_joined_odds_contract(df: pd.DataFrame) -> None:
-    require_columns(df, JOINED_ODDS_REQUIRED_COLUMNS, "joined_odds_df")
-    assert_non_empty(df, "joined_odds_df")
-    assert_non_null_columns(
+    validate_dataframe_contract(
         df,
-        ["player_name_proj", "predicted_strikeouts", "bookmaker", "side", "line"],
-        "joined_odds_df",
+        name="joined_odds_df",
+        required_columns=JOINED_ODDS_REQUIRED_COLUMNS,
+        non_null_columns=[
+            "player_name_proj",
+            "predicted_strikeouts",
+            "bookmaker",
+            "side",
+            "line",
+        ],
     )
 
 
 def validate_final_picks_contract(df: pd.DataFrame) -> None:
-    require_columns(df, FINAL_PICKS_REQUIRED_COLUMNS, "final_picks_df")
-    assert_non_empty(df, "final_picks_df")
-    assert_non_null_columns(
+    validate_dataframe_contract(
         df,
-        ["player_name", "book", "pick_side", "line", "edge", "pick_type"],
-        "final_picks_df",
+        name="final_picks_df",
+        required_columns=FINAL_PICKS_REQUIRED_COLUMNS,
+        non_null_columns=[
+            "player_name",
+            "book",
+            "pick_side",
+            "line",
+            "edge",
+            "pick_type",
+        ],
     )

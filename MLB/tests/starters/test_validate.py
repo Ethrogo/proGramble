@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+from common.contracts import validate_starters_contract
 from starters.validate import validate_starters_df
 
 
@@ -40,18 +41,26 @@ def test_validate_starters_df_passes_on_valid_input():
     validate_starters_df(df)
 
 
-def test_validate_starters_df_raises_on_missing_required_column():
+def test_validate_starters_contract_raises_on_missing_required_column():
     df = _valid_starters_df().drop(columns=["team"])
 
-    with pytest.raises(ValueError, match="Missing required starter columns"):
-        validate_starters_df(df)
+    with pytest.raises(ValueError, match="starters_df is missing required columns"):
+        validate_starters_contract(df)
 
 
-def test_validate_starters_df_raises_on_duplicate_pitcher_rows():
+def test_validate_starters_contract_raises_on_duplicate_pitcher_rows():
     df = pd.concat([_valid_starters_df(), _valid_starters_df().iloc[[0]]], ignore_index=True)
 
-    with pytest.raises(ValueError, match="Duplicate pitcher rows found"):
-        validate_starters_df(df)
+    with pytest.raises(ValueError, match="starters_df has duplicate rows"):
+        validate_starters_contract(df)
+
+
+def test_validate_starters_contract_raises_on_required_nulls():
+    df = _valid_starters_df()
+    df.loc[0, "team"] = None
+
+    with pytest.raises(ValueError, match="starters_df has null values in required columns"):
+        validate_starters_contract(df)
 
 
 def test_validate_starters_df_raises_on_bad_home_away_logic():
