@@ -181,6 +181,9 @@ def test_filter_postable_picks_limits_officials_and_leans():
                 "price": -110,
                 "pick_type": "official",
                 "edge": 1.2,
+                "implied_probability": 110 / 210,
+                "value_score": 1.2 * (1 - (110 / 210)),
+                "confidence_tier": "medium",
             },
             {
                 "player_name": "B",
@@ -190,6 +193,9 @@ def test_filter_postable_picks_limits_officials_and_leans():
                 "price": -105,
                 "pick_type": "official",
                 "edge": 1.1,
+                "implied_probability": 105 / 205,
+                "value_score": 1.1 * (1 - (105 / 205)),
+                "confidence_tier": "medium",
             },
             {
                 "player_name": "C",
@@ -199,6 +205,9 @@ def test_filter_postable_picks_limits_officials_and_leans():
                 "price": 100,
                 "pick_type": "official",
                 "edge": 1.0,
+                "implied_probability": 0.5,
+                "value_score": 0.5,
+                "confidence_tier": "medium",
             },
             {
                 "player_name": "D",
@@ -208,6 +217,9 @@ def test_filter_postable_picks_limits_officials_and_leans():
                 "price": -115,
                 "pick_type": "lean",
                 "edge": 0.6,
+                "implied_probability": 115 / 215,
+                "value_score": 0.6 * (1 - (115 / 215)),
+                "confidence_tier": "low",
             },
             {
                 "player_name": "E",
@@ -217,6 +229,9 @@ def test_filter_postable_picks_limits_officials_and_leans():
                 "price": -110,
                 "pick_type": "lean",
                 "edge": 0.5,
+                "implied_probability": 110 / 210,
+                "value_score": 0.5 * (1 - (110 / 210)),
+                "confidence_tier": "low",
             },
             {
                 "player_name": "F",
@@ -226,6 +241,9 @@ def test_filter_postable_picks_limits_officials_and_leans():
                 "price": -110,
                 "pick_type": "pass",
                 "edge": 0.1,
+                "implied_probability": 110 / 210,
+                "value_score": 0.1 * (1 - (110 / 210)),
+                "confidence_tier": "thin",
             },
         ]
     )
@@ -297,4 +315,92 @@ def test_filter_postable_picks_raises_when_pick_type_missing():
     with pytest.raises(ValueError, match="picks_df is missing required columns"):
         filter_postable_picks(picks_df)
 
+def test_build_daily_picks_adds_implied_probability_value_score_and_confidence_tier():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
 
+    picks = build_daily_picks(joined_df)
+
+    assert "implied_probability" in picks.columns
+    assert "value_score" in picks.columns
+    assert "confidence_tier" in picks.columns
+
+    expected_edge = 6.8 - 5.5
+    expected_implied_probability = 120 / 220
+    expected_value_score = abs(expected_edge) * (1 - expected_implied_probability)
+
+    assert picks.loc[0, "edge"] == pytest.approx(expected_edge)
+    assert picks.loc[0, "implied_probability"] == pytest.approx(expected_implied_probability)
+    assert picks.loc[0, "value_score"] == pytest.approx(expected_value_score)
+    assert picks.loc[0, "confidence_tier"] in {"high", "medium", "low", "thin"}
+
+def test_build_daily_picks_ranks_same_pick_type_by_value_score_not_raw_edge():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Expensive Bigger Edge",
+                "team": "AAA",
+                "opponent": "BBB",
+                "predicted_strikeouts": 6.3,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -300,
+            },
+            {
+                "player_name_proj": "Plus Money Smaller Edge",
+                "team": "CCC",
+                "opponent": "DDD",
+                "predicted_strikeouts": 6.26,
+                "bookmaker": "FanDuel",
+                "side": "Over",
+                "line": 5.5,
+                "price": 150,
+            },
+        ]
+    )
+
+    picks = build_daily_picks(joined_df)
+
+    assert len(picks) == 2
+    assert list(picks["pick_type"]) == ["official", "official"]
+    assert picks.loc[0, "player_name"] == "Plus Money Smaller Edge"
+    assert picks.loc[0, "value_score"] > picks.loc[1, "value_score"]
+    assert picks.loc[0, "edge"] < picks.loc[1, "edge"]
+
+def test_filter_postable_picks_preserves_value_fields():
+    picks_df = pd.DataFrame(
+        [
+            {
+                "player_name": "A",
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -110,
+                "edge": 1.0,
+                "implied_probability": 110 / 210,
+                "value_score": 1.0 * (1 - (110 / 210)),
+                "confidence_tier": "medium",
+                "pick_type": "official",
+            }
+        ]
+    )
+
+    postable = filter_postable_picks(picks_df, max_official=1, max_leans=0)
+
+    assert len(postable) == 1
+    assert "implied_probability" in postable.columns
+    assert "value_score" in postable.columns
+    assert "confidence_tier" in postable.columns

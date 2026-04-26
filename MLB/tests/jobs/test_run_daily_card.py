@@ -64,21 +64,23 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     )
 
     picks_df = pd.DataFrame(
-        [
-            {
-                "player_name": "Jacob deGrom",
-                "team": "TEX",
-                "opponent": "SEA",
-                "predicted_strikeouts": 6.8,
-                "book": "DraftKings",
-                "pick_side": "over",
-                "line": 5.5,
-                "price": -120,
-                "edge": 1.3,
-                "pick_type": "official",
-            }
-        ]
-    )
+    [
+        {
+            "player_name": "Jacob deGrom",
+            "team": "TEX",
+            "opponent": "SEA",
+            "predicted_strikeouts": 6.8,
+            "book": "DraftKings",
+            "pick_side": "over",
+            "line": 5.5,
+            "price": -120,
+            "edge": 1.3,
+            "implied_probability": 120 / 220,
+            "value_score": 1.3 * (1 - (120 / 220)),
+            "confidence_tier": "medium",
+            "pick_type": "official",
+        }
+    ])
 
     post_df = picks_df.copy()
 
