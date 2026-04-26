@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pandas requests pybaseball xgboost python-dotenv
+          pip install -r requirements.txt
 
       - name: Build training artifacts
         run: |
@@ -56,18 +56,14 @@ jobs:
           )
           '
           
-      - name: Upload outputs
+      - name: Upload runtime artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: daily-mlb-card-output
           if-no-files-found: warn
           path: |
-            MLB/data/artifacts/model.ubj
-            MLB/data/artifacts/pitcher_games.csv
-            MLB/data/artifacts/model_df.csv
-            MLB/data/inputs/starters/today_starters.csv
-            MLB/data/outputs/projections/today_projections.csv
-            MLB/data/outputs/edges/today_joined_edges.csv
-            MLB/data/outputs/picks/today_all_picks.csv
-            MLB/data/outputs/picks/today_postable_picks.csv
+            MLB/data/artifacts/latest/
+            MLB/data/artifacts/previous/
+            MLB/data/inputs/starters/
+            MLB/data/outputs/
