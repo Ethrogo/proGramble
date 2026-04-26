@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
 import pandas as pd
 
 from common.contracts import validate_pitcher_games_contract, require_columns
-from pitcher_k.config import BASE_FEATURES, RAW_STATCAST_START, RAW_STATCAST_END
+from pitcher_k.config import (
+    BASE_FEATURES,
+    RAW_STATCAST_START,
+    RAW_STATCAST_END,
+    TARGET_COL,
+    TRAIN_SPLIT_DATE,
+    XGB_PARAMS,
+)
 from pitcher_k.data_loader import load_statcast_data
 from pitcher_k.preprocessing import add_outcome_flags
 from pitcher_k.feature_engineering import (
@@ -33,6 +41,7 @@ PREVIOUS_DIR = ARTIFACTS_DIR / "previous"
 MODEL_FILENAME = "model.ubj"
 PITCHER_GAMES_FILENAME = "pitcher_games.csv"
 MODEL_DF_FILENAME = "model_df.csv"
+METADATA_FILENAME = "metadata.json"
 
 
 def ensure_artifact_dirs() -> None:
@@ -46,6 +55,7 @@ def artifact_paths(base_dir: Path) -> dict[str, Path]:
         "model": base_dir / MODEL_FILENAME,
         "pitcher_games": base_dir / PITCHER_GAMES_FILENAME,
         "model_df": base_dir / MODEL_DF_FILENAME,
+        "metadata": base_dir / METADATA_FILENAME,
     }
 
 
@@ -99,7 +109,63 @@ def train_pitcher_k_model(pitcher_games: pd.DataFrame):
     model_df = build_model_df(pitcher_games)
     train_df, test_df = time_split(model_df)
     train_output = train_model(train_df, test_df)
-    return train_output["model"], model_df
+    metadata = build_training_metadata(
+        model_df=model_df,
+        train_df=train_df,
+        test_df=test_df,
+        train_output=train_output,
+    )
+    return train_output["model"], model_df, metadata
+
+
+def _date_range(df: pd.DataFrame) -> dict[str, str | None]:
+    if df.empty:
+        return {"start": None, "end": None}
+
+    game_dates = pd.to_datetime(df["game_date"])
+    return {
+        "start": game_dates.min().strftime("%Y-%m-%d"),
+        "end": game_dates.max().strftime("%Y-%m-%d"),
+    }
+
+
+def _evaluation_metrics(train_output: dict) -> dict[str, float]:
+    y_test = train_output["y_test"]
+    y_pred = train_output["model"].predict(train_output["dtest"])
+    abs_errors = (y_pred - y_test).abs()
+
+    return {
+        "mae": float(abs_errors.mean()),
+        "pred_min": float(y_pred.min()),
+        "pred_max": float(y_pred.max()),
+    }
+
+
+def build_training_metadata(
+    model_df: pd.DataFrame,
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    train_output: dict,
+) -> dict:
+    return {
+        "target": TARGET_COL,
+        "features": BASE_FEATURES,
+        "model_params": {
+            "xgb_params": XGB_PARAMS,
+            "num_boost_round": 200,
+        },
+        "training_window": {
+            "raw_statcast_start": RAW_STATCAST_START,
+            "raw_statcast_end": RAW_STATCAST_END,
+            "train_split_date": TRAIN_SPLIT_DATE,
+            "model_df_rows": int(len(model_df)),
+            "train_rows": int(len(train_df)),
+            "test_rows": int(len(test_df)),
+            "train_game_date_range": _date_range(train_df),
+            "test_game_date_range": _date_range(test_df),
+        },
+        "evaluation_metrics": _evaluation_metrics(train_output),
+    }
 
 
 def save_artifacts_to_dir(
@@ -107,6 +173,7 @@ def save_artifacts_to_dir(
     pitcher_games: pd.DataFrame,
     model_df: pd.DataFrame,
     model,
+    metadata: dict,
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = artifact_paths(output_dir)
@@ -114,6 +181,7 @@ def save_artifacts_to_dir(
     pitcher_games.to_csv(paths["pitcher_games"], index=False)
     model_df.to_csv(paths["model_df"], index=False)
     model.save_model(str(paths["model"]))
+    paths["metadata"].write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
     return paths
 
@@ -138,13 +206,14 @@ def build_training_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, Path, Path]:
     reset_dir(STAGING_DIR)
 
     pitcher_games = build_historical_pitcher_games()
-    model, model_df = train_pitcher_k_model(pitcher_games)
+    model, model_df, metadata = train_pitcher_k_model(pitcher_games)
 
     staging_paths = save_artifacts_to_dir(
         output_dir=STAGING_DIR,
         pitcher_games=pitcher_games,
         model_df=model_df,
         model=model,
+        metadata=metadata,
     )
     validate_saved_artifacts(staging_paths)
 
