@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from jobs import run_daily_card as daily_card
+from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 
 def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp_path):
@@ -97,7 +98,11 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
         "build_today_predictions",
         lambda starters_df, pitcher_games, model: today_preds,
     )
-    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda preds, market: (joined_df, joined_df),)
+    def fake_run_edge_pipeline(preds, market):
+        assert market == PITCHER_K_PROP_MARKET
+        return joined_df, joined_df
+
+    monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
     monkeypatch.setattr(daily_card, "build_daily_picks", lambda joined: picks_df)
     monkeypatch.setattr(
         daily_card,
@@ -140,6 +145,130 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert len(loaded_post) == 1
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
     assert loaded_post.loc[0, "pick_type"] == "official"
+
+
+def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch, tmp_path):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-18",
+                "game_pk": 111111,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "opp_strikeouts_per_game_last10": 9.4,
+                "opp_k_rate_last10": 0.255,
+            }
+        ]
+    )
+
+    today_preds = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+            }
+        ]
+    )
+
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
+
+    picks_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -120,
+                "edge": 1.3,
+                "implied_probability": 120 / 220,
+                "value_score": 1.3 * (1 - (120 / 220)),
+                "confidence_tier": "medium",
+                "pick_type": "official",
+            }
+        ]
+    )
+    post_df = picks_df.copy()
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
+    monkeypatch.setattr(daily_card, "load_model_metadata", lambda: {"target": "strikeouts"})
+    monkeypatch.setattr(
+        daily_card,
+        "build_today_predictions",
+        lambda starters_df, pitcher_games, model: today_preds,
+    )
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
+
+    custom_market = "custom_market"
+    calls = {}
+
+    def fake_run_edge_pipeline(preds, market):
+        calls["market"] = market
+        return joined_df, joined_df
+
+    def fake_build_picks(joined):
+        calls["build_picks_joined"] = joined.copy()
+        return picks_df
+
+    def fake_filter_postable(picks):
+        calls["filter_postable_picks"] = picks.copy()
+        return post_df
+
+    monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
+
+    daily_card.run_daily_card(
+        market=custom_market,
+        build_picks_fn=fake_build_picks,
+        filter_postable_picks_fn=fake_filter_postable,
+    )
+
+    assert calls["market"] == custom_market
+    pd.testing.assert_frame_equal(calls["build_picks_joined"], joined_df)
+    pd.testing.assert_frame_equal(calls["filter_postable_picks"], picks_df)
 
 
 def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp_path):
