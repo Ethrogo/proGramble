@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 import xgboost as xgb
@@ -40,6 +41,9 @@ OUTPUT_DIR = DATA_DIR / "outputs"
 PROJECTIONS_DIR = OUTPUT_DIR / "projections"
 EDGES_DIR = OUTPUT_DIR / "edges"
 PICKS_DIR = OUTPUT_DIR / "picks"
+
+BuildPicksFn = Callable[[pd.DataFrame], pd.DataFrame]
+FilterPostablePicksFn = Callable[[pd.DataFrame], pd.DataFrame]
 
 
 def ensure_output_dirs() -> None:
@@ -137,8 +141,24 @@ def save_outputs(
     post_df.to_csv(PICKS_DIR / "today_postable_picks.csv", index=False)
 
 
-def run_daily_card() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def run_daily_card(
+    *,
+    market: str = PITCHER_K_PROP_MARKET,
+    build_picks_fn: BuildPicksFn | None = None,
+    filter_postable_picks_fn: FilterPostablePicksFn | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     ensure_output_dirs()
+
+    if build_picks_fn is None:
+        build_picks_fn = build_daily_picks
+
+    if filter_postable_picks_fn is None:
+        def filter_postable_picks_fn(picks_df: pd.DataFrame) -> pd.DataFrame:
+            return filter_postable_picks(
+                picks_df,
+                max_official=3,
+                max_leans=1,
+            )
 
     starters_df = get_today_starters_df()
     validate_starters_contract(starters_df)
@@ -155,13 +175,13 @@ def run_daily_card() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataF
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
 
-    joined_df, _ = run_edge_pipeline(today_preds, PITCHER_K_PROP_MARKET)
+    joined_df, _ = run_edge_pipeline(today_preds, market)
     validate_joined_odds_contract(joined_df)
 
-    picks_df = build_daily_picks(joined_df)
+    picks_df = build_picks_fn(joined_df)
     validate_final_picks_contract(picks_df)
 
-    post_df = filter_postable_picks(picks_df, max_official=3, max_leans=1)
+    post_df = filter_postable_picks_fn(picks_df)
     validate_final_picks_contract(post_df)
 
     save_outputs(
