@@ -120,7 +120,7 @@ def build_today_predictions(starters_df: pd.DataFrame, pitcher_games: pd.DataFra
     assert_non_empty(today_preds, "today_preds")
     require_columns(
         today_preds,
-        ["player_name", "predicted_strikeouts"],
+        ["player_name", "predicted_strikeouts", "lower_bound", "upper_bound", "std_dev"],
         "today_preds",
     )
     return today_preds

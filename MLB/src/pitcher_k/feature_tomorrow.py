@@ -137,6 +137,9 @@ def build_tomorrow_features(
         feature_row["pitches_last10"] = last10["pitches"].mean()
         feature_row["batters_faced_last10"] = last10["batters_faced"].mean()
         feature_row["whiffs_last10"] = last10["whiffs"].mean()
+        feature_row["strikeouts_stddev_last10"] = last10["strikeouts"].std(ddof=0)
+        feature_row["strikeouts_p25_last10"] = last10["strikeouts"].quantile(0.25)
+        feature_row["strikeouts_p75_last10"] = last10["strikeouts"].quantile(0.75)
 
         feature_row["k_per_pitch_last10"] = _safe_div(last10["strikeouts"].sum(), last10["pitches"].sum())
         feature_row["k_rate_last10"] = _safe_div(last10["strikeouts"].sum(), last10["batters_faced"].sum())

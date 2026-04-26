@@ -323,6 +323,9 @@ def test_build_daily_picks_adds_implied_probability_value_score_and_confidence_t
                 "team": "TEX",
                 "opponent": "SEA",
                 "predicted_strikeouts": 6.8,
+                "lower_bound": 5.6,
+                "upper_bound": 8.0,
+                "std_dev": 1.2,
                 "bookmaker": "DraftKings",
                 "side": "Over",
                 "line": 5.5,
@@ -345,6 +348,32 @@ def test_build_daily_picks_adds_implied_probability_value_score_and_confidence_t
     assert picks.loc[0, "implied_probability"] == pytest.approx(expected_implied_probability)
     assert picks.loc[0, "value_score"] == pytest.approx(expected_value_score)
     assert picks.loc[0, "confidence_tier"] in {"high", "medium", "low", "thin"}
+
+
+def test_build_daily_picks_preserves_projection_uncertainty_fields():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "lower_bound": 5.6,
+                "upper_bound": 8.0,
+                "std_dev": 1.2,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
+
+    picks = build_daily_picks(joined_df)
+
+    assert picks.loc[0, "lower_bound"] == pytest.approx(5.6)
+    assert picks.loc[0, "upper_bound"] == pytest.approx(8.0)
+    assert picks.loc[0, "std_dev"] == pytest.approx(1.2)
 
 def test_build_daily_picks_ranks_same_pick_type_by_value_score_not_raw_edge():
     joined_df = pd.DataFrame(

@@ -36,6 +36,9 @@ def test_join_projections_to_odds_computes_edge():
                 "team": "TEX",
                 "opponent": "SEA",
                 "predicted_strikeouts": 6.78,
+                "lower_bound": 5.9,
+                "upper_bound": 7.6,
+                "std_dev": 0.9,
             }
         ]
     )
@@ -71,6 +74,9 @@ def test_join_projections_to_odds_computes_edge():
 
     assert dk_edge == 6.78 - 6.5
     assert fd_edge == 6.78 - 5.5
+    assert joined.loc[0, "lower_bound"] == pytest.approx(5.9)
+    assert joined.loc[0, "upper_bound"] == pytest.approx(7.6)
+    assert joined.loc[0, "std_dev"] == pytest.approx(0.9)
 
 
 def test_join_projections_to_odds_matches_on_normalized_name():
