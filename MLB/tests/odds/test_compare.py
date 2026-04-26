@@ -28,6 +28,26 @@ def test_prepare_projection_df_adds_normalized_name():
     assert result.loc[0, "player_name_norm"] == "jacob degrom"
 
 
+def test_prepare_projection_df_respects_precomputed_join_key():
+    projections = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "participant_norm": "jacob degrom",
+                "predicted_strikeouts": 6.78,
+            }
+        ]
+    )
+
+    result = prepare_projection_df(
+        projections,
+        participant_key="player_name",
+        projection_join_key="participant_norm",
+    )
+
+    assert result.loc[0, "participant_norm"] == "jacob degrom"
+
+
 def test_join_projections_to_odds_computes_edge():
     projections = pd.DataFrame(
         [
@@ -105,6 +125,42 @@ def test_join_projections_to_odds_matches_on_normalized_name():
     )
 
     joined = join_projections_to_odds(projections, odds_df)
+
+    assert len(joined) == 1
+    assert joined.iloc[0]["player_name_proj"] == "Jacob deGrom"
+
+
+def test_join_projections_to_odds_accepts_configured_join_keys():
+    projections = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "participant_norm": "jacob degrom",
+                "predicted_strikeouts": 6.78,
+            }
+        ]
+    )
+
+    odds_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob Degrom",
+                "odds_participant_norm": "jacob degrom",
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 6.5,
+                "price": -120,
+            }
+        ]
+    )
+
+    joined = join_projections_to_odds(
+        projections,
+        odds_df,
+        participant_key="player_name",
+        projection_join_key="participant_norm",
+        odds_join_key="odds_participant_norm",
+    )
 
     assert len(joined) == 1
     assert joined.iloc[0]["player_name_proj"] == "Jacob deGrom"

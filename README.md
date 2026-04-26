@@ -92,12 +92,13 @@ Artifacts are written to `MLB/data/artifacts/_staging/`, validated, then promote
 1. pull today's probable starters from the MLB Stats API
 2. validate and normalize the starter slate
 3. load the most recent saved model and pitcher-game history
-4. build today features for the current slate
-5. generate pitcher strikeout projections
-6. fetch market data from The Odds API
-7. join projections to normalized odds rows
-8. choose the best market per pitcher according to the configured pick policy
-9. classify picks and export a smaller postable subset
+4. resolve the active workflow spec for the prop
+5. build today features for the current slate
+6. generate pitcher strikeout projections
+7. fetch market data from The Odds API
+8. join projections to normalized odds rows
+9. choose the best market per pitcher according to the configured pick policy
+10. classify picks and export a smaller postable subset
 
 Outputs are written to:
 
@@ -117,6 +118,20 @@ Outputs are written to:
 - final picks output
 
 These checks enforce required columns, non-null expectations, uniqueness, and boolean-like fields so pipeline failures happen early and loudly.
+
+### 3.5 Workflow spec
+
+`MLB/src/common/workflows.py` defines the first lightweight workflow spec for MLB pitcher strikeouts. It describes:
+
+- sport
+- participant key
+- market key
+- feature builder
+- predictor
+- projection/odds join keys
+- pick-ranking policy
+
+The daily card job consumes that spec directly, which keeps the current behavior intact while giving future props a repeatable orchestration shape without introducing a large framework.
 
 ### 4. Odds and pick policy
 
