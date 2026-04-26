@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 from odds.value import american_to_implied_probability
+from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
 
 from common.contracts import (
     require_columns,
@@ -12,34 +13,10 @@ from common.contracts import (
 )
 
 
-OFFICIAL_EDGE_THRESHOLD = 0.75
-LEAN_EDGE_THRESHOLD = 0.40
-
-
 def _normalize_side(value: str) -> str:
     if not isinstance(value, str):
         return ""
     return value.strip().lower()
-
-
-
-def _classify_pick_type(edge: float) -> str:
-    abs_edge = abs(edge)
-
-    if abs_edge >= OFFICIAL_EDGE_THRESHOLD:
-        return "official"
-    if abs_edge >= LEAN_EDGE_THRESHOLD:
-        return "lean"
-    return "pass"
-
-def _classify_confidence_tier(value_score: float) -> str:
-    if value_score >= 0.50:
-        return "high"
-    if value_score >= 0.30:
-        return "medium"
-    if value_score >= 0.15:
-        return "low"
-    return "thin"
 
 
 def _american_odds_sort_key(price: float | int | None) -> float:
@@ -53,41 +30,10 @@ def _american_odds_sort_key(price: float | int | None) -> float:
     return float(price)
 
 
-def _select_best_over_market(player_df: pd.DataFrame) -> pd.Series:
-    """
-    For overs:
-    - prefer the lowest line
-    - then prefer the best price
-    """
-    over_df = player_df[player_df["side_norm"] == "over"].copy()
-    if over_df.empty:
-        return pd.Series(dtype="object")
-
-    over_df = over_df.sort_values(
-        by=["line", "price_sort_key"],
-        ascending=[True, False],
-    )
-    return over_df.iloc[0]
-
-
-def _select_best_under_market(player_df: pd.DataFrame) -> pd.Series:
-    """
-    For unders:
-    - prefer the highest line
-    - then prefer the best price
-    """
-    under_df = player_df[player_df["side_norm"] == "under"].copy()
-    if under_df.empty:
-        return pd.Series(dtype="object")
-
-    under_df = under_df.sort_values(
-        by=["line", "price_sort_key"],
-        ascending=[False, False],
-    )
-    return under_df.iloc[0]
-
-
-def _choose_best_market_for_player(player_df: pd.DataFrame) -> pd.Series:
+def _choose_best_market_for_player(
+    player_df: pd.DataFrame,
+    policy: PickRankingPolicy,
+) -> pd.Series:
     """
     Choose the best market based on the player's strongest edge direction.
     Expects all rows in player_df to belong to the same player.
@@ -100,46 +46,20 @@ def _choose_best_market_for_player(player_df: pd.DataFrame) -> pd.Series:
 
     predicted = float(player_df["predicted_strikeouts"].iloc[0])
 
-    best_over = _select_best_over_market(player_df)
-    best_under = _select_best_under_market(player_df)
+    best_over = policy.select_best_market(player_df, "over")
+    best_under = policy.select_best_market(player_df, "under")
 
-    over_edge = None
-    under_edge = None
-
-    if not best_over.empty:
-        over_edge = predicted - float(best_over["line"])
-
-    if not best_under.empty:
-        under_edge = float(best_under["line"]) - predicted
-
-    if over_edge is None and under_edge is None:
-        return pd.Series(dtype="object")
-
-    if over_edge is None:
-        chosen = best_under.copy()
-        chosen["edge"] = under_edge
-        chosen["pick_side"] = "under"
-        return chosen
-
-    if under_edge is None:
-        chosen = best_over.copy()
-        chosen["edge"] = over_edge
-        chosen["pick_side"] = "over"
-        return chosen
-
-    if over_edge >= under_edge:
-        chosen = best_over.copy()
-        chosen["edge"] = over_edge
-        chosen["pick_side"] = "over"
-        return chosen
-
-    chosen = best_under.copy()
-    chosen["edge"] = under_edge
-    chosen["pick_side"] = "under"
-    return chosen
+    return policy.choose_pick_side(
+        best_over=best_over,
+        best_under=best_under,
+        predicted=predicted,
+    )
 
 
-def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
+def build_daily_picks(
+    joined_df: pd.DataFrame,
+    policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+) -> pd.DataFrame:
     """
     Build final daily picks from joined projections + odds rows.
 
@@ -194,7 +114,7 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
     best_rows: list[pd.Series] = []
 
     for _, player_df in df.groupby("player_name_proj", sort=False):
-        best_row = _choose_best_market_for_player(player_df)
+        best_row = _choose_best_market_for_player(player_df, policy)
         if not best_row.empty:
             best_rows.append(best_row)
 
@@ -202,9 +122,9 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     picks = pd.DataFrame(best_rows).reset_index(drop=True)
-    picks["pick_type"] = picks["edge"].apply(_classify_pick_type)
+    picks["pick_type"] = picks["edge"].apply(policy.classify_pick_type)
     picks["value_score"] = picks["edge"].abs() * (1 - picks["implied_probability"])
-    picks["confidence_tier"] = picks["value_score"].apply(_classify_confidence_tier)
+    picks["confidence_tier"] = picks["value_score"].apply(policy.classify_confidence_tier)
 
     if "player_name" in picks.columns:
         picks["player_name"] = picks["player_name_proj"].combine_first(picks["player_name"])
@@ -238,17 +158,7 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
 
     picks = picks[existing_cols + other_cols]
 
-    pick_type_order = {"official": 0, "lean": 1, "pass": 2}
-    picks["pick_type_order"] = picks["pick_type"].map(pick_type_order).fillna(99)
-
-    picks = (
-        picks.sort_values(
-            by=["pick_type_order", "value_score"],
-            ascending=[True, False],
-        )
-        .drop(columns=["pick_type_order"])
-        .reset_index(drop=True)
-    )
+    picks = policy.sort_picks(picks)
 
     validate_final_picks_contract(picks)
     return picks
@@ -256,8 +166,9 @@ def build_daily_picks(joined_df: pd.DataFrame) -> pd.DataFrame:
 
 def filter_postable_picks(
     picks_df: pd.DataFrame,
-    max_official: int = 4,
-    max_leans: int = 2,
+    max_official: int | None = None,
+    max_leans: int | None = None,
+    policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
 ) -> pd.DataFrame:
     """
     Return a smaller set of picks to post publicly.
@@ -267,8 +178,13 @@ def filter_postable_picks(
 
     require_columns(picks_df, ["pick_type"], "picks_df")
 
-    officials = picks_df[picks_df["pick_type"] == "official"].head(max_official)
-    leans = picks_df[picks_df["pick_type"] == "lean"].head(max_leans)
+    limits = policy.resolved_postable_limits(
+        max_official=max_official,
+        max_leans=max_leans,
+    )
+
+    officials = picks_df[picks_df["pick_type"] == "official"].head(limits.max_official)
+    leans = picks_df[picks_df["pick_type"] == "lean"].head(limits.max_leans)
 
     result = pd.concat([officials, leans], ignore_index=True)
 
