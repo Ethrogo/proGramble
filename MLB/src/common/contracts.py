@@ -46,6 +46,9 @@ FINAL_PICKS_REQUIRED_COLUMNS = [
     "price",
     "edge",
     "pick_type",
+    "implied_probability",
+    "value_score",
+    "confidence_tier",
 ]
 
 
