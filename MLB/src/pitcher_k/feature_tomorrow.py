@@ -11,7 +11,11 @@ from common.contracts import (
     validate_pitcher_games_contract,
 )
 from .config import BASE_FEATURES
-from .feature_engineering import normalize_player_name, _safe_div
+from .feature_engineering import (
+    filter_starter_like_appearances,
+    normalize_player_name,
+    _safe_div,
+)
 
 
 def build_tomorrow_features(
@@ -52,6 +56,7 @@ def build_tomorrow_features(
 
     slate_df["game_date"] = pd.to_datetime(slate_df["game_date"])
     pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
+    pitcher_games = filter_starter_like_appearances(pitcher_games)
 
     slate_df["player_name_norm"] = slate_df["player_name"].apply(normalize_player_name)
     pitcher_games["player_name_norm"] = pitcher_games["player_name"].apply(normalize_player_name)
