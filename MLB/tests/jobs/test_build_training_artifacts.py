@@ -208,3 +208,80 @@ def test_build_training_metadata_uses_native_historical_lines_for_real_backtest(
     assert workflow_backtest["available"] is True
     assert workflow_backtest["overall"][0]["picks"] == 1
     assert workflow_backtest["by_book"][0]["book"] == "DraftKings"
+
+
+def test_train_pitcher_k_model_filters_to_starter_like_appearances(monkeypatch):
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2025-07-30",
+                "game_pk": 1,
+                "pitcher": 111,
+                "player_name": "Starter One",
+                "strikeouts": 6,
+                "pitches": 91,
+                "batters_faced": 25,
+                "pitches_last3": 92.0,
+                "pitches_last10": 94.0,
+                "whiff_per_pitch_last3": 0.14,
+                "avg_velo_last3": 97.1,
+                "avg_spin_last3": 2450.0,
+                "k_per_pitch_last10": 0.08,
+                "k_rate_last10": 0.28,
+                "opp_strikeouts_per_game_last10": 9.0,
+                "opp_k_rate_last10": 0.25,
+            },
+            {
+                "game_date": "2025-08-02",
+                "game_pk": 2,
+                "pitcher": 111,
+                "player_name": "Starter One",
+                "strikeouts": 1,
+                "pitches": 19,
+                "batters_faced": 5,
+                "pitches_last3": 19.0,
+                "pitches_last10": 19.0,
+                "whiff_per_pitch_last3": 0.08,
+                "avg_velo_last3": 96.0,
+                "avg_spin_last3": 2430.0,
+                "k_per_pitch_last10": 0.04,
+                "k_rate_last10": 0.20,
+                "opp_strikeouts_per_game_last10": 8.4,
+                "opp_k_rate_last10": 0.23,
+            },
+        ]
+    )
+    historical_lines_df = empty_historical_lines_df()
+
+    captured = {}
+
+    def fake_train_model(train_df, test_df):
+        captured["train_df"] = train_df.copy()
+        captured["test_df"] = test_df.copy()
+        return {
+            "model": FakePredictModel(),
+            "dtrain": "train",
+            "dtest": "test",
+            "X_train": pd.DataFrame([{"pitches_last3": 92.0, "strikeouts_stddev_last10": 1.1}]),
+            "X_test": pd.DataFrame([{"pitches_last3": 94.0, "strikeouts_stddev_last10": 1.2}]),
+            "y_train": pd.Series([6.0], dtype="float64"),
+            "y_test": pd.Series([7.0], dtype="float64"),
+        }
+
+    def fake_time_split(model_df):
+        captured["model_df"] = model_df.copy()
+        return model_df.iloc[:1].copy(), model_df.iloc[:1].copy()
+
+    monkeypatch.setattr(training_job, "time_split", fake_time_split)
+    monkeypatch.setattr(training_job, "train_model", fake_train_model)
+    monkeypatch.setattr(training_job, "build_training_metadata", lambda **kwargs: {"ok": True})
+
+    _, model_df, metadata = training_job.train_pitcher_k_model(
+        pitcher_games,
+        historical_lines_df=historical_lines_df,
+    )
+
+    assert metadata == {"ok": True}
+    assert len(model_df) == 1
+    assert model_df["game_pk"].tolist() == [1]
+    assert captured["model_df"]["game_pk"].tolist() == [1]

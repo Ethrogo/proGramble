@@ -186,3 +186,61 @@ def test_build_tomorrow_features_falls_back_to_name_match_when_pitcher_id_has_no
 
     assert len(features) == 1
     assert features.loc[0, "player_name"] == "Jacob deGrom"
+
+
+def test_build_tomorrow_features_uses_only_starter_like_history():
+    slate_df = _valid_slate_df()
+    pitcher_games = _valid_pitcher_games_df()
+    team_context = _valid_team_context_df()
+
+    relief_rows = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-16",
+                "game_pk": 300001,
+                "pitcher": 111,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "strikeouts": 1,
+                "pitches": 18,
+                "batters_faced": 5,
+                "whiffs": 2,
+                "avg_velo": 96.2,
+                "avg_spin": 2440,
+            },
+            {
+                "game_date": "2026-04-17",
+                "game_pk": 300002,
+                "pitcher": 111,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "strikeouts": 2,
+                "pitches": 22,
+                "batters_faced": 6,
+                "whiffs": 3,
+                "avg_velo": 96.4,
+                "avg_spin": 2442,
+            },
+        ]
+    )
+    pitcher_games = pd.concat([pitcher_games, relief_rows], ignore_index=True)
+
+    features = build_tomorrow_features(
+        slate_df,
+        pitcher_games,
+        team_context=team_context,
+        min_career_starts=5,
+    )
+
+    starter_only = _valid_pitcher_games_df()
+    expected_last3 = starter_only.tail(3)
+    expected_last10 = starter_only.tail(6)
+
+    assert len(features) == 1
+    assert features.loc[0, "pitches_last3"] == pytest.approx(expected_last3["pitches"].mean())
+    assert features.loc[0, "pitches_last10"] == pytest.approx(expected_last10["pitches"].mean())
+    assert features.loc[0, "k_rate_last10"] == pytest.approx(
+        expected_last10["strikeouts"].sum() / expected_last10["batters_faced"].sum()
+    )

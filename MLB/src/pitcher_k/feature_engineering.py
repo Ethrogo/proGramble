@@ -14,6 +14,7 @@ from common.contracts import (
     require_columns,
     validate_pitcher_games_contract,
 )
+from .config import STARTER_LIKE_MIN_BATTERS_FACED, STARTER_LIKE_MIN_PITCHES
 
 
 def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
@@ -363,6 +364,28 @@ def add_rate_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     )
 
     return pitcher_games
+
+
+def filter_starter_like_appearances(
+    pitcher_games: pd.DataFrame,
+    *,
+    min_pitches: int = STARTER_LIKE_MIN_PITCHES,
+    min_batters_faced: int = STARTER_LIKE_MIN_BATTERS_FACED,
+) -> pd.DataFrame:
+    """
+    Keep appearances with starter-like workload for starter projection workflows.
+    """
+    require_columns(
+        pitcher_games,
+        ["pitches", "batters_faced"],
+        "pitcher_games",
+    )
+
+    starter_like_mask = (
+        (pitcher_games["pitches"] >= min_pitches)
+        | (pitcher_games["batters_faced"] >= min_batters_faced)
+    )
+    return pitcher_games.loc[starter_like_mask].copy()
 
 
 def build_team_context(pitcher_games: pd.DataFrame, as_of_date: str | pd.Timestamp) -> pd.DataFrame:

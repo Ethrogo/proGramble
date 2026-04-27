@@ -34,6 +34,7 @@ from pitcher_k.feature_engineering import (
     add_opponent_k_features,
     add_rolling_pitcher_features,
     add_rate_features,
+    filter_starter_like_appearances,
 )
 from pitcher_k.feature_model import build_model_df
 from pitcher_k.train import time_split, train_model
@@ -125,7 +126,8 @@ def train_pitcher_k_model(
     pitcher_games: pd.DataFrame,
     historical_lines_df: pd.DataFrame | None = None,
 ):
-    model_df = build_model_df(pitcher_games)
+    starter_like_pitcher_games = filter_starter_like_appearances(pitcher_games)
+    model_df = build_model_df(starter_like_pitcher_games)
     train_df, test_df = time_split(model_df)
     train_output = train_model(train_df, test_df)
     metadata = build_training_metadata(
