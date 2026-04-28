@@ -129,6 +129,13 @@ def train_pitcher_k_model(
     starter_like_pitcher_games = filter_starter_like_appearances(pitcher_games)
     model_df = build_model_df(starter_like_pitcher_games)
     train_df, test_df = time_split(model_df)
+
+    if train_df.empty or test_df.empty:
+        raise ValueError(
+            "Starter-like filtering produced an empty train/test split. "
+            f"Expected non-empty rows on both sides of {TRAIN_SPLIT_DATE}."
+        )
+
     train_output = train_model(train_df, test_df)
     metadata = build_training_metadata(
         model_df=model_df,

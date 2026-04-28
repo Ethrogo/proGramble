@@ -1,6 +1,7 @@
 import json
 
 import pandas as pd
+import pytest
 
 from jobs import build_training_artifacts as training_job
 from odds.historical_lines import empty_historical_lines_df
@@ -299,3 +300,61 @@ def test_train_pitcher_k_model_filters_to_starter_like_appearances(monkeypatch):
     assert len(model_df) == 1
     assert model_df["game_pk"].tolist() == [1]
     assert captured["model_df"]["game_pk"].tolist() == [1]
+
+
+def test_train_pitcher_k_model_raises_when_starter_filtering_leaves_empty_held_out_split():
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2025-07-30",
+                "game_pk": 1,
+                "pitcher": 111,
+                "player_name": "Starter One",
+                "strikeouts": 6,
+                "pitches": 91,
+                "batters_faced": 25,
+                "pitches_last3": 92.0,
+                "pitches_last10": 94.0,
+                "whiff_per_pitch_last3": 0.14,
+                "avg_velo_last3": 97.1,
+                "avg_spin_last3": 2450.0,
+                "k_per_pitch_last10": 0.08,
+                "k_rate_last10": 0.28,
+                "opp_strikeouts_per_game_last10": 9.0,
+                "opp_k_rate_last10": 0.25,
+                "strikeouts_stddev_last10": 1.1,
+                "strikeouts_p25_last10": 5.0,
+                "strikeouts_p75_last10": 7.0,
+            },
+            {
+                "game_date": "2025-08-03",
+                "game_pk": 2,
+                "pitcher": 111,
+                "player_name": "Starter One",
+                "strikeouts": 1,
+                "pitches": 19,
+                "batters_faced": 5,
+                "pitches_last3": 19.0,
+                "pitches_last10": 19.0,
+                "whiff_per_pitch_last3": 0.08,
+                "avg_velo_last3": 96.0,
+                "avg_spin_last3": 2430.0,
+                "k_per_pitch_last10": 0.04,
+                "k_rate_last10": 0.20,
+                "opp_strikeouts_per_game_last10": 8.4,
+                "opp_k_rate_last10": 0.23,
+                "strikeouts_stddev_last10": 0.5,
+                "strikeouts_p25_last10": 1.0,
+                "strikeouts_p75_last10": 1.0,
+            },
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Starter-like filtering produced an empty train/test split",
+    ):
+        training_job.train_pitcher_k_model(
+            pitcher_games,
+            historical_lines_df=empty_historical_lines_df(),
+        )
