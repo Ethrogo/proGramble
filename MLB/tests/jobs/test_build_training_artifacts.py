@@ -93,12 +93,24 @@ def test_promote_latest_to_previous_preserves_matching_metadata(tmp_path, monkey
 def test_build_training_metadata_includes_richer_evaluation_sections():
     model_df = pd.DataFrame(
         [
-            {"game_date": "2025-07-30", "strikeouts": 5},
-            {"game_date": "2025-08-02", "strikeouts": 7},
+            {"game_date": "2025-07-30", "strikeouts": 5, "strikeouts_stddev_last10": 1.1},
+            {"game_date": "2025-07-31", "strikeouts": 6, "strikeouts_stddev_last10": 1.4},
+            {"game_date": "2025-08-02", "strikeouts": 7, "strikeouts_stddev_last10": 1.3},
+            {"game_date": "2025-08-03", "strikeouts": 8, "strikeouts_stddev_last10": 1.5},
         ]
     )
-    train_df = pd.DataFrame([{"game_date": "2025-07-30", "strikeouts": 5}])
-    test_df = pd.DataFrame([{"game_date": "2025-08-02", "strikeouts": 7}])
+    train_df = pd.DataFrame(
+        [
+            {"game_date": "2025-07-30", "strikeouts": 5, "strikeouts_stddev_last10": 1.1},
+            {"game_date": "2025-07-31", "strikeouts": 6, "strikeouts_stddev_last10": 1.4},
+        ]
+    )
+    test_df = pd.DataFrame(
+        [
+            {"game_date": "2025-08-02", "strikeouts": 7, "strikeouts_stddev_last10": 1.3},
+            {"game_date": "2025-08-03", "strikeouts": 8, "strikeouts_stddev_last10": 1.5},
+        ]
+    )
     train_output = {
         "model": FakePredictModel(),
         "dtrain": "train",
@@ -133,7 +145,9 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
     assert "uncertainty" in evaluation
     assert "workflow_backtest" in evaluation
     assert evaluation["workflow_backtest"]["available"] is False
+    assert evaluation["uncertainty"]["mean_interval_width"] > 0
     assert metadata["uncertainty_model"]["interval_multiplier"] > 0
+    assert metadata["uncertainty_model"]["calibration_rows"] > 0
     assert "documented_interpretation" in metadata["uncertainty_model"]
 
 

@@ -26,11 +26,24 @@ def test_build_model_df_uses_configured_feature_columns():
                 "k_rate_last10": 0.30,
                 "opp_strikeouts_per_game_last10": 9.4,
                 "opp_k_rate_last10": 0.255,
+                "strikeouts_stddev_last10": 1.2,
+                "strikeouts_p25_last10": 6.0,
+                "strikeouts_p75_last10": 9.0,
             }
         ]
     )
 
     model_df = build_model_df(pitcher_games)
 
-    expected_cols = ["game_date", "game_pk", "pitcher", "player_name", "strikeouts"] + BASE_FEATURES
+    expected_cols = [
+        "game_date",
+        "game_pk",
+        "pitcher",
+        "player_name",
+        "strikeouts",
+    ] + BASE_FEATURES + [
+        "strikeouts_stddev_last10",
+        "strikeouts_p25_last10",
+        "strikeouts_p75_last10",
+    ]
     assert list(model_df.columns) == expected_cols
