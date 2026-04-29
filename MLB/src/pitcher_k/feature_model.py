@@ -5,6 +5,12 @@ import pandas as pd
 
 from .config import BASE_FEATURES
 
+UNCERTAINTY_FEATURE_COLUMNS = [
+    "strikeouts_stddev_last10",
+    "strikeouts_p25_last10",
+    "strikeouts_p75_last10",
+]
+
 
 def get_feature_columns() -> list[str]:
     """
@@ -27,6 +33,9 @@ def build_model_df(pitcher_games: pd.DataFrame) -> pd.DataFrame:
         "player_name",
         "strikeouts",
     ] + features
+
+    extra_cols = [col for col in UNCERTAINTY_FEATURE_COLUMNS if col in pitcher_games.columns]
+    keep_cols = keep_cols + [col for col in extra_cols if col not in keep_cols]
 
     model_df = pitcher_games[keep_cols].copy()
     model_df["game_date"] = pd.to_datetime(model_df["game_date"])

@@ -129,6 +129,13 @@ def train_pitcher_k_model(
     starter_like_pitcher_games = filter_starter_like_appearances(pitcher_games)
     model_df = build_model_df(starter_like_pitcher_games)
     train_df, test_df = time_split(model_df)
+
+    if train_df.empty or test_df.empty:
+        raise ValueError(
+            "Starter-like filtering produced an empty train/test split. "
+            f"Expected non-empty rows on both sides of {TRAIN_SPLIT_DATE}."
+        )
+
     train_output = train_model(train_df, test_df)
     metadata = build_training_metadata(
         model_df=model_df,
@@ -182,6 +189,7 @@ def _build_workflow_backtest_summary(
 def _evaluation_metrics(
     train_output: dict,
     *,
+    train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     historical_lines_df: pd.DataFrame | None = None,
 ) -> dict:
@@ -191,12 +199,12 @@ def _evaluation_metrics(
     y_pred_test = train_output["model"].predict(train_output["dtest"])
 
     test_results = build_prediction_results(
-        train_output["X_test"],
+        test_df,
         y_test,
         y_pred_test,
     )
     interval_config = fit_interval_calibration(
-        train_output["X_train"],
+        train_df,
         y_train,
         y_pred_train,
     )
@@ -208,7 +216,7 @@ def _evaluation_metrics(
             "buckets": build_error_bucket_summary(test_results),
         },
         "uncertainty": summarize_interval_coverage(
-            train_output["X_test"],
+            test_df,
             y_test,
             y_pred_test,
             interval_config,
@@ -257,6 +265,7 @@ def build_training_metadata(
         },
         "evaluation_metrics": _evaluation_metrics(
             train_output,
+            train_df=train_df,
             test_df=test_df,
             historical_lines_df=historical_lines_df,
         ),
