@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 import pandas as pd
+import requests
 import xgboost as xgb
 
 from starters.today_starters import get_today_starters_df, save_today_starters_csv
@@ -14,6 +15,8 @@ from starters.today_starters import get_today_starters_df, save_today_starters_c
 from odds.run_edges import run_edge_pipeline
 from odds.create_picks import build_daily_picks, filter_postable_picks
 from common.contracts import (
+    FINAL_PICKS_REQUIRED_COLUMNS,
+    JOINED_ODDS_REQUIRED_COLUMNS,
     validate_starters_contract,
     validate_pitcher_games_contract,
     validate_joined_odds_contract,
@@ -40,6 +43,7 @@ TRACKING_DIR = DATA_DIR / "tracking"
 PROJECTIONS_DIR = OUTPUT_DIR / "projections"
 EDGES_DIR = OUTPUT_DIR / "edges"
 PICKS_DIR = OUTPUT_DIR / "picks"
+RUN_STATUS_PATH = OUTPUT_DIR / "run_daily_card_status.json"
 OFFICIAL_PICKS_HISTORY_PATH = TRACKING_DIR / "official_picks_history.csv"
 
 OFFICIAL_PICKS_HISTORY_COLUMNS = [
@@ -75,6 +79,14 @@ def ensure_output_dirs() -> None:
 
 def empty_official_picks_history_df() -> pd.DataFrame:
     return pd.DataFrame(columns=OFFICIAL_PICKS_HISTORY_COLUMNS)
+
+
+def empty_joined_odds_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=JOINED_ODDS_REQUIRED_COLUMNS)
+
+
+def empty_final_picks_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=FINAL_PICKS_REQUIRED_COLUMNS)
 
 
 def _format_american_odds(price: float | int | str | None) -> str:
@@ -293,12 +305,23 @@ def apply_metadata_uncertainty(
     return apply_interval_calibration(today_preds, interval_config)
 
 
+def save_run_status(*, status: str, message: str | None = None) -> None:
+    payload = {
+        "status": status,
+        "message": message or "",
+    }
+    RUN_STATUS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def save_outputs(
     starters_df: pd.DataFrame,
     today_preds: pd.DataFrame,
     joined_df: pd.DataFrame,
     picks_df: pd.DataFrame,
     post_df: pd.DataFrame,
+    *,
+    run_status: str = "success",
+    run_message: str | None = None,
 ) -> None:
     save_today_starters_csv(starters_df)
 
@@ -307,6 +330,7 @@ def save_outputs(
     picks_df.to_csv(PICKS_DIR / "today_all_picks.csv", index=False)
     post_df.to_csv(PICKS_DIR / "today_postable_picks.csv", index=False)
     persist_official_picks_history(starters_df, post_df)
+    save_run_status(status=run_status, message=run_message)
 
 
 def run_daily_card(
@@ -354,20 +378,34 @@ def run_daily_card(
         raise ValueError("No today predictions were generated.")
 
     selected_market = market or workflow.market_key
-    joined_df, _ = run_edge_pipeline(
-        today_preds,
-        selected_market,
-        participant_key=workflow.participant_key,
-        projection_join_key=workflow.projection_odds_join_keys.projection,
-        odds_join_key=workflow.projection_odds_join_keys.odds,
-    )
-    validate_joined_odds_contract(joined_df)
+    run_status = "success"
+    run_message: str | None = None
 
-    picks_df = build_picks_fn(joined_df)
-    validate_final_picks_contract(picks_df)
+    try:
+        joined_df, _ = run_edge_pipeline(
+            today_preds,
+            selected_market,
+            participant_key=workflow.participant_key,
+            projection_join_key=workflow.projection_odds_join_keys.projection,
+            odds_join_key=workflow.projection_odds_join_keys.odds,
+        )
+        validate_joined_odds_contract(joined_df)
 
-    post_df = filter_postable_picks_fn(picks_df)
-    validate_final_picks_contract(post_df)
+        picks_df = build_picks_fn(joined_df)
+        validate_final_picks_contract(picks_df)
+
+        post_df = filter_postable_picks_fn(picks_df)
+        validate_final_picks_contract(post_df)
+    except requests.RequestException as exc:
+        run_status = "degraded"
+        run_message = (
+            "Live odds fetch failed; projections were saved but no edges or picks were generated. "
+            f"Reason: {exc.__class__.__name__}: {exc}"
+        )
+        print(f"WARNING: {run_message}")
+        joined_df = empty_joined_odds_df()
+        picks_df = empty_final_picks_df()
+        post_df = empty_final_picks_df()
 
     save_outputs(
         starters_df=starters_df,
@@ -375,6 +413,8 @@ def run_daily_card(
         joined_df=joined_df,
         picks_df=picks_df,
         post_df=post_df,
+        run_status=run_status,
+        run_message=run_message,
     )
 
     return starters_df, today_preds, picks_df, post_df
@@ -382,6 +422,11 @@ def run_daily_card(
 
 if __name__ == "__main__":
     _, _, picks_df, post_df = run_daily_card()
+
+    if RUN_STATUS_PATH.exists():
+        status_payload = json.loads(RUN_STATUS_PATH.read_text(encoding="utf-8"))
+        if status_payload.get("status") == "degraded" and status_payload.get("message"):
+            print(f"\n{status_payload['message']}")
 
     print("\nTop postable picks:")
     if post_df.empty:

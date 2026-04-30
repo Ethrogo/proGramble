@@ -66,10 +66,23 @@ jobs:
         run: |
           python -c '
           import os
+          import json
+          from pathlib import Path
           from notifications.discord import DiscordNotification, send_discord_notification
+
+          status_path = Path("data/outputs/run_daily_card_status.json")
+          message = None
+          if status_path.exists():
+              payload = json.loads(status_path.read_text(encoding="utf-8"))
+              status = payload.get("status", "").strip().lower()
+              detail = payload.get("message", "").strip()
+              if status == "degraded":
+                  message = detail or "Daily card completed in degraded mode."
+
           send_discord_notification(
               DiscordNotification(
                   status=os.getenv("JOB_STATUS", "unknown"),
+                  message=message,
                   run_url=os.getenv("RUN_URL"),
               )
           )
