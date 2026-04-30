@@ -1,32 +1,35 @@
 pick_key,game_date,player_name,team,opponent,book,odds,price,pick_side,line,predicted_strikeouts,edge,confidence_tier,pick_type,result,actual_strikeouts,record_source
-legacy-0001,,Tyler Bibee,,,DraftKings,+108,108,under,5.5,,,,"official",W,,manual_seed
-legacy-0002,,Kyle Leahy,,,DraftKings,+120,120,under,3.5,,,,"official",L,,manual_seed
-legacy-0003,,Grant Holmes,,,DraftKings,-163,-163,over,4.5,,,,"official",L,,manual_seed
-legacy-0004,,Reid Detmers,,,BetMGM,+100,100,under,5.5,,,,"official",W,,manual_seed
-legacy-0005,,Emerson Hancock,,,DraftKings,-135,-135,under,5.5,,,,"official",W,,manual_seed
-legacy-0006,,Justin Wrobleski,,,DraftKings,-137,-137,under,4.5,,,,"official",W,,manual_seed
-legacy-0007,,Steven Matz,,,BetMGM,-155,-155,under,5.5,,,,"official",W,,manual_seed
-legacy-0008,,Yoshinobu Yamamoto,,,DraftKings,-104,-104,over,5.5,,,,"official",L,,manual_seed
-legacy-0009,,Chris Paddack,,,BetMGM,-135,-135,under,4.5,,,,"official",W,,manual_seed
-legacy-0010,,Eric Lauer,,,DraftKings,+100,100,under,4.5,,,,"official",W,,manual_seed
-legacy-0011,,Anthony Kay,,,DraftKings,-142,-142,under,3.5,,,,"official",W,,manual_seed
-legacy-0012,,Nick Martinez,,,BetMGM,-140,-140,under,4.5,,,,"official",L,,manual_seed
-legacy-0013,,Michael Soroka,,,DraftKings,+103,103,under,5.5,,,,"official",L,,manual_seed
-legacy-0014,,Payton Tolle,,,FanDuel,-110,-110,under,4.5,,,,"official",L,,manual_seed
-legacy-0015,,Lance McCullers Jr,,,BetMGM,-120,-120,under,5.5,,,,"official",W,,manual_seed
-legacy-0016,,Freddy Peralta,,,BetMGM,-150,-150,under,7.5,,,,"official",L,,manual_seed
-legacy-0017,,Sandy Alcantara,,,FanDuel,+136,136,over,4.5,,,,"official",L,,manual_seed
-legacy-0018,,Bryan Woo,,,BetMGM,-185,-185,over,4.5,,,,"official",L,,manual_seed
-legacy-0019,,Jacob Misiorowski,,,BetMGM,-115,-115,under,7.5,,,,"official",L,,manual_seed
-legacy-0020,,Zac Gallen,,,DraftKings,+119,119,over,3.5,,,,"official",Push,,manual_seed
-legacy-0021,,Reid Detmers,,,BetMGM,-120,-120,under,5.5,,,,"official",W,,manual_seed
-legacy-0022,,Carmen Mlodzinski,,,BetMGM,+100,100,under,4.5,,,,"official",W,,manual_seed
-legacy-0023,,Emerson Hancock,,,FanDuel,-154,-154,under,4.5,,,,"official",W,,manual_seed
-legacy-0024,,Luis Castillo,,,BetMGM,-150,-150,over,4.5,,,,"official",L,,manual_seed
-legacy-0025,,Max Fried,,,FanDuel,-125,-125,over,5.5,,,,"official",L,,manual_seed
-legacy-0026,,Matthew Boyd,,,DraftKings,-152,-152,under,5.5,,,,"official",W,,manual_seed
-legacy-0027,,Shohei Ohtani,,,BetMGM,-105,-105,under,6.5,,,,"official",L,,manual_seed
-legacy-0028,,Chad Patrick,,,BetMGM,-150,-150,over,3.5,,,,"official",W,,manual_seed
-legacy-0029,,"Martín Pérez",,,BetMGM,-120,-120,over,3.5,,,,"official",W,,manual_seed
-legacy-0030,,George Kirby,,,FanDuel,+126,126,over,5.5,,,,"official",L,,manual_seed
-legacy-0031,,Yusei Kikuchi,,,BetMGM,+115,115,under,5.5,,,,"official",W,,manual_seed
+legacy-0001,,Tyler Bibee,,,DraftKings,108,108,under,5.5,,,,official,W,,manual_seed
+legacy-0002,,Kyle Leahy,,,DraftKings,120,120,under,3.5,,,,official,L,,manual_seed
+legacy-0003,,Grant Holmes,,,DraftKings,-163,-163,over,4.5,,,,official,L,,manual_seed
+legacy-0004,,Reid Detmers,,,BetMGM,100,100,under,5.5,,,,official,W,,manual_seed
+legacy-0005,,Emerson Hancock,,,DraftKings,-135,-135,under,5.5,,,,official,W,,manual_seed
+legacy-0006,,Justin Wrobleski,,,DraftKings,-137,-137,under,4.5,,,,official,W,,manual_seed
+legacy-0007,,Steven Matz,,,BetMGM,-155,-155,under,5.5,,,,official,W,,manual_seed
+legacy-0008,,Yoshinobu Yamamoto,,,DraftKings,-104,-104,over,5.5,,,,official,L,,manual_seed
+legacy-0009,,Chris Paddack,,,BetMGM,-135,-135,under,4.5,,,,official,W,,manual_seed
+legacy-0010,,Eric Lauer,,,DraftKings,100,100,under,4.5,,,,official,W,,manual_seed
+legacy-0011,,Anthony Kay,,,DraftKings,-142,-142,under,3.5,,,,official,W,,manual_seed
+legacy-0012,,Nick Martinez,,,BetMGM,-140,-140,under,4.5,,,,official,L,,manual_seed
+legacy-0013,,Michael Soroka,,,DraftKings,103,103,under,5.5,,,,official,L,,manual_seed
+legacy-0014,,Payton Tolle,,,FanDuel,-110,-110,under,4.5,,,,official,L,,manual_seed
+legacy-0015,,Lance McCullers Jr,,,BetMGM,-120,-120,under,5.5,,,,official,W,,manual_seed
+legacy-0016,,Freddy Peralta,,,BetMGM,-150,-150,under,7.5,,,,official,L,,manual_seed
+legacy-0017,,Sandy Alcantara,,,FanDuel,136,136,over,4.5,,,,official,L,,manual_seed
+legacy-0018,,Bryan Woo,,,BetMGM,-185,-185,over,4.5,,,,official,L,,manual_seed
+legacy-0019,,Jacob Misiorowski,,,BetMGM,-115,-115,under,7.5,,,,official,L,,manual_seed
+legacy-0020,,Zac Gallen,,,DraftKings,119,119,over,3.5,,,,official,Push,,manual_seed
+legacy-0021,,Reid Detmers,,,BetMGM,-120,-120,under,5.5,,,,official,W,,manual_seed
+legacy-0022,,Carmen Mlodzinski,,,BetMGM,100,100,under,4.5,,,,official,W,,manual_seed
+legacy-0023,,Emerson Hancock,,,FanDuel,-154,-154,under,4.5,,,,official,W,,manual_seed
+legacy-0024,,Luis Castillo,,,BetMGM,-150,-150,over,4.5,,,,official,L,,manual_seed
+legacy-0025,,Max Fried,,,FanDuel,-125,-125,over,5.5,,,,official,L,,manual_seed
+legacy-0026,,Matthew Boyd,,,DraftKings,-152,-152,under,5.5,,,,official,W,,manual_seed
+legacy-0027,,Shohei Ohtani,,,BetMGM,-105,-105,under,6.5,,,,official,L,,manual_seed
+legacy-0028,,Chad Patrick,,,BetMGM,-150,-150,over,3.5,,,,official,W,,manual_seed
+legacy-0029,,Martín Pérez,,,BetMGM,-120,-120,over,3.5,,,,official,W,,manual_seed
+legacy-0030,,George Kirby,,,FanDuel,126,126,over,5.5,,,,official,L,,manual_seed
+legacy-0031,,Yusei Kikuchi,,,BetMGM,115,115,under,5.5,,,,official,W,,manual_seed
+2026-04-30|peter lambert,2026-04-30,Peter Lambert,HOU,BAL,BetMGM,-160,-160,under,5.5,3.1216189861297607,2.3783810138702393,high,official,,,run_daily_card
+2026-04-30|kevin gausman,2026-04-30,Kevin Gausman,TOR,MIN,BetMGM,-110,-110,over,5.5,6.670597553253174,1.1705975532531738,high,official,,,run_daily_card
+2026-04-30|bryce elder,2026-04-30,Bryce Elder,ATL,DET,DraftKings,-128,-128,over,4.5,5.65626859664917,1.15626859664917,high,official,,,run_daily_card
