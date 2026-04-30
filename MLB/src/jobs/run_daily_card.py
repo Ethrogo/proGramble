@@ -144,7 +144,21 @@ def build_official_picks_history_rows(
         starter_lookup,
         on=merge_keys,
         how="left",
+        suffixes=("", "_starter"),
     )
+
+    if "game_date" not in history_rows.columns and "game_date_starter" in history_rows.columns:
+        history_rows["game_date"] = history_rows["game_date_starter"]
+
+    if history_rows["game_date"].isna().any():
+        unique_game_dates = pd.to_datetime(starters_df["game_date"]).dt.strftime("%Y-%m-%d").dropna().unique()
+        if len(unique_game_dates) == 1:
+            history_rows["game_date"] = history_rows["game_date"].fillna(unique_game_dates[0])
+
+    history_rows["game_date"] = history_rows["game_date"].fillna("").astype(str)
+
+    if "game_date" not in history_rows.columns and "game_date_starter" in history_rows.columns:
+        history_rows["game_date"] = history_rows["game_date_starter"]
 
     if history_rows["game_date"].isna().any():
         unique_game_dates = pd.to_datetime(starters_df["game_date"]).dt.strftime("%Y-%m-%d").dropna().unique()

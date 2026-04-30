@@ -628,6 +628,49 @@ def test_persist_official_picks_history_is_idempotent_and_preserves_manual_resul
     assert loaded_history.loc[0, "edge"] == pytest.approx(1.3)
 
 
+def test_build_official_picks_history_rows_handles_existing_game_date_in_post_df():
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    post_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -120,
+                "edge": 1.3,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+            }
+        ]
+    )
+
+    history_rows = daily_card.build_official_picks_history_rows(starters_df, post_df)
+
+    assert len(history_rows) == 1
+    assert history_rows.loc[0, "game_date"] == "2026-04-19"
+    assert history_rows.loc[0, "pick_key"] == "2026-04-19|jacob degrom"
+
+
 def test_run_daily_card_handles_live_odds_http_error_gracefully(monkeypatch, tmp_path):
     starters_df = pd.DataFrame(
         [
