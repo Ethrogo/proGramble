@@ -147,8 +147,20 @@ def build_official_picks_history_rows(
         suffixes=("", "_starter"),
     )
 
-    if "game_date" not in history_rows.columns and "game_date_starter" in history_rows.columns:
-        history_rows["game_date"] = history_rows["game_date_starter"]
+    if "game_date" not in history_rows.columns:
+        candidate_columns = [
+            "game_date_starter",
+            "game_date_x",
+            "game_date_y",
+        ]
+        available_candidates = [col for col in candidate_columns if col in history_rows.columns]
+        if available_candidates:
+            resolved_game_date = history_rows[available_candidates[0]].copy()
+            for candidate in available_candidates[1:]:
+                resolved_game_date = resolved_game_date.combine_first(history_rows[candidate])
+            history_rows["game_date"] = resolved_game_date
+        else:
+            history_rows["game_date"] = pd.Series(pd.NA, index=history_rows.index, dtype="object")
 
     if history_rows["game_date"].isna().any():
         unique_game_dates = pd.to_datetime(starters_df["game_date"]).dt.strftime("%Y-%m-%d").dropna().unique()
