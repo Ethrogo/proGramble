@@ -118,14 +118,14 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
         "dtest": "test",
         "X_train": pd.DataFrame(
             [
-                {"pitches_last3": 90.0, "strikeouts_stddev_last10": 1.1},
-                {"pitches_last3": 95.0, "strikeouts_stddev_last10": 1.4},
+                {"pitches_last3": 90.0},
+                {"pitches_last3": 95.0},
             ]
         ),
         "X_test": pd.DataFrame(
             [
-                {"pitches_last3": 92.0, "strikeouts_stddev_last10": 1.2},
-                {"pitches_last3": 98.0, "strikeouts_stddev_last10": 1.5},
+                {"pitches_last3": 92.0},
+                {"pitches_last3": 98.0},
             ]
         ),
         "y_train": pd.Series([5.0, 6.0], dtype="float64"),
@@ -175,13 +175,13 @@ def test_build_training_metadata_uses_native_historical_lines_for_real_backtest(
         "dtest": "test",
         "X_train": pd.DataFrame(
             [
-                {"pitches_last3": 90.0, "strikeouts_stddev_last10": 1.1},
-                {"pitches_last3": 95.0, "strikeouts_stddev_last10": 1.4},
+                {"pitches_last3": 90.0},
+                {"pitches_last3": 95.0},
             ]
         ),
         "X_test": pd.DataFrame(
             [
-                {"pitches_last3": 92.0, "strikeouts_stddev_last10": 1.2},
+                {"pitches_last3": 92.0},
             ]
         ),
         "y_train": pd.Series([5.0, 6.0], dtype="float64"),
