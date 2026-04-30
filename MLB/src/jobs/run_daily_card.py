@@ -35,10 +35,32 @@ PITCHER_GAMES_PATH = LATEST_ARTIFACTS_DIR / "pitcher_games.csv"
 METADATA_FILENAME = "metadata.json"
 
 OUTPUT_DIR = DATA_DIR / "outputs"
+TRACKING_DIR = DATA_DIR / "tracking"
 
 PROJECTIONS_DIR = OUTPUT_DIR / "projections"
 EDGES_DIR = OUTPUT_DIR / "edges"
 PICKS_DIR = OUTPUT_DIR / "picks"
+OFFICIAL_PICKS_HISTORY_PATH = TRACKING_DIR / "official_picks_history.csv"
+
+OFFICIAL_PICKS_HISTORY_COLUMNS = [
+    "pick_key",
+    "game_date",
+    "player_name",
+    "team",
+    "opponent",
+    "book",
+    "odds",
+    "price",
+    "pick_side",
+    "line",
+    "predicted_strikeouts",
+    "edge",
+    "confidence_tier",
+    "pick_type",
+    "result",
+    "actual_strikeouts",
+    "record_source",
+]
 
 BuildPicksFn = Callable[[pd.DataFrame], pd.DataFrame]
 FilterPostablePicksFn = Callable[[pd.DataFrame], pd.DataFrame]
@@ -48,6 +70,128 @@ def ensure_output_dirs() -> None:
     PROJECTIONS_DIR.mkdir(parents=True, exist_ok=True)
     EDGES_DIR.mkdir(parents=True, exist_ok=True)
     PICKS_DIR.mkdir(parents=True, exist_ok=True)
+    TRACKING_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def empty_official_picks_history_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=OFFICIAL_PICKS_HISTORY_COLUMNS)
+
+
+def _format_american_odds(price: float | int | str | None) -> str:
+    if pd.isna(price):
+        return ""
+
+    numeric_price = int(float(price))
+    if numeric_price > 0:
+        return f"+{numeric_price}"
+    return str(numeric_price)
+
+
+def _normalize_pick_key_name(player_name: str) -> str:
+    return " ".join(str(player_name).strip().lower().split())
+
+
+def _build_pick_key(game_date: str, player_name: str) -> str:
+    return f"{game_date}|{_normalize_pick_key_name(player_name)}"
+
+
+def load_official_picks_history() -> pd.DataFrame:
+    if not OFFICIAL_PICKS_HISTORY_PATH.exists():
+        return empty_official_picks_history_df()
+
+    history_df = pd.read_csv(OFFICIAL_PICKS_HISTORY_PATH, keep_default_na=False)
+    missing = [col for col in OFFICIAL_PICKS_HISTORY_COLUMNS if col not in history_df.columns]
+    if missing:
+        raise ValueError(
+            "official_picks_history.csv is missing required columns: "
+            f"{missing}"
+        )
+
+    return history_df[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
+
+
+def build_official_picks_history_rows(
+    starters_df: pd.DataFrame,
+    post_df: pd.DataFrame,
+) -> pd.DataFrame:
+    official_df = post_df[post_df["pick_type"] == "official"].copy()
+    if official_df.empty:
+        return empty_official_picks_history_df()
+
+    starter_lookup = starters_df[
+        ["player_name", "team", "opponent", "game_date"]
+    ].copy()
+    starter_lookup["game_date"] = pd.to_datetime(starter_lookup["game_date"]).dt.strftime("%Y-%m-%d")
+    merge_keys = ["player_name"]
+    if {"team", "opponent"}.issubset(official_df.columns):
+        merge_keys = ["player_name", "team", "opponent"]
+
+    starter_lookup = starter_lookup.drop_duplicates(subset=merge_keys, keep="last")
+
+    history_rows = official_df.merge(
+        starter_lookup,
+        on=merge_keys,
+        how="left",
+    )
+
+    if history_rows["game_date"].isna().any():
+        unique_game_dates = pd.to_datetime(starters_df["game_date"]).dt.strftime("%Y-%m-%d").dropna().unique()
+        if len(unique_game_dates) == 1:
+            history_rows["game_date"] = history_rows["game_date"].fillna(unique_game_dates[0])
+
+    history_rows["game_date"] = history_rows["game_date"].fillna("").astype(str)
+    history_rows["pick_key"] = history_rows.apply(
+        lambda row: _build_pick_key(row["game_date"], row["player_name"]),
+        axis=1,
+    )
+    history_rows["odds"] = history_rows["price"].apply(_format_american_odds)
+    history_rows["result"] = ""
+    history_rows["actual_strikeouts"] = ""
+    history_rows["record_source"] = "run_daily_card"
+
+    for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
+        if column not in history_rows.columns:
+            history_rows[column] = ""
+
+    return history_rows[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
+
+
+def persist_official_picks_history(
+    starters_df: pd.DataFrame,
+    post_df: pd.DataFrame,
+) -> Path:
+    existing_df = load_official_picks_history()
+    new_rows = build_official_picks_history_rows(starters_df, post_df)
+
+    if new_rows.empty:
+        if not OFFICIAL_PICKS_HISTORY_PATH.exists():
+            existing_df.to_csv(OFFICIAL_PICKS_HISTORY_PATH, index=False)
+        return OFFICIAL_PICKS_HISTORY_PATH
+
+    existing_by_key = existing_df.set_index("pick_key", drop=False)
+    merged_rows: list[dict] = []
+
+    for _, new_row in new_rows.iterrows():
+        new_record = new_row.to_dict()
+        pick_key = new_record["pick_key"]
+
+        if pick_key in existing_by_key.index:
+            existing_record = existing_by_key.loc[pick_key].to_dict()
+            if existing_record.get("result") and not new_record.get("result"):
+                new_record["result"] = existing_record["result"]
+            if existing_record.get("actual_strikeouts") and not new_record.get("actual_strikeouts"):
+                new_record["actual_strikeouts"] = existing_record["actual_strikeouts"]
+            if existing_record.get("record_source") and not new_record.get("record_source"):
+                new_record["record_source"] = existing_record["record_source"]
+
+        merged_rows.append(new_record)
+
+    merged_df = pd.DataFrame(merged_rows, columns=OFFICIAL_PICKS_HISTORY_COLUMNS)
+    untouched_existing = existing_df[~existing_df["pick_key"].isin(merged_df["pick_key"])]
+    history_df = pd.concat([untouched_existing, merged_df], ignore_index=True)
+    history_df = history_df[OFFICIAL_PICKS_HISTORY_COLUMNS]
+    history_df.to_csv(OFFICIAL_PICKS_HISTORY_PATH, index=False)
+    return OFFICIAL_PICKS_HISTORY_PATH
 
 
 def resolve_artifact_path(filename: str) -> Path:
@@ -162,6 +306,7 @@ def save_outputs(
     joined_df.to_csv(EDGES_DIR / "today_joined_edges.csv", index=False)
     picks_df.to_csv(PICKS_DIR / "today_all_picks.csv", index=False)
     post_df.to_csv(PICKS_DIR / "today_postable_picks.csv", index=False)
+    persist_official_picks_history(starters_df, post_df)
 
 
 def run_daily_card(

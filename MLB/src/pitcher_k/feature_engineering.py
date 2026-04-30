@@ -270,7 +270,7 @@ def add_opponent_k_features(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd
 
 def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     """
-    Add trailing 3-game and 10-game rolling averages using prior games only.
+    Add trailing rolling features using prior games only.
     """
     require_columns(
         pitcher_games,
@@ -310,6 +310,17 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
             .transform(lambda s: s.shift(1).rolling(10, min_periods=3).mean())
         )
 
+    strikeouts_history = pitcher_games.groupby("pitcher")["strikeouts"].transform(
+        lambda s: s.shift(1).rolling(10, min_periods=3).std(ddof=0)
+    )
+    pitcher_games["strikeouts_stddev_last10"] = strikeouts_history
+    pitcher_games["strikeouts_p25_last10"] = pitcher_games.groupby("pitcher")["strikeouts"].transform(
+        lambda s: s.shift(1).rolling(10, min_periods=3).quantile(0.25)
+    )
+    pitcher_games["strikeouts_p75_last10"] = pitcher_games.groupby("pitcher")["strikeouts"].transform(
+        lambda s: s.shift(1).rolling(10, min_periods=3).quantile(0.75)
+    )
+
     require_columns(
         pitcher_games,
         [
@@ -320,6 +331,9 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
             "avg_spin_last3",
             "strikeouts_last10",
             "batters_faced_last10",
+            "strikeouts_stddev_last10",
+            "strikeouts_p25_last10",
+            "strikeouts_p75_last10",
         ],
         "pitcher_games",
     )

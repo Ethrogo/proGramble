@@ -203,6 +203,8 @@ def _evaluation_metrics(
         y_test,
         y_pred_test,
     )
+    # Use the full model dataframes here so interval calibration can see
+    # uncertainty columns that are intentionally excluded from BASE_FEATURES.
     interval_config = fit_interval_calibration(
         train_df,
         y_train,
@@ -241,8 +243,10 @@ def build_training_metadata(
     train_output: dict,
     historical_lines_df: pd.DataFrame | None = None,
 ) -> dict:
+    # Calibrate saved intervals from the model dataframe rather than X_train,
+    # because X_train only contains BASE_FEATURES and omits stddev fields.
     uncertainty_model = fit_interval_calibration(
-        train_output["X_train"],
+        train_df,
         train_output["y_train"],
         train_output["model"].predict(train_output["dtrain"]),
     )

@@ -12,8 +12,8 @@ def evaluate_predictions(y_true, y_pred) -> dict:
     """
     Return richer regression metrics for model governance.
     """
-    y_true_series = pd.Series(y_true, dtype="float64")
-    y_pred_series = pd.Series(y_pred, dtype="float64")
+    y_true_series = pd.Series(y_true, dtype="float64").reset_index(drop=True)
+    y_pred_series = pd.Series(y_pred, dtype="float64").reset_index(drop=True)
     errors = y_pred_series - y_true_series
     abs_errors = errors.abs()
 

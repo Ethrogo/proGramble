@@ -121,6 +121,12 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
     monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
     monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
 
     saved_starters = {}
 
@@ -146,11 +152,17 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert (daily_card.EDGES_DIR / "today_joined_edges.csv").exists()
     assert (daily_card.PICKS_DIR / "today_all_picks.csv").exists()
     assert (daily_card.PICKS_DIR / "today_postable_picks.csv").exists()
+    assert daily_card.OFFICIAL_PICKS_HISTORY_PATH.exists()
 
     loaded_post = pd.read_csv(daily_card.PICKS_DIR / "today_postable_picks.csv")
+    loaded_history = pd.read_csv(daily_card.OFFICIAL_PICKS_HISTORY_PATH, keep_default_na=False)
     assert len(loaded_post) == 1
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
     assert loaded_post.loc[0, "pick_type"] == "official"
+    assert len(loaded_history) == 1
+    assert loaded_history.loc[0, "game_date"] == "2026-04-19"
+    assert str(loaded_history.loc[0, "odds"]) == "-120"
+    assert loaded_history.loc[0, "pick_key"] == "2026-04-19|jacob degrom"
 
 
 def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch, tmp_path):
@@ -247,6 +259,12 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
     monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
     monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
     monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
 
     custom_market = "custom_market"
@@ -335,6 +353,12 @@ def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp
     monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
     monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
     monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
 
     with pytest.raises(ValueError, match="No today predictions were generated."):
         daily_card.run_daily_card()
@@ -369,6 +393,12 @@ def test_run_daily_card_raises_when_pitcher_games_artifact_is_missing(monkeypatc
     monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
     monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
     monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
 
     with pytest.raises(FileNotFoundError, match="Missing pitcher_games artifact"):
         daily_card.run_daily_card()
@@ -479,6 +509,12 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
     monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
     monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
     monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
 
     def fake_run_edge_pipeline(preds, market, **kwargs):
@@ -510,6 +546,85 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     assert calls["build_policy"] is workflow.pick_ranking_policy
     assert calls["filter_policy"] is workflow.pick_ranking_policy
     assert calls["filter_limits"] == (1, 0)
+
+
+def test_persist_official_picks_history_is_idempotent_and_preserves_manual_results(tmp_path, monkeypatch):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    post_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -120,
+                "edge": 1.3,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+            }
+        ]
+    )
+
+    tracking_dir = tmp_path / "data" / "tracking"
+    history_path = tracking_dir / "official_picks_history.csv"
+
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tracking_dir)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+
+    seed_history = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-04-19|jacob degrom",
+                "game_date": "2026-04-19",
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "book": "DraftKings",
+                "odds": "-120",
+                "price": -120,
+                "pick_side": "over",
+                "line": 5.5,
+                "predicted_strikeouts": 6.6,
+                "edge": 1.1,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+                "result": "W",
+                "actual_strikeouts": "7",
+                "record_source": "manual_seed",
+            }
+        ]
+    )
+    seed_history.to_csv(history_path, index=False)
+
+    daily_card.persist_official_picks_history(starters_df, post_df)
+    daily_card.persist_official_picks_history(starters_df, post_df)
+
+    loaded_history = pd.read_csv(history_path, keep_default_na=False)
+
+    assert len(loaded_history) == 1
+    assert loaded_history.loc[0, "result"] == "W"
+    assert str(loaded_history.loc[0, "actual_strikeouts"]) == "7"
+    assert loaded_history.loc[0, "predicted_strikeouts"] == pytest.approx(6.8)
+    assert loaded_history.loc[0, "edge"] == pytest.approx(1.3)
 
 
 def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_path, monkeypatch, capsys):

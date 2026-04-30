@@ -158,8 +158,42 @@ def test_add_rolling_pitcher_features_creates_critical_rolling_columns():
         "avg_spin_last3",
         "strikeouts_last10",
         "batters_faced_last10",
+        "strikeouts_stddev_last10",
+        "strikeouts_p25_last10",
+        "strikeouts_p75_last10",
     }
     assert expected_cols.issubset(enriched.columns)
+
+
+def test_add_rolling_pitcher_features_builds_uncertainty_history_from_prior_games():
+    sc = _statcast_df()
+    pitcher_games = build_pitcher_game_table(sc)
+    pitcher_games = add_pitcher_team_info(pitcher_games, sc)
+    pitcher_games = add_opponent_k_features(pitcher_games, sc)
+
+    # Give one pitcher varying strikeout totals so the trailing stddev is non-zero.
+    strikeout_pattern = {
+        1001: 1,
+        1002: 3,
+        1003: 2,
+        1004: 4,
+    }
+    pitcher_games.loc[pitcher_games["pitcher"] == 111, "strikeouts"] = (
+        pitcher_games.loc[pitcher_games["pitcher"] == 111, "game_pk"].map(strikeout_pattern)
+    )
+
+    enriched = add_rolling_pitcher_features(pitcher_games)
+    degrom_rows = enriched[enriched["pitcher"] == 111].sort_values("game_pk").reset_index(drop=True)
+
+    assert pd.isna(degrom_rows.loc[0, "strikeouts_stddev_last10"])
+    assert pd.isna(degrom_rows.loc[1, "strikeouts_stddev_last10"])
+    assert degrom_rows.loc[3, "strikeouts_stddev_last10"] == pytest.approx(
+        pd.Series([1.0, 3.0, 2.0]).std(ddof=0)
+    )
+    assert pd.isna(degrom_rows.loc[2, "strikeouts_p25_last10"])
+    assert pd.isna(degrom_rows.loc[2, "strikeouts_p75_last10"])
+    assert degrom_rows.loc[3, "strikeouts_p25_last10"] == pytest.approx(1.5)
+    assert degrom_rows.loc[3, "strikeouts_p75_last10"] == pytest.approx(2.5)
 
 
 def test_add_rate_features_creates_required_rate_columns():

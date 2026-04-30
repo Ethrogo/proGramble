@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: "29 11 * * *" # 7:30 AM ET during EDT
 
+permissions:
+  contents: write
+
 jobs:
   daily-training-card:
     runs-on: ubuntu-latest
@@ -20,6 +23,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -37,6 +42,20 @@ jobs:
       - name: Run daily card
         run: |
           python -m jobs.run_daily_card
+
+      - name: Commit official picks history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- data/tracking/official_picks_history.csv; then
+            echo "No official picks history changes to commit."
+            exit 0
+          fi
+
+          git add data/tracking/official_picks_history.csv
+          git commit -m "Update official picks history"
+          git push
       
       - name: Notify Discord
         if: always()
@@ -67,3 +86,4 @@ jobs:
             MLB/data/artifacts/previous/
             MLB/data/inputs/starters/
             MLB/data/outputs/
+            MLB/data/tracking/
