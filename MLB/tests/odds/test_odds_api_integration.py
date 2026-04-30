@@ -20,7 +20,7 @@ def test_live_pitcher_strikeout_payload_normalizes():
     - ODDS_API_KEY must be set
     - at least one MLB event must currently expose pitcher_strikeouts
     """
-    if not os.getenv("ODDS_API_KEY"):
+    if not os.getenv("ODDS_API_KEY", "").strip():
         pytest.skip("ODDS_API_KEY is not set")
 
     prop_events = fetch_all_player_props(PITCHER_K_PROP_MARKET)
