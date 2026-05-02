@@ -8,7 +8,6 @@ from typing import Callable
 
 import pandas as pd
 import requests
-import xgboost as xgb
 
 from starters.today_starters import get_today_starters_df, save_today_starters_csv
 
@@ -18,24 +17,19 @@ from common.contracts import (
     FINAL_PICKS_REQUIRED_COLUMNS,
     JOINED_ODDS_REQUIRED_COLUMNS,
     validate_starters_contract,
-    validate_pitcher_games_contract,
     validate_joined_odds_contract,
     validate_final_picks_contract,
     assert_non_empty,
     require_columns,
 )
-from common.workflows import MLB_PITCHER_STRIKEOUT_WORKFLOW, ModelingWorkflowSpec
-from pitcher_k.evaluate import apply_interval_calibration
+from common.workflows import ModelingWorkflowSpec
+from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 LATEST_ARTIFACTS_DIR = ARTIFACTS_DIR / "latest"
 PREVIOUS_ARTIFACTS_DIR = ARTIFACTS_DIR / "previous"
-
-MODEL_PATH = LATEST_ARTIFACTS_DIR / "model.ubj"
-PITCHER_GAMES_PATH = LATEST_ARTIFACTS_DIR / "pitcher_games.csv"
-METADATA_FILENAME = "metadata.json"
 
 OUTPUT_DIR = DATA_DIR / "outputs"
 TRACKING_DIR = DATA_DIR / "tracking"
@@ -139,7 +133,6 @@ def build_official_picks_history_rows(
         merge_keys = ["player_name", "team", "opponent"]
 
     starter_lookup = starter_lookup.drop_duplicates(subset=merge_keys, keep="last")
-
     history_rows = official_df.merge(
         starter_lookup,
         on=merge_keys,
@@ -247,26 +240,23 @@ def resolve_artifact_path(filename: str) -> Path:
     )
 
 
-def load_pitcher_games_artifact() -> pd.DataFrame:
-    path = resolve_artifact_path("pitcher_games.csv")
-    pitcher_games = pd.read_csv(path)
-    pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"])
-    validate_pitcher_games_contract(pitcher_games)
-    print(f"Loaded pitcher_games artifact from: {path}")
-    return pitcher_games
+def load_workflow_history_artifact(workflow: ModelingWorkflowSpec) -> pd.DataFrame:
+    path = resolve_artifact_path(workflow.artifacts.history_filename)
+    history_df = workflow.artifacts.history_loader(path)
+    print(f"Loaded workflow history artifact from: {path}")
+    return history_df
 
 
-def load_model_artifact():
-    path = resolve_artifact_path("model.ubj")
-    model = xgb.Booster()
-    model.load_model(str(path))
+def load_workflow_model_artifact(workflow: ModelingWorkflowSpec):
+    path = resolve_artifact_path(workflow.artifacts.model_filename)
+    model = workflow.artifacts.model_loader(path)
     print(f"Loaded model artifact from: {path}")
     return model
 
 
-def load_model_metadata() -> dict:
-    model_path = resolve_artifact_path("model.ubj")
-    metadata_path = model_path.with_name(METADATA_FILENAME)
+def load_model_metadata(workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW) -> dict:
+    model_path = resolve_artifact_path(workflow.artifacts.model_filename)
+    metadata_path = model_path.with_name(workflow.artifacts.metadata_filename)
 
     if not metadata_path.exists():
         raise FileNotFoundError(
@@ -297,7 +287,6 @@ def build_today_predictions_for_workflow(
     workflow: ModelingWorkflowSpec,
 ):
     validate_starters_contract(starters_df)
-    validate_pitcher_games_contract(pitcher_games)
 
     today_features = workflow.feature_builder(starters_df, pitcher_games)
 
@@ -308,7 +297,7 @@ def build_today_predictions_for_workflow(
     assert_non_empty(today_preds, "today_preds")
     require_columns(
         today_preds,
-        ["player_name", "predicted_strikeouts", "lower_bound", "upper_bound", "std_dev"],
+        list(workflow.prediction_columns),
         "today_preds",
     )
     return today_preds
@@ -317,18 +306,13 @@ def build_today_predictions_for_workflow(
 def apply_metadata_uncertainty(
     today_preds: pd.DataFrame,
     metadata: dict | None,
+    workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW,
 ) -> pd.DataFrame:
-    """
-    Re-apply interval bounds using the saved calibration config when available.
-    """
-    if today_preds.empty:
+    adjuster = workflow.prediction_metadata_adjuster
+    if adjuster is None:
         return today_preds
 
-    interval_config = (metadata or {}).get("uncertainty_model")
-    if not interval_config:
-        return today_preds
-
-    return apply_interval_calibration(today_preds, interval_config)
+    return adjuster(today_preds, metadata)
 
 
 def save_run_status(*, status: str, message: str | None = None) -> None:
@@ -388,17 +372,17 @@ def run_daily_card(
 
     starters_df = get_today_starters_df()
     validate_starters_contract(starters_df)
-    pitcher_games = load_pitcher_games_artifact()
-    model = load_model_artifact()
-    metadata = load_model_metadata()
+    history_df = load_workflow_history_artifact(workflow)
+    model = load_workflow_model_artifact(workflow)
+    metadata = load_model_metadata(workflow)
 
     today_preds = build_today_predictions_for_workflow(
         starters_df=starters_df,
-        pitcher_games=pitcher_games,
+        pitcher_games=history_df,
         model=model,
         workflow=workflow,
     )
-    today_preds = apply_metadata_uncertainty(today_preds, metadata)
+    today_preds = apply_metadata_uncertainty(today_preds, metadata, workflow)
 
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
