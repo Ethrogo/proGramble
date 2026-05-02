@@ -12,6 +12,7 @@ FeatureBuilder = Callable[[pd.DataFrame, pd.DataFrame], pd.DataFrame]
 Predictor = Callable[[object, pd.DataFrame], pd.DataFrame]
 ArtifactDataLoader = Callable[[Path], pd.DataFrame]
 ArtifactModelLoader = Callable[[Path], object]
+PredictionMetadataAdjuster = Callable[[pd.DataFrame, dict | None], pd.DataFrame]
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class ModelingWorkflowSpec:
     projection_odds_join_keys: ProjectionOddsJoinKeys
     pick_ranking_policy: PickRankingPolicy
     prediction_columns: tuple[str, ...]
+    prediction_metadata_adjuster: PredictionMetadataAdjuster | None = None
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
 
     def resolved_postable_limits(self) -> PostablePickLimits:

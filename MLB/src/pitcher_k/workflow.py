@@ -13,6 +13,7 @@ from common.workflows import (
 )
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PostablePickLimits
 from pitcher_k.config import PITCHER_K_PROP_MARKET
+from pitcher_k.evaluate import apply_interval_calibration
 from pitcher_k.feature_engineering import build_team_context
 from pitcher_k.feature_tomorrow import build_tomorrow_features
 from pitcher_k.predict import predict_on_dataframe
@@ -44,6 +45,20 @@ def build_mlb_pitcher_strikeout_features(
     )
 
 
+def apply_pitcher_k_metadata_uncertainty(
+    today_preds: pd.DataFrame,
+    metadata: dict | None,
+) -> pd.DataFrame:
+    if today_preds.empty:
+        return today_preds
+
+    interval_config = (metadata or {}).get("uncertainty_model")
+    if not interval_config:
+        return today_preds
+
+    return apply_interval_calibration(today_preds, interval_config)
+
+
 MLB_PITCHER_STRIKEOUT_WORKFLOW = ModelingWorkflowSpec(
     sport="MLB",
     participant_key="player_name",
@@ -68,6 +83,7 @@ MLB_PITCHER_STRIKEOUT_WORKFLOW = ModelingWorkflowSpec(
         "upper_bound",
         "std_dev",
     ),
+    prediction_metadata_adjuster=apply_pitcher_k_metadata_uncertainty,
     postable_limits=PostablePickLimits(
         max_official=3,
         max_leans=1,

@@ -23,7 +23,6 @@ from common.contracts import (
     require_columns,
 )
 from common.workflows import ModelingWorkflowSpec
-from pitcher_k.evaluate import apply_interval_calibration
 from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -31,8 +30,6 @@ DATA_DIR = PROJECT_ROOT / "data"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 LATEST_ARTIFACTS_DIR = ARTIFACTS_DIR / "latest"
 PREVIOUS_ARTIFACTS_DIR = ARTIFACTS_DIR / "previous"
-
-METADATA_FILENAME = "metadata.json"
 
 OUTPUT_DIR = DATA_DIR / "outputs"
 TRACKING_DIR = DATA_DIR / "tracking"
@@ -136,7 +133,7 @@ def build_official_picks_history_rows(
         merge_keys = ["player_name", "team", "opponent"]
 
     starter_lookup = starter_lookup.drop_duplicates(subset=merge_keys, keep="last")
-history_rows = official_df.merge(
+    history_rows = official_df.merge(
         starter_lookup,
         on=merge_keys,
         how="left",
@@ -309,18 +306,13 @@ def build_today_predictions_for_workflow(
 def apply_metadata_uncertainty(
     today_preds: pd.DataFrame,
     metadata: dict | None,
+    workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW,
 ) -> pd.DataFrame:
-    """
-    Re-apply interval bounds using the saved calibration config when available.
-    """
-    if today_preds.empty:
+    adjuster = workflow.prediction_metadata_adjuster
+    if adjuster is None:
         return today_preds
 
-    interval_config = (metadata or {}).get("uncertainty_model")
-    if not interval_config:
-        return today_preds
-
-    return apply_interval_calibration(today_preds, interval_config)
+    return adjuster(today_preds, metadata)
 
 
 def save_run_status(*, status: str, message: str | None = None) -> None:
@@ -390,7 +382,7 @@ def run_daily_card(
         model=model,
         workflow=workflow,
     )
-    today_preds = apply_metadata_uncertainty(today_preds, metadata)
+    today_preds = apply_metadata_uncertainty(today_preds, metadata, workflow)
 
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
