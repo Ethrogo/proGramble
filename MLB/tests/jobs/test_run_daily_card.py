@@ -3,7 +3,7 @@ import pytest
 import requests
 
 from jobs import run_daily_card as daily_card
-from common.workflows import ModelingWorkflowSpec, ProjectionOddsJoinKeys
+from common.workflows import ModelingWorkflowSpec, ProjectionOddsJoinKeys, WorkflowArtifactSpec
 from odds.policy import (
     DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
     PostablePickLimits,
@@ -92,12 +92,12 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     post_df = picks_df.copy()
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
     monkeypatch.setattr(
         daily_card,
         "load_model_metadata",
-        lambda: {"target": "strikeouts", "features": ["pitches_last3"]},
+        lambda workflow=None: {"target": "strikeouts", "features": ["pitches_last3"]},
     )
     monkeypatch.setattr(
         daily_card,
@@ -247,9 +247,9 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     post_df = picks_df.copy()
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
-    monkeypatch.setattr(daily_card, "load_model_metadata", lambda: {"target": "strikeouts"})
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
+    monkeypatch.setattr(daily_card, "load_model_metadata", lambda workflow=None: {"target": "strikeouts"})
     monkeypatch.setattr(
         daily_card,
         "build_today_predictions_for_workflow",
@@ -336,12 +336,12 @@ def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp
     )
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
     monkeypatch.setattr(
         daily_card,
         "load_model_metadata",
-        lambda: {"target": "strikeouts", "features": ["pitches_last3"]},
+        lambda workflow=None: {"target": "strikeouts", "features": ["pitches_last3"]},
     )
     monkeypatch.setattr(
         daily_card,
@@ -387,7 +387,7 @@ def test_run_daily_card_raises_when_pitcher_games_artifact_is_missing(monkeypatc
     def raise_missing_pitcher_games():
         raise FileNotFoundError("Missing pitcher_games artifact: fake/path/pitcher_games.csv")
 
-    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", raise_missing_pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", raise_missing_pitcher_games)
 
     monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
@@ -497,9 +497,9 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     )
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
-    monkeypatch.setattr(daily_card, "load_model_metadata", lambda: {"target": "strikeouts"})
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
+    monkeypatch.setattr(daily_card, "load_model_metadata", lambda workflow=None: {"target": "strikeouts"})
     monkeypatch.setattr(
         daily_card,
         "build_today_predictions_for_workflow",
@@ -760,8 +760,8 @@ def test_run_daily_card_handles_live_odds_http_error_gracefully(monkeypatch, tmp
     )
 
     monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
-    monkeypatch.setattr(daily_card, "load_pitcher_games_artifact", lambda: pitcher_games)
-    monkeypatch.setattr(daily_card, "load_model_artifact", lambda: "fake_model")
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
     monkeypatch.setattr(daily_card, "load_model_metadata", lambda: {"target": "strikeouts"})
     monkeypatch.setattr(
         daily_card,
