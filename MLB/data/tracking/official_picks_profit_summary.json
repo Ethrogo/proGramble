@@ -1,0 +1,13 @@
+{
+  "books": 0,
+  "picks": 0,
+  "wins": 0,
+  "losses": 0,
+  "pushes": 0,
+  "decisions": 0,
+  "units_risked": 0.0,
+  "units_profit": 0.0,
+  "win_rate": null,
+  "roi": null,
+  "skipped_rows": 1
+}

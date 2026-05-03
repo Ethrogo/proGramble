@@ -39,6 +39,10 @@ EDGES_DIR = OUTPUT_DIR / "edges"
 PICKS_DIR = OUTPUT_DIR / "picks"
 RUN_STATUS_PATH = OUTPUT_DIR / "run_daily_card_status.json"
 OFFICIAL_PICKS_HISTORY_PATH = TRACKING_DIR / "official_picks_history.csv"
+OFFICIAL_PICKS_GRADES_PATH = TRACKING_DIR / "official_picks_profit_report.csv"
+OFFICIAL_PICKS_BOOK_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_by_book.csv"
+OFFICIAL_PICKS_OVERALL_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary.json"
+OFFICIAL_PICKS_SKIPPED_PATH = TRACKING_DIR / "official_picks_profit_skipped.csv"
 
 OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "pick_key",
@@ -58,6 +62,26 @@ OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "result",
     "actual_strikeouts",
     "record_source",
+]
+
+OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS = OFFICIAL_PICKS_HISTORY_COLUMNS + [
+    "result_normalized",
+    "odds_numeric",
+    "units_risked",
+    "units_result",
+]
+
+OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS = [
+    "book",
+    "picks",
+    "wins",
+    "losses",
+    "pushes",
+    "decisions",
+    "units_risked",
+    "units_profit",
+    "win_rate",
+    "roi",
 ]
 
 BuildPicksFn = Callable[[pd.DataFrame], pd.DataFrame]
@@ -99,6 +123,207 @@ def _normalize_pick_key_name(player_name: str) -> str:
 
 def _build_pick_key(game_date: str, player_name: str) -> str:
     return f"{game_date}|{_normalize_pick_key_name(player_name)}"
+
+
+def _normalize_pick_result(result: str | None) -> str:
+    normalized = str(result or "").strip().lower()
+    if normalized in {"w", "win"}:
+        return "W"
+    if normalized in {"l", "loss"}:
+        return "L"
+    if normalized == "push":
+        return "Push"
+    return ""
+
+
+def _parse_american_odds(odds: float | int | str | None) -> float | None:
+    if pd.isna(odds):
+        return None
+
+    text = str(odds).strip()
+    if not text:
+        return None
+
+    try:
+        numeric_odds = float(text)
+    except ValueError:
+        return None
+
+    if numeric_odds == 0:
+        return None
+
+    return numeric_odds
+
+
+def _resolve_history_row_odds(row: pd.Series) -> float | None:
+    odds_value = _parse_american_odds(row.get("odds"))
+    if odds_value is not None:
+        return odds_value
+    return _parse_american_odds(row.get("price"))
+
+
+def _profit_units_for_result(odds: float | None, result: str) -> float | None:
+    if result == "Push":
+        return 0.0
+    if result == "L":
+        return -1.0
+    if result != "W" or odds is None:
+        return None
+    if odds > 0:
+        return odds / 100.0
+    return 100.0 / abs(odds)
+
+
+def empty_official_picks_profit_report_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS)
+
+
+def empty_official_picks_profit_summary_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS)
+
+
+def summarize_official_picks_profit_by_book(graded_df: pd.DataFrame) -> pd.DataFrame:
+    if graded_df.empty:
+        return empty_official_picks_profit_summary_df()
+
+    summary = (
+        graded_df.groupby("book", dropna=False)
+        .agg(
+            picks=("pick_key", "size"),
+            wins=("result_normalized", lambda s: int((s == "W").sum())),
+            losses=("result_normalized", lambda s: int((s == "L").sum())),
+            pushes=("result_normalized", lambda s: int((s == "Push").sum())),
+            decisions=("units_risked", "sum"),
+            units_risked=("units_risked", "sum"),
+            units_profit=("units_result", "sum"),
+        )
+        .reset_index()
+    )
+    summary["picks"] = summary["picks"].astype(int)
+    summary["wins"] = summary["wins"].astype(int)
+    summary["losses"] = summary["losses"].astype(int)
+    summary["pushes"] = summary["pushes"].astype(int)
+    summary["decisions"] = summary["decisions"].astype(int)
+    summary["win_rate"] = summary.apply(
+        lambda row: row["wins"] / row["decisions"] if row["decisions"] else None,
+        axis=1,
+    )
+    summary["roi"] = summary.apply(
+        lambda row: row["units_profit"] / row["units_risked"] if row["units_risked"] else None,
+        axis=1,
+    )
+    return summary[OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS].sort_values(
+        by=["units_profit", "book"],
+        ascending=[False, True],
+    ).reset_index(drop=True)
+
+
+def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, object]:
+    if history_df.empty:
+        return {
+            "graded_df": empty_official_picks_profit_report_df(),
+            "summary_by_book_df": empty_official_picks_profit_summary_df(),
+            "overall_summary": {
+                "books": 0,
+                "picks": 0,
+                "wins": 0,
+                "losses": 0,
+                "pushes": 0,
+                "decisions": 0,
+                "units_risked": 0.0,
+                "units_profit": 0.0,
+                "win_rate": None,
+                "roi": None,
+                "skipped_rows": 0,
+            },
+            "skipped_df": empty_official_picks_profit_report_df(),
+        }
+
+    official_df = history_df[history_df["pick_type"] == "official"].copy()
+    if official_df.empty:
+        return {
+            "graded_df": empty_official_picks_profit_report_df(),
+            "summary_by_book_df": empty_official_picks_profit_summary_df(),
+            "overall_summary": {
+                "books": 0,
+                "picks": 0,
+                "wins": 0,
+                "losses": 0,
+                "pushes": 0,
+                "decisions": 0,
+                "units_risked": 0.0,
+                "units_profit": 0.0,
+                "win_rate": None,
+                "roi": None,
+                "skipped_rows": 0,
+            },
+            "skipped_df": empty_official_picks_profit_report_df(),
+        }
+
+    working = official_df.copy()
+    working["result_normalized"] = working["result"].apply(_normalize_pick_result)
+    working["odds_numeric"] = working.apply(_resolve_history_row_odds, axis=1)
+    working["units_risked"] = 0.0
+    working["units_result"] = pd.NA
+
+    resolved_mask = working["result_normalized"].isin(["W", "L", "Push"])
+    valid_odds_mask = working["odds_numeric"].notna()
+    push_mask = working["result_normalized"] == "Push"
+    gradeable_mask = resolved_mask & (valid_odds_mask | push_mask)
+
+    if gradeable_mask.any():
+        working.loc[gradeable_mask, "units_risked"] = working.loc[
+            gradeable_mask, "result_normalized"
+        ].apply(lambda result: 0.0 if result == "Push" else 1.0)
+        working.loc[gradeable_mask, "units_result"] = working.loc[gradeable_mask].apply(
+            lambda row: _profit_units_for_result(row["odds_numeric"], row["result_normalized"]),
+            axis=1,
+        )
+
+    graded_df = working.loc[gradeable_mask, OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS].copy()
+    skipped_df = working.loc[~gradeable_mask, OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS].copy()
+    summary_by_book_df = summarize_official_picks_profit_by_book(graded_df)
+
+    wins = int((graded_df["result_normalized"] == "W").sum())
+    losses = int((graded_df["result_normalized"] == "L").sum())
+    pushes = int((graded_df["result_normalized"] == "Push").sum())
+    decisions = wins + losses
+    units_risked = float(graded_df["units_risked"].sum()) if not graded_df.empty else 0.0
+    units_profit = float(pd.to_numeric(graded_df["units_result"], errors="coerce").fillna(0.0).sum())
+
+    overall_summary = {
+        "books": int(summary_by_book_df["book"].nunique()) if not summary_by_book_df.empty else 0,
+        "picks": int(len(graded_df)),
+        "wins": wins,
+        "losses": losses,
+        "pushes": pushes,
+        "decisions": decisions,
+        "units_risked": units_risked,
+        "units_profit": units_profit,
+        "win_rate": (wins / decisions) if decisions else None,
+        "roi": (units_profit / units_risked) if units_risked else None,
+        "skipped_rows": int(len(skipped_df)),
+    }
+
+    return {
+        "graded_df": graded_df,
+        "summary_by_book_df": summary_by_book_df,
+        "overall_summary": overall_summary,
+        "skipped_df": skipped_df,
+    }
+
+
+def persist_official_picks_profit_reports() -> dict[str, object]:
+    history_df = load_official_picks_history()
+    report = build_official_picks_profit_report(history_df)
+    report["graded_df"].to_csv(OFFICIAL_PICKS_GRADES_PATH, index=False)
+    report["summary_by_book_df"].to_csv(OFFICIAL_PICKS_BOOK_SUMMARY_PATH, index=False)
+    report["skipped_df"].to_csv(OFFICIAL_PICKS_SKIPPED_PATH, index=False)
+    OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.write_text(
+        json.dumps(report["overall_summary"], indent=2),
+        encoding="utf-8",
+    )
+    return report
 
 
 def load_official_picks_history() -> pd.DataFrame:
@@ -340,6 +565,7 @@ def save_outputs(
     picks_df.to_csv(PICKS_DIR / "today_all_picks.csv", index=False)
     post_df.to_csv(PICKS_DIR / "today_postable_picks.csv", index=False)
     persist_official_picks_history(starters_df, post_df)
+    persist_official_picks_profit_reports()
     save_run_status(status=run_status, message=run_message)
 
 
