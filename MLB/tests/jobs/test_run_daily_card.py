@@ -154,9 +154,18 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert (daily_card.PICKS_DIR / "today_all_picks.csv").exists()
     assert (daily_card.PICKS_DIR / "today_postable_picks.csv").exists()
     assert daily_card.OFFICIAL_PICKS_HISTORY_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_GRADES_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_SKIPPED_PATH.exists()
 
     loaded_post = pd.read_csv(daily_card.PICKS_DIR / "today_postable_picks.csv")
     loaded_history = pd.read_csv(daily_card.OFFICIAL_PICKS_HISTORY_PATH, keep_default_na=False)
+    loaded_grades = pd.read_csv(daily_card.OFFICIAL_PICKS_GRADES_PATH)
+    loaded_book_summary = pd.read_csv(daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH)
+    loaded_overall = daily_card.json.loads(
+        daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.read_text(encoding="utf-8")
+    )
     assert len(loaded_post) == 1
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
     assert loaded_post.loc[0, "pick_type"] == "official"
@@ -164,6 +173,10 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert loaded_history.loc[0, "game_date"] == "2026-04-19"
     assert str(loaded_history.loc[0, "odds"]) == "-120"
     assert loaded_history.loc[0, "pick_key"] == "2026-04-19|jacob degrom"
+    assert loaded_grades.empty
+    assert loaded_book_summary.empty
+    assert loaded_overall["picks"] == 0
+    assert loaded_overall["skipped_rows"] == 1
 
 
 def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch, tmp_path):
@@ -878,3 +891,204 @@ def test_apply_metadata_uncertainty_uses_saved_interval_calibration():
     assert adjusted.loc[0, "std_dev"] == pytest.approx(1.4)
     assert adjusted.loc[0, "lower_bound"] == pytest.approx(5.4)
     assert adjusted.loc[0, "upper_bound"] == pytest.approx(8.2)
+
+
+def test_build_official_picks_profit_report_grades_units_and_aggregates_by_book():
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-01|pitcher a",
+                "game_date": "2026-05-01",
+                "player_name": "Pitcher A",
+                "team": "AAA",
+                "opponent": "BBB",
+                "book": "DraftKings",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "over",
+                "line": 5.5,
+                "predicted_strikeouts": 6.4,
+                "edge": 0.9,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "W",
+                "actual_strikeouts": "7",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-02|pitcher b",
+                "game_date": "2026-05-02",
+                "player_name": "Pitcher B",
+                "team": "CCC",
+                "opponent": "DDD",
+                "book": "FanDuel",
+                "odds": "",
+                "price": 120,
+                "pick_side": "under",
+                "line": 6.5,
+                "predicted_strikeouts": 5.5,
+                "edge": 1.0,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "L",
+                "actual_strikeouts": "8",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-03|pitcher c",
+                "game_date": "2026-05-03",
+                "player_name": "Pitcher C",
+                "team": "EEE",
+                "opponent": "FFF",
+                "book": "BetMGM",
+                "odds": "",
+                "price": "",
+                "pick_side": "over",
+                "line": 4.5,
+                "predicted_strikeouts": 5.1,
+                "edge": 0.6,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+                "result": "Push",
+                "actual_strikeouts": "4.5",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-04|pitcher d",
+                "game_date": "2026-05-04",
+                "player_name": "Pitcher D",
+                "team": "GGG",
+                "opponent": "HHH",
+                "book": "Caesars",
+                "odds": "",
+                "price": "",
+                "pick_side": "over",
+                "line": 4.5,
+                "predicted_strikeouts": 5.1,
+                "edge": 0.6,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+                "result": "W",
+                "actual_strikeouts": "6",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-05|lean row",
+                "game_date": "2026-05-05",
+                "player_name": "Lean Row",
+                "team": "III",
+                "opponent": "JJJ",
+                "book": "DraftKings",
+                "odds": "+100",
+                "price": 100,
+                "pick_side": "over",
+                "line": 3.5,
+                "predicted_strikeouts": 4.0,
+                "edge": 0.5,
+                "confidence_tier": "medium",
+                "pick_type": "lean",
+                "result": "W",
+                "actual_strikeouts": "5",
+                "record_source": "run_daily_card",
+            },
+        ]
+    )
+
+    report = daily_card.build_official_picks_profit_report(history_df)
+
+    graded_df = report["graded_df"]
+    summary_by_book_df = report["summary_by_book_df"]
+    overall_summary = report["overall_summary"]
+    skipped_df = report["skipped_df"]
+
+    assert len(graded_df) == 3
+    pitcher_a = graded_df.loc[graded_df["player_name"] == "Pitcher A"].iloc[0]
+    pitcher_b = graded_df.loc[graded_df["player_name"] == "Pitcher B"].iloc[0]
+    pitcher_c = graded_df.loc[graded_df["player_name"] == "Pitcher C"].iloc[0]
+    assert pitcher_a["units_result"] == pytest.approx(100 / 110)
+    assert pitcher_a["units_risked"] == pytest.approx(1.0)
+    assert pitcher_b["units_result"] == pytest.approx(-1.0)
+    assert pitcher_b["units_risked"] == pytest.approx(1.0)
+    assert pitcher_c["units_result"] == pytest.approx(0.0)
+    assert pitcher_c["units_risked"] == pytest.approx(0.0)
+
+    by_book = {row["book"]: row for row in summary_by_book_df.to_dict(orient="records")}
+    assert by_book["DraftKings"]["units_profit"] == pytest.approx(100 / 110)
+    assert by_book["FanDuel"]["units_profit"] == pytest.approx(-1.0)
+    assert by_book["BetMGM"]["units_profit"] == pytest.approx(0.0)
+    assert by_book["DraftKings"]["roi"] == pytest.approx(100 / 110)
+    assert by_book["FanDuel"]["roi"] == pytest.approx(-1.0)
+    assert pd.isna(by_book["BetMGM"]["roi"])
+
+    expected_profit = (100 / 110) - 1.0
+    assert overall_summary["picks"] == 3
+    assert overall_summary["wins"] == 1
+    assert overall_summary["losses"] == 1
+    assert overall_summary["pushes"] == 1
+    assert overall_summary["decisions"] == 2
+    assert overall_summary["units_risked"] == pytest.approx(2.0)
+    assert overall_summary["units_profit"] == pytest.approx(expected_profit)
+    assert overall_summary["roi"] == pytest.approx(expected_profit / 2.0)
+    assert overall_summary["skipped_rows"] == 1
+    assert list(skipped_df["player_name"]) == ["Pitcher D"]
+
+
+def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_path, monkeypatch):
+    tracking_dir = tmp_path / "data" / "tracking"
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+    history_path = tracking_dir / "official_picks_history.csv"
+    grades_path = tracking_dir / "official_picks_profit_report.csv"
+    by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
+    summary_path = tracking_dir / "official_picks_profit_summary.json"
+    skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-01|pitcher a",
+                "game_date": "2026-05-01",
+                "player_name": "Pitcher A",
+                "team": "AAA",
+                "opponent": "BBB",
+                "book": "DraftKings",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "over",
+                "line": 5.5,
+                "predicted_strikeouts": 6.4,
+                "edge": 0.9,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "W",
+                "actual_strikeouts": "7",
+                "record_source": "run_daily_card",
+            }
+        ]
+    )
+    history_df.to_csv(history_path, index=False)
+
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tracking_dir)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+
+    daily_card.persist_official_picks_profit_reports()
+
+    assert grades_path.exists()
+    assert by_book_path.exists()
+    assert summary_path.exists()
+    assert skipped_path.exists()
+
+    grades_df = pd.read_csv(grades_path)
+    by_book_df = pd.read_csv(by_book_path)
+    summary_payload = daily_card.json.loads(summary_path.read_text(encoding="utf-8"))
+    skipped_df = pd.read_csv(skipped_path)
+
+    assert grades_df.loc[0, "units_result"] == pytest.approx(100 / 110)
+    assert by_book_df.loc[0, "book"] == "DraftKings"
+    assert by_book_df.loc[0, "units_profit"] == pytest.approx(100 / 110)
+    assert summary_payload["picks"] == 1
+    assert summary_payload["units_profit"] == pytest.approx(100 / 110)
+    assert skipped_df.empty

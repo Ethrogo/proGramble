@@ -43,18 +43,18 @@ jobs:
         run: |
           python -m jobs.run_daily_card
 
-      - name: Commit official picks history
+      - name: Commit official picks tracking artifacts
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- data/tracking/official_picks_history.csv; then
-            echo "No official picks history changes to commit."
+          if git diff --quiet -- data/tracking/; then
+            echo "No official picks tracking changes to commit."
             exit 0
           fi
 
-          git add data/tracking/official_picks_history.csv
-          git commit -m "Update official picks history"
+          git add data/tracking/
+          git commit -m "Update official picks tracking"
           git push
       
       - name: Notify Discord
