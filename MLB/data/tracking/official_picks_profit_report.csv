@@ -6,8 +6,8 @@ legacy-0004,,Reid Detmers,,,BetMGM,100,100,under,5.5,,,,official,W,,manual_seed,
 legacy-0005,,Emerson Hancock,,,DraftKings,-135,-135,under,5.5,,,,official,W,,manual_seed,W,-135.0,1.0,0.7407407407407407
 legacy-0006,,Justin Wrobleski,,,DraftKings,-137,-137,under,4.5,,,,official,W,,manual_seed,W,-137.0,1.0,0.7299270072992701
 legacy-0007,,Steven Matz,,,BetMGM,-155,-155,under,5.5,,,,official,W,,manual_seed,W,-155.0,1.0,0.6451612903225806
-legacy-0008,,Yoshinobu Yamamoto,,,DraftKings,-104,-104,over,5.5,,,,official,L,,manual_seed,L,-104.0,1.0,-1.0
-legacy-0009,,Chris Paddack,,,BetMGM,-135,-135,under,4.5,,,,official,W,,manual_seed,W,-135.0,1.0,0.7407407407407407
+legacy-0008,,Yoshinobu Yamamoto,,,DraftKings,-104,-104,over,5.5,,,,official,W,,manual_seed,W,-104.0,1.0,0.9615384615384616
+legacy-0009,,Chris Paddack,,,BetMGM,-135,-135,under,4.5,,,,official,L,,manual_seed,L,-135.0,1.0,-1.0
 legacy-0010,,Eric Lauer,,,DraftKings,100,100,under,4.5,,,,official,W,,manual_seed,W,100.0,1.0,1.0
 legacy-0011,,Anthony Kay,,,DraftKings,-142,-142,under,3.5,,,,official,W,,manual_seed,W,-142.0,1.0,0.704225352112676
 legacy-0012,,Nick Martinez,,,BetMGM,-140,-140,under,4.5,,,,official,L,,manual_seed,L,-140.0,1.0,-1.0
@@ -34,5 +34,11 @@ legacy-0031,,Yusei Kikuchi,,,BetMGM,115,115,under,5.5,,,,official,W,,manual_seed
 2026-04-30|kevin gausman,2026-04-30,Kevin Gausman,TOR,MIN,BetMGM,-110,-110,over,5.5,6.670597553253174,1.1705975532531738,high,official,L,,run_daily_card,L,-110.0,1.0,-1.0
 2026-04-30|bryce elder,2026-04-30,Bryce Elder,ATL,DET,DraftKings,-128,-128,over,4.5,5.65626859664917,1.15626859664917,high,official,W,,run_daily_card,W,-128.0,1.0,0.78125
 2026-05-01|jt ginn,2026-05-01,JT Ginn,ATH,CLE,BetMGM,-105,-105,over,3.5,5.311550617218018,1.8115506172180176,high,official,W,,run_daily_card,W,-105.0,1.0,0.9523809523809523
-2026-05-01|zac gallen,2026-05-01,Zac Gallen,AZ,CHC,FanDuel,116,116,over,4.5,5.818013668060303,1.3180136680603027,high,official,W,,run_daily_card,W,116.0,1.0,1.16
+2026-05-01|zac gallen,2026-05-01,Zac Gallen,AZ,CHC,FanDuel,116,116,over,4.5,5.818013668060303,1.3180136680603027,high,official,L,,run_daily_card,L,116.0,1.0,-1.0
 2026-05-01|simeon woods richardson,2026-05-01,Simeon Woods Richardson,MIN,TOR,DraftKings,-103,-103,over,3.5,4.812343120574951,1.3123431205749512,high,official,L,,run_daily_card,L,-103.0,1.0,-1.0
+2026-05-02|reid detmers,2026-05-02,Reid Detmers,LAA,NYM,BetMGM,-125,-125,under,6.5,4.437117099761963,2.062882900238037,high,official,L,,run_daily_card,L,-125.0,1.0,-1.0
+2026-05-02|sean burke,2026-05-02,Sean Burke,CWS,SD,FanDuel,-130,-130,over,3.5,5.375972270965576,1.8759722709655762,high,official,W,,run_daily_card,W,-130.0,1.0,0.7692307692307693
+2026-05-02|chris sale,2026-05-02,Chris Sale,ATL,COL,FanDuel,-144,-144,under,7.5,5.521391868591309,1.9786081314086914,high,official,L,,run_daily_card,L,-144.0,1.0,-1.0
+2026-05-03|jack leiter,2026-05-03,Jack Leiter,TEX,DET,FanDuel,-172,-172,over,4.5,5.989242076873779,1.4892420768737793,high,official,W,,run_daily_card,W,-172.0,1.0,0.5813953488372093
+2026-05-03|kyle freeland,2026-05-03,Kyle Freeland,COL,ATL,FanDuel,-125,-125,over,3.5,4.571568489074707,1.071568489074707,medium,official,W,,run_daily_card,W,-125.0,1.0,0.8
+2026-05-03|merrill kelly,2026-05-03,Merrill Kelly,AZ,CHC,FanDuel,-144,-144,over,3.5,4.505809783935547,1.0058097839355469,medium,official,W,,run_daily_card,W,-144.0,1.0,0.6944444444444444

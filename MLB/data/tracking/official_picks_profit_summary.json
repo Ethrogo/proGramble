@@ -1,13 +1,13 @@
 {
   "books": 3,
-  "picks": 37,
-  "wins": 20,
-  "losses": 16,
+  "picks": 43,
+  "wins": 23,
+  "losses": 19,
   "pushes": 1,
-  "decisions": 36,
-  "units_risked": 36.0,
-  "units_profit": 0.7833381364563818,
-  "win_rate": 0.5555555555555556,
-  "roi": 0.02175939267934394,
-  "skipped_rows": 6
+  "decisions": 42,
+  "units_risked": 42.0,
+  "units_profit": -0.3107935802334736,
+  "win_rate": 0.5476190476190477,
+  "roi": -0.0073998471484160375,
+  "skipped_rows": 3
 }
