@@ -1,4 +1,4 @@
 pick_key,game_date,player_name,team,opponent,book,odds,price,pick_side,line,predicted_strikeouts,edge,confidence_tier,pick_type,result,actual_strikeouts,record_source,result_normalized,odds_numeric,units_risked,units_result
-2026-05-05|peter lambert,2026-05-05,Peter Lambert,HOU,LAD,BetMGM,115,115,under,4.5,2.7774240970611572,1.7225759029388428,high,official,,,run_daily_card,,115.0,0.0,
-2026-05-05|stephen kolek,2026-05-05,Stephen Kolek,KC,CLE,DraftKings,-157,-157,over,2.5,4.562065601348877,2.062065601348877,high,official,,,run_daily_card,,-157.0,0.0,
-2026-05-05|shohei ohtani,2026-05-05,Shohei Ohtani,LAD,HOU,DraftKings,-152,-152,under,7.5,5.5092058181762695,1.9907941818237305,high,official,,,run_daily_card,,-152.0,0.0,
+2026-05-06|sonny gray,2026-05-06,Sonny Gray,BOS,DET,DraftKings,108,108,over,4.5,6.3377814292907715,1.8377814292907715,high,official,,,run_daily_card,,108.0,0.0,
+2026-05-06|bryan woo,2026-05-06,Bryan Woo,SEA,ATL,BetMGM,-160,-160,over,4.5,6.964148044586182,2.4641480445861816,high,official,,,run_daily_card,,-160.0,0.0,
+2026-05-06|adrian houser,2026-05-06,Adrian Houser,SF,SD,FanDuel,120,120,over,3.5,4.868718147277832,1.368718147277832,high,official,,,run_daily_card,,120.0,0.0,
