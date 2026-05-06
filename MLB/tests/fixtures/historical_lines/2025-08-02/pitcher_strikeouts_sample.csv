@@ -1,0 +1,6 @@
+game_date,player_name,market_key,bookmaker,bookmaker_key,side,line,price,event_id,commence_time,pulled_at,snapshot_type,source
+2025-08-02,Jacob deGrom,pitcher_strikeouts,DraftKings,draftkings,Over,6.5,-120,evt_1,2025-08-02T23:10:00Z,2025-08-02T22:00:00Z,raw,fixture
+2025-08-02,Jacob Degrom,pitcher_strikeouts,DraftKings,draftkings,Over,7.0,-110,evt_1,2025-08-02T23:10:00Z,2025-08-02T22:30:00Z,raw,fixture
+2025-08-02,Jacob deGrom,pitcher_strikeouts,DraftKings,draftkings,Over,7.5,100,evt_1,2025-08-02T23:10:00Z,2025-08-02T23:30:00Z,raw,fixture
+2025-08-02,Tarik Skubal,pitcher_strikeouts,FanDuel,fanduel,Under,6.0,105,evt_2,2025-08-02T23:40:00Z,2025-08-02T22:45:00Z,raw,fixture
+2025-08-02,Tarik Skubal,batter_hits,FanDuel,fanduel,Over,1.5,-120,evt_2,2025-08-02T23:40:00Z,2025-08-02T22:45:00Z,raw,fixture

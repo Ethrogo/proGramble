@@ -151,7 +151,7 @@ MLB/data/artifacts/latest/
 MLB/data/artifacts/previous/
 MLB/data/inputs/starters/today_starters.csv
 MLB/data/outputs/
-MLB/data/raw/historical_lines
+MLB/data/raw/historical_lines/
 # Spyder project settings
 .spyderproject
 .spyproject
