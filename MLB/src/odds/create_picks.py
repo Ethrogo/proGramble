@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import pandas as pd
-from odds.value import american_to_implied_probability
-from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
 
 from common.contracts import (
     require_columns,
-    validate_joined_odds_contract,
     validate_final_picks_contract,
+    validate_joined_odds_contract,
 )
+from common.identity import PARTICIPANT_JOIN_KEY_COLUMN
+from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
+from odds.value import american_to_implied_probability
 
 
 def _normalize_side(value: str) -> str:
@@ -63,17 +64,7 @@ def build_daily_picks(
     """
     Build final daily picks from joined projections + odds rows.
 
-    Expected joined_df columns include:
-    - player_name_proj (or player_name)
-    - team
-    - opponent
-    - predicted_strikeouts
-    - bookmaker
-    - side
-    - line
-    - price
-
-    Returns one best market row per player with:
+    Returns one best market row per participant with:
     - pick_side
     - edge
     - pick_type
@@ -82,6 +73,7 @@ def build_daily_picks(
         return pd.DataFrame()
 
     df = joined_df.copy()
+    group_key = PARTICIPANT_JOIN_KEY_COLUMN if PARTICIPANT_JOIN_KEY_COLUMN in df.columns else "player_name_proj"
 
     if "player_name_proj" not in df.columns:
         if "player_name" in df.columns:
@@ -113,7 +105,7 @@ def build_daily_picks(
 
     best_rows: list[pd.Series] = []
 
-    for _, player_df in df.groupby("player_name_proj", sort=False):
+    for _, player_df in df.groupby(group_key, sort=False):
         best_row = _choose_best_market_for_player(player_df, policy)
         if not best_row.empty:
             best_rows.append(best_row)
@@ -131,14 +123,19 @@ def build_daily_picks(
     else:
         picks["player_name"] = picks["player_name_proj"]
 
-    # Drop the proj column after merge
     picks = picks.drop(columns=["player_name_proj"])
-
-    # Rename bookmaker → book
     picks = picks.rename(columns={"bookmaker": "book"})
 
     preferred_cols = [
         "player_name",
+        PARTICIPANT_JOIN_KEY_COLUMN,
+        "participant_id",
+        "participant_source_id",
+        "participant_source_id_type",
+        "participant_name_norm",
+        "sport",
+        "market_key",
+        "market_family",
         "team",
         "opponent",
         "predicted_strikeouts",
@@ -146,9 +143,14 @@ def build_daily_picks(
         "upper_bound",
         "std_dev",
         "book",
+        "bookmaker_key",
+        "event_id",
         "pick_side",
         "line",
         "price",
+        "side_norm",
+        "market_selection_key",
+        "market_offer_key",
         "edge",
         "implied_probability",
         "value_score",
@@ -160,7 +162,6 @@ def build_daily_picks(
     other_cols = [col for col in picks.columns if col not in existing_cols]
 
     picks = picks[existing_cols + other_cols]
-
     picks = policy.sort_picks(picks)
 
     validate_final_picks_contract(picks)

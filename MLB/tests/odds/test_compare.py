@@ -27,6 +27,8 @@ def test_prepare_projection_df_adds_normalized_name():
 
     assert "player_name_norm" in result.columns
     assert result.loc[0, "player_name_norm"] == "jacob degrom"
+    assert result.loc[0, "participant_name_norm"] == "jacob degrom"
+    assert result.loc[0, "participant_join_key"] == "name:jacob degrom"
 
 
 def test_prepare_projection_df_respects_precomputed_join_key():

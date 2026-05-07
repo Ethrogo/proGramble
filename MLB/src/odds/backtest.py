@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from common.contracts import require_columns, validate_joined_odds_contract
+from common.identity import PARTICIPANT_JOIN_KEY_COLUMN
 from odds.compare import join_projections_to_historical_lines
 from odds.create_picks import build_daily_picks
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
@@ -212,10 +213,12 @@ def run_historical_workflow_backtest(
     historical_lines_df: pd.DataFrame,
     *,
     participant_key: str = "player_name",
-    projection_join_key: str = "player_name_norm",
-    lines_join_key: str = "player_name_norm",
+    projection_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
+    lines_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     actual_column: str = "actual_strikeouts",
     policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+    sport: str | None = None,
+    market_key: str | None = None,
 ) -> dict:
     """
     Join historical projections to curated native historical lines and run the
@@ -227,6 +230,8 @@ def run_historical_workflow_backtest(
         participant_key=participant_key,
         projection_join_key=projection_join_key,
         lines_join_key=lines_join_key,
+        sport=sport,
+        market_key=market_key,
     )
     if joined.empty:
         return {
