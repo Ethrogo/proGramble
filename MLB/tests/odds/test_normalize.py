@@ -69,15 +69,25 @@ def test_odds_json_to_dataframe_parses_event_level_props():
         "market_key",
         "player_name",
         "player_name_norm",
+        "participant_name",
+        "participant_name_norm",
+        "participant_join_key",
+        "sport",
+        "market_family",
         "side",
+        "side_norm",
         "line",
         "price",
+        "market_selection_key",
+        "market_offer_key",
     }
     assert expected_cols.issubset(df.columns)
 
     assert set(df["bookmaker"]) == {"DraftKings"}
     assert set(df["side"]) == {"Over", "Under"}
     assert set(df["player_name_norm"]) == {"jacob degrom"}
+    assert set(df["participant_join_key"]) == {"name:jacob degrom"}
+    assert set(df["sport"]) == {"MLB"}
 
 
 def test_odds_json_to_dataframe_maps_williamhill_us_to_caesars():

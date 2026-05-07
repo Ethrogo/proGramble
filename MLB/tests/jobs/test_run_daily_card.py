@@ -308,8 +308,9 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     assert calls["market"] == custom_market
     assert calls["join_kwargs"] == {
         "participant_key": "player_name",
-        "projection_join_key": "player_name_norm",
-        "odds_join_key": "player_name_norm",
+        "projection_join_key": "participant_join_key",
+        "odds_join_key": "participant_join_key",
+        "sport": "MLB",
     }
     pd.testing.assert_frame_equal(calls["build_picks_joined"], joined_df)
     pd.testing.assert_frame_equal(calls["filter_postable_picks"], picks_df)
@@ -508,8 +509,8 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
         feature_builder=lambda starters, history: starters,
         predictor=lambda model, features: features,
         projection_odds_join_keys=ProjectionOddsJoinKeys(
-            projection="player_name_norm",
-            odds="player_name_norm",
+            projection="participant_join_key",
+            odds="participant_join_key",
         ),
         pick_ranking_policy=DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
         prediction_columns=(
@@ -567,8 +568,9 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     assert calls["market"] == "workflow_market"
     assert calls["join_kwargs"] == {
         "participant_key": "player_name",
-        "projection_join_key": "player_name_norm",
-        "odds_join_key": "player_name_norm",
+        "projection_join_key": "participant_join_key",
+        "odds_join_key": "participant_join_key",
+        "sport": "MLB",
     }
     assert calls["build_policy"] is workflow.pick_ranking_policy
     assert calls["filter_policy"] is workflow.pick_ranking_policy
@@ -738,6 +740,63 @@ def test_build_official_picks_history_rows_falls_back_to_unique_starter_date_whe
     assert len(history_rows) == 1
     assert history_rows.loc[0, "game_date"] == "2026-04-19"
     assert history_rows.loc[0, "pick_key"] == "2026-04-19|jacob degrom"
+
+
+def test_build_official_picks_history_rows_uses_canonical_offer_identity_when_available():
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    post_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "participant_join_key": "mlbam_player:1",
+                "participant_id": "mlbam_player:1",
+                "participant_source_id": "1",
+                "participant_source_id_type": "mlbam_player",
+                "participant_name_norm": "jacob degrom",
+                "sport": "MLB",
+                "market_key": "pitcher_strikeouts",
+                "market_family": "player_prop",
+                "team": "TEX",
+                "opponent": "SEA",
+                "book": "DraftKings",
+                "bookmaker_key": "draftkings",
+                "event_id": "evt_1",
+                "pick_side": "over",
+                "line": 5.5,
+                "market_selection_key": "MLB|pitcher_strikeouts|mlbam_player:1|over|5.5",
+                "market_offer_key": "MLB|pitcher_strikeouts|mlbam_player:1|over|5.5|draftkings",
+                "price": -120,
+                "predicted_strikeouts": 6.8,
+                "edge": 1.3,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+            }
+        ]
+    )
+
+    history_rows = daily_card.build_official_picks_history_rows(starters_df, post_df)
+
+    assert len(history_rows) == 1
+    assert history_rows.loc[0, "participant_join_key"] == "mlbam_player:1"
+    assert history_rows.loc[0, "market_key"] == "pitcher_strikeouts"
+    assert history_rows.loc[0, "pick_key"] == (
+        "2026-04-19|MLB|pitcher_strikeouts|mlbam_player:1|over|5.5|draftkings"
+    )
 
 
 def test_run_daily_card_handles_live_odds_http_error_gracefully(monkeypatch, tmp_path):

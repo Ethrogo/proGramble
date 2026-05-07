@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import unicodedata
-
 import numpy as np
 import pandas as pd
 
@@ -14,6 +12,7 @@ from common.contracts import (
     require_columns,
     validate_pitcher_games_contract,
 )
+from common.identity import normalize_participant_name
 from .config import STARTER_LIKE_MIN_BATTERS_FACED, STARTER_LIKE_MIN_PITCHES
 
 
@@ -449,20 +448,7 @@ def build_team_context(pitcher_games: pd.DataFrame, as_of_date: str | pd.Timesta
 
 
 def normalize_player_name(name: str) -> str:
-    if pd.isna(name):
-        return ""
-
-    name = str(name).strip()
-
-    if "," in name:
-        last, first = [part.strip() for part in name.split(",", 1)]
-        name = f"{first} {last}"
-
-    name = unicodedata.normalize("NFKD", name)
-    name = "".join(ch for ch in name if not unicodedata.combining(ch))
-
-    name = " ".join(name.split()).lower()
-    return name
+    return normalize_participant_name(name)
 
 
 def _safe_div(numerator: float, denominator: float) -> float:

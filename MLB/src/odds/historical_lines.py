@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from common.contracts import require_columns, validate_historical_lines_contract
+from common.identity import ensure_market_identity, ensure_participant_identity
 from odds.normalize import normalize_player_name
 from pitcher_k.config import PITCHER_K_PROP_MARKET
 
@@ -20,15 +21,27 @@ RAW_HISTORICAL_LINES_REQUIRED_COLUMNS = [
 
 HISTORICAL_LINES_COLUMNS = [
     "game_date",
+    "sport",
     "player_name",
     "player_name_norm",
+    "participant_name",
+    "participant_name_norm",
+    "participant_id",
+    "participant_source_id",
+    "participant_source_id_type",
+    "participant_source_key",
+    "participant_join_key",
     "market_key",
+    "market_family",
     "bookmaker",
     "bookmaker_key",
     "side",
+    "side_norm",
     "line",
     "price",
     "event_id",
+    "market_selection_key",
+    "market_offer_key",
     "commence_time",
     "selection_rule",
     "source",
@@ -124,6 +137,13 @@ def normalize_historical_line_snapshots(
         _optional_series(df, "snapshot_rank", None),
         errors="coerce",
     )
+
+    df = ensure_participant_identity(
+        df,
+        display_name_col="player_name",
+        normalized_name_col="player_name_norm",
+    )
+    df = ensure_market_identity(df, sport="MLB", market_key=market_key)
 
     return df[HISTORICAL_LINES_COLUMNS]
 

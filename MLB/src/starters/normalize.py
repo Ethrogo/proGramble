@@ -1,20 +1,13 @@
 # MLB/src/starters/normalize.py
 
 from __future__ import annotations
-from common.contracts import require_columns
-
 import pandas as pd
+from common.contracts import require_columns
+from common.identity import normalize_participant_name
 
 
 def normalize_player_name(name: str) -> str:
-    if not isinstance(name, str):
-        return ""
-    return (
-        name.strip()
-        .replace(".", "")
-        .replace("'", "")
-        .replace("-", " ")
-    )
+    return normalize_participant_name(name)
 
 
 def normalize_team_code(team: str) -> str:

@@ -22,6 +22,17 @@ from common.contracts import (
     assert_non_empty,
     require_columns,
 )
+from common.identity import (
+    MARKET_OFFER_KEY_COLUMN,
+    MARKET_SELECTION_KEY_COLUMN,
+    PARTICIPANT_ID_COLUMN,
+    PARTICIPANT_JOIN_KEY_COLUMN,
+    PARTICIPANT_NAME_NORM_COLUMN,
+    PARTICIPANT_SOURCE_ID_COLUMN,
+    PARTICIPANT_SOURCE_ID_TYPE_COLUMN,
+    ensure_market_identity,
+    ensure_participant_identity,
+)
 from common.workflows import ModelingWorkflowSpec
 from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
 
@@ -48,13 +59,25 @@ OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "pick_key",
     "game_date",
     "player_name",
+    PARTICIPANT_JOIN_KEY_COLUMN,
+    PARTICIPANT_ID_COLUMN,
+    PARTICIPANT_SOURCE_ID_COLUMN,
+    PARTICIPANT_SOURCE_ID_TYPE_COLUMN,
+    PARTICIPANT_NAME_NORM_COLUMN,
+    "sport",
+    "market_key",
+    "market_family",
     "team",
     "opponent",
     "book",
+    "bookmaker_key",
+    "event_id",
     "odds",
     "price",
     "pick_side",
     "line",
+    MARKET_SELECTION_KEY_COLUMN,
+    MARKET_OFFER_KEY_COLUMN,
     "predicted_strikeouts",
     "edge",
     "confidence_tier",
@@ -121,7 +144,13 @@ def _normalize_pick_key_name(player_name: str) -> str:
     return " ".join(str(player_name).strip().lower().split())
 
 
-def _build_pick_key(game_date: str, player_name: str) -> str:
+def _build_pick_key(
+    game_date: str,
+    player_name: str,
+    market_offer_key: str | None = None,
+) -> str:
+    if market_offer_key:
+        return f"{game_date}|{market_offer_key}"
     return f"{game_date}|{_normalize_pick_key_name(player_name)}"
 
 
@@ -239,7 +268,12 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
             "skipped_df": empty_official_picks_profit_report_df(),
         }
 
-    official_df = history_df[history_df["pick_type"] == "official"].copy()
+    working_history = history_df.copy()
+    for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
+        if column not in working_history.columns:
+            working_history[column] = ""
+
+    official_df = working_history[working_history["pick_type"] == "official"].copy()
     if official_df.empty:
         return {
             "graded_df": empty_official_picks_profit_report_df(),
@@ -332,11 +366,8 @@ def load_official_picks_history() -> pd.DataFrame:
 
     history_df = pd.read_csv(OFFICIAL_PICKS_HISTORY_PATH, keep_default_na=False)
     missing = [col for col in OFFICIAL_PICKS_HISTORY_COLUMNS if col not in history_df.columns]
-    if missing:
-        raise ValueError(
-            "official_picks_history.csv is missing required columns: "
-            f"{missing}"
-        )
+    for column in missing:
+        history_df[column] = ""
 
     return history_df[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
 
@@ -349,13 +380,31 @@ def build_official_picks_history_rows(
     if official_df.empty:
         return empty_official_picks_history_df()
 
+    official_df = ensure_participant_identity(
+        official_df,
+        display_name_col="player_name",
+        normalized_name_col="player_name_norm" if "player_name_norm" in official_df.columns else None,
+        source_id_col=PARTICIPANT_SOURCE_ID_COLUMN if PARTICIPANT_SOURCE_ID_COLUMN in official_df.columns else None,
+        source_id_type="mlbam_player",
+    )
+    official_df = ensure_market_identity(official_df)
+
     starter_lookup = starters_df[
-        ["player_name", "team", "opponent", "game_date"]
+        ["player_name", "team", "opponent", "game_date", "pitcher"]
+        if "pitcher" in starters_df.columns
+        else ["player_name", "team", "opponent", "game_date"]
     ].copy()
+    starter_lookup = ensure_participant_identity(
+        starter_lookup,
+        display_name_col="player_name",
+        normalized_name_col="player_name_norm" if "player_name_norm" in starter_lookup.columns else None,
+        source_id_col="pitcher" if "pitcher" in starter_lookup.columns else None,
+        source_id_type="mlbam_player",
+    )
     starter_lookup["game_date"] = pd.to_datetime(starter_lookup["game_date"]).dt.strftime("%Y-%m-%d")
-    merge_keys = ["player_name"]
+    merge_keys = [PARTICIPANT_JOIN_KEY_COLUMN]
     if {"team", "opponent"}.issubset(official_df.columns):
-        merge_keys = ["player_name", "team", "opponent"]
+        merge_keys = [PARTICIPANT_JOIN_KEY_COLUMN, "team", "opponent"]
 
     starter_lookup = starter_lookup.drop_duplicates(subset=merge_keys, keep="last")
     history_rows = official_df.merge(
@@ -397,7 +446,11 @@ def build_official_picks_history_rows(
 
     history_rows["game_date"] = history_rows["game_date"].fillna("").astype(str)
     history_rows["pick_key"] = history_rows.apply(
-        lambda row: _build_pick_key(row["game_date"], row["player_name"]),
+        lambda row: _build_pick_key(
+            row["game_date"],
+            row["player_name"],
+            row.get(MARKET_OFFER_KEY_COLUMN),
+        ),
         axis=1,
     )
     history_rows["odds"] = history_rows["price"].apply(_format_american_odds)
@@ -525,6 +578,18 @@ def build_today_predictions_for_workflow(
         list(workflow.prediction_columns),
         "today_preds",
     )
+    today_preds = ensure_participant_identity(
+        today_preds,
+        display_name_col=workflow.participant_key,
+        normalized_name_col="player_name_norm" if "player_name_norm" in today_preds.columns else None,
+        source_id_col="pitcher" if "pitcher" in today_preds.columns else None,
+        source_id_type="mlbam_player",
+    )
+    today_preds = ensure_market_identity(
+        today_preds,
+        sport=workflow.sport,
+        market_key=workflow.market_key,
+    )
     return today_preds
 
 
@@ -624,6 +689,7 @@ def run_daily_card(
             participant_key=workflow.participant_key,
             projection_join_key=workflow.projection_odds_join_keys.projection,
             odds_join_key=workflow.projection_odds_join_keys.odds,
+            sport=workflow.sport,
         )
         validate_joined_odds_contract(joined_df)
 

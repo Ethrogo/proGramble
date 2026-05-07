@@ -6,6 +6,7 @@ from typing import Callable
 
 import pandas as pd
 
+from common.identity import MarketIdentitySpec, ParticipantIdentitySpec
 from odds.policy import PickRankingPolicy, PostablePickLimits
 
 FeatureBuilder = Callable[[pd.DataFrame, pd.DataFrame], pd.DataFrame]
@@ -41,6 +42,8 @@ class ModelingWorkflowSpec:
     projection_odds_join_keys: ProjectionOddsJoinKeys
     pick_ranking_policy: PickRankingPolicy
     prediction_columns: tuple[str, ...]
+    participant_identity: ParticipantIdentitySpec = field(default_factory=ParticipantIdentitySpec)
+    market_identity: MarketIdentitySpec = field(default_factory=MarketIdentitySpec)
     prediction_metadata_adjuster: PredictionMetadataAdjuster | None = None
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
 

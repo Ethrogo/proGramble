@@ -1,19 +1,12 @@
 from __future__ import annotations
 
 import pandas as pd
+from common.identity import ensure_market_identity, ensure_participant_identity, normalize_participant_name
 from .config import BOOK_DISPLAY_NAMES
 
 
 def normalize_player_name(name: str) -> str:
-    if not isinstance(name, str):
-        return ""
-    return (
-        name.lower()
-        .replace(".", "")
-        .replace("'", "")
-        .replace("-", " ")
-        .strip()
-    )
+    return normalize_participant_name(name)
 
 
 def odds_json_to_dataframe(events: list[dict]) -> pd.DataFrame:
@@ -52,4 +45,14 @@ def odds_json_to_dataframe(events: list[dict]) -> pd.DataFrame:
                         }
                     )
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+
+    df = ensure_participant_identity(
+        df,
+        display_name_col="player_name",
+        normalized_name_col="player_name_norm",
+    )
+    df = ensure_market_identity(df, sport="MLB")
+    return df
