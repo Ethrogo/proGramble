@@ -35,6 +35,9 @@ from common.identity import (
 )
 from common.workflows import ModelingWorkflowSpec
 from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
+from pitcher_k.data_loader import load_statcast_data
+from pitcher_k.feature_engineering import build_pitcher_game_table
+from pitcher_k.preprocessing import add_outcome_flags
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
@@ -201,6 +204,186 @@ def _profit_units_for_result(odds: float | None, result: str) -> float | None:
     if odds > 0:
         return odds / 100.0
     return 100.0 / abs(odds)
+
+
+def _yesterday_game_date() -> str:
+    return (
+        pd.Timestamp.now(tz="America/New_York").normalize() - pd.Timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+
+
+def _is_pitcher_strikeout_history_row(row: pd.Series) -> bool:
+    market_key = str(row.get("market_key", "") or "").strip()
+    return market_key in {"", "pitcher_strikeouts"}
+
+
+def _grade_pick_result_from_actual(actual: float, line: float, pick_side: str) -> str:
+    pick_side_norm = str(pick_side or "").strip().lower()
+    if pick_side_norm == "over":
+        if actual > line:
+            return "W"
+        if actual < line:
+            return "L"
+        return "Push"
+
+    if pick_side_norm == "under":
+        if actual < line:
+            return "W"
+        if actual > line:
+            return "L"
+        return "Push"
+
+    return ""
+
+
+def _format_stat_value(value: float | int) -> str:
+    return f"{float(value):g}"
+
+
+def load_pitcher_results_from_statcast(game_date: str) -> pd.DataFrame:
+    sc = load_statcast_data(game_date, game_date, chunk_days=1)
+    if sc.empty:
+        return pd.DataFrame(
+            columns=[
+                "game_date",
+                "pitcher",
+                "player_name",
+                "strikeouts",
+            ]
+        )
+
+    sc = add_outcome_flags(sc)
+    pitcher_games = build_pitcher_game_table(sc)
+    pitcher_games["game_date"] = pd.to_datetime(pitcher_games["game_date"]).dt.strftime("%Y-%m-%d")
+    pitcher_games = ensure_participant_identity(
+        pitcher_games,
+        display_name_col="player_name",
+        source_id_col="pitcher",
+        source_id_type="mlbam_player",
+    )
+    return pitcher_games
+
+
+def apply_statcast_results_to_official_picks_history(
+    history_df: pd.DataFrame,
+    pitcher_results_df: pd.DataFrame,
+    *,
+    game_date: str,
+) -> pd.DataFrame:
+    if history_df.empty:
+        return history_df.copy()
+
+    working = history_df.copy()
+    for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
+        if column not in working.columns:
+            working[column] = ""
+
+    working = ensure_participant_identity(
+        working,
+        display_name_col="player_name",
+        normalized_name_col=PARTICIPANT_NAME_NORM_COLUMN,
+        source_id_col=PARTICIPANT_SOURCE_ID_COLUMN,
+        source_id_type="mlbam_player",
+    )
+
+    if pitcher_results_df.empty:
+        return working[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
+
+    pitcher_results = pitcher_results_df.copy()
+    pitcher_results = ensure_participant_identity(
+        pitcher_results,
+        display_name_col="player_name",
+        source_id_col="pitcher" if "pitcher" in pitcher_results.columns else PARTICIPANT_SOURCE_ID_COLUMN,
+        source_id_type="mlbam_player",
+    )
+
+    result_lookup = pitcher_results.drop_duplicates(
+        subset=["game_date", PARTICIPANT_JOIN_KEY_COLUMN],
+        keep="last",
+    )[
+        ["game_date", PARTICIPANT_JOIN_KEY_COLUMN, "strikeouts"]
+    ].copy()
+
+    pending_mask = (
+        (working["pick_type"] == "official")
+        & (working["game_date"].astype(str) == game_date)
+        & working.apply(_is_pitcher_strikeout_history_row, axis=1)
+        & (
+            working["actual_strikeouts"].astype(str).str.strip().eq("")
+            | working["result"].astype(str).str.strip().eq("")
+        )
+    )
+    if not pending_mask.any():
+        return working[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
+
+    pending = working.loc[pending_mask].copy()
+    pending["history_row_index"] = pending.index
+    pending = pending.merge(
+        result_lookup,
+        on=["game_date", PARTICIPANT_JOIN_KEY_COLUMN],
+        how="left",
+    )
+    resolved_mask = pending["strikeouts"].notna()
+    if not resolved_mask.any():
+        return working[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
+
+    pending.loc[resolved_mask, "actual_strikeouts"] = pending.loc[resolved_mask, "strikeouts"].apply(
+        _format_stat_value
+    )
+    pending.loc[resolved_mask, "result"] = pending.loc[resolved_mask].apply(
+        lambda row: _grade_pick_result_from_actual(
+            actual=float(row["strikeouts"]),
+            line=float(row["line"]),
+            pick_side=str(row["pick_side"]),
+        ),
+        axis=1,
+    )
+
+    working.loc[pending["history_row_index"], OFFICIAL_PICKS_HISTORY_COLUMNS] = pending[
+        OFFICIAL_PICKS_HISTORY_COLUMNS
+    ].values
+    return working[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
+
+
+def grade_official_picks_from_statcast(
+    *,
+    game_date: str | None = None,
+) -> dict[str, object]:
+    target_date = game_date or _yesterday_game_date()
+    history_df = load_official_picks_history()
+    if history_df.empty:
+        persist_official_picks_profit_reports()
+        return {"game_date": target_date, "updated_rows": 0, "history_df": history_df}
+
+    pending_mask = (
+        (history_df["pick_type"] == "official")
+        & (history_df["game_date"].astype(str) == target_date)
+        & history_df.apply(_is_pitcher_strikeout_history_row, axis=1)
+        & (
+            history_df["actual_strikeouts"].astype(str).str.strip().eq("")
+            | history_df["result"].astype(str).str.strip().eq("")
+        )
+    )
+    if not pending_mask.any():
+        persist_official_picks_profit_reports()
+        return {"game_date": target_date, "updated_rows": 0, "history_df": history_df}
+
+    pitcher_results_df = load_pitcher_results_from_statcast(target_date)
+    updated_history_df = apply_statcast_results_to_official_picks_history(
+        history_df,
+        pitcher_results_df,
+        game_date=target_date,
+    )
+    before = history_df["actual_strikeouts"].astype(str).str.strip()
+    after = updated_history_df["actual_strikeouts"].astype(str).str.strip()
+    updated_rows = int(((before == "") & (after != "")).sum())
+    updated_history_df.to_csv(OFFICIAL_PICKS_HISTORY_PATH, index=False)
+    persist_official_picks_profit_reports()
+    return {
+        "game_date": target_date,
+        "updated_rows": updated_rows,
+        "history_df": updated_history_df,
+    }
 
 
 def empty_official_picks_profit_report_df() -> pd.DataFrame:
@@ -630,7 +813,14 @@ def save_outputs(
     picks_df.to_csv(PICKS_DIR / "today_all_picks.csv", index=False)
     post_df.to_csv(PICKS_DIR / "today_postable_picks.csv", index=False)
     persist_official_picks_history(starters_df, post_df)
-    persist_official_picks_profit_reports()
+    try:
+        grade_official_picks_from_statcast()
+    except Exception as exc:
+        print(
+            "WARNING: Failed to grade official picks from Statcast for "
+            f"{_yesterday_game_date()}: {exc.__class__.__name__}: {exc}"
+        )
+        persist_official_picks_profit_reports()
     save_run_status(status=run_status, message=run_message)
 
 
