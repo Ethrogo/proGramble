@@ -128,6 +128,26 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
         "OFFICIAL_PICKS_HISTORY_PATH",
         tmp_path / "data" / "tracking" / "official_picks_history.csv",
     )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_GRADES_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_report.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_BOOK_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_by_book.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_summary.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_SKIPPED_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_skipped.csv",
+    )
 
     saved_starters = {}
 
@@ -1151,3 +1171,139 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     assert summary_payload["picks"] == 1
     assert summary_payload["units_profit"] == pytest.approx(100 / 110)
     assert skipped_df.empty
+
+
+def test_apply_statcast_results_to_official_picks_history_updates_yesterday_pick_results():
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-06|pitcher-a",
+                "game_date": "2026-05-06",
+                "player_name": "Pitcher A",
+                "participant_join_key": "mlbam_player:101",
+                "participant_id": "mlbam_player:101",
+                "participant_source_id": "101",
+                "participant_source_id_type": "mlbam_player",
+                "participant_name_norm": "pitcher a",
+                "sport": "MLB",
+                "market_key": "pitcher_strikeouts",
+                "market_family": "player_prop",
+                "team": "AAA",
+                "opponent": "BBB",
+                "book": "DraftKings",
+                "bookmaker_key": "draftkings",
+                "event_id": "evt_1",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "over",
+                "line": 5.5,
+                "market_selection_key": "MLB|pitcher_strikeouts|mlbam_player:101|over|5.5",
+                "market_offer_key": "MLB|pitcher_strikeouts|mlbam_player:101|over|5.5|draftkings",
+                "predicted_strikeouts": 6.2,
+                "edge": 0.7,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "",
+                "actual_strikeouts": "",
+                "record_source": "run_daily_card",
+            }
+        ]
+    )
+    pitcher_results_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-05-06",
+                "pitcher": 101,
+                "player_name": "Pitcher A",
+                "strikeouts": 6,
+            }
+        ]
+    )
+
+    updated = daily_card.apply_statcast_results_to_official_picks_history(
+        history_df,
+        pitcher_results_df,
+        game_date="2026-05-06",
+    )
+
+    assert updated.loc[0, "actual_strikeouts"] == "6"
+    assert updated.loc[0, "result"] == "W"
+
+
+def test_grade_official_picks_from_statcast_persists_updates_and_profit_reports(tmp_path, monkeypatch):
+    tracking_dir = tmp_path / "data" / "tracking"
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+    history_path = tracking_dir / "official_picks_history.csv"
+    grades_path = tracking_dir / "official_picks_profit_report.csv"
+    by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
+    summary_path = tracking_dir / "official_picks_profit_summary.json"
+    skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-06|pitcher-a",
+                "game_date": "2026-05-06",
+                "player_name": "Pitcher A",
+                "participant_join_key": "mlbam_player:101",
+                "participant_id": "mlbam_player:101",
+                "participant_source_id": "101",
+                "participant_source_id_type": "mlbam_player",
+                "participant_name_norm": "pitcher a",
+                "sport": "MLB",
+                "market_key": "pitcher_strikeouts",
+                "market_family": "player_prop",
+                "team": "AAA",
+                "opponent": "BBB",
+                "book": "DraftKings",
+                "bookmaker_key": "draftkings",
+                "event_id": "evt_1",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "under",
+                "line": 5.5,
+                "market_selection_key": "MLB|pitcher_strikeouts|mlbam_player:101|under|5.5",
+                "market_offer_key": "MLB|pitcher_strikeouts|mlbam_player:101|under|5.5|draftkings",
+                "predicted_strikeouts": 4.7,
+                "edge": 0.8,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "",
+                "actual_strikeouts": "",
+                "record_source": "run_daily_card",
+            }
+        ]
+    )
+    history_df.to_csv(history_path, index=False)
+
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+    monkeypatch.setattr(
+        daily_card,
+        "load_pitcher_results_from_statcast",
+        lambda game_date: pd.DataFrame(
+            [
+                {
+                    "game_date": game_date,
+                    "pitcher": 101,
+                    "player_name": "Pitcher A",
+                    "strikeouts": 7,
+                }
+            ]
+        ),
+    )
+
+    result = daily_card.grade_official_picks_from_statcast(game_date="2026-05-06")
+
+    loaded_history = pd.read_csv(history_path, keep_default_na=False)
+    grades_df = pd.read_csv(grades_path)
+    summary_payload = daily_card.json.loads(summary_path.read_text(encoding="utf-8"))
+
+    assert result["updated_rows"] == 1
+    assert str(loaded_history.loc[0, "actual_strikeouts"]) == "7"
+    assert loaded_history.loc[0, "result"] == "L"
+    assert grades_df.loc[0, "result"] == "L"
+    assert summary_payload["losses"] == 1
