@@ -169,6 +169,46 @@ def test_join_projections_to_odds_accepts_configured_join_keys():
     assert joined.iloc[0]["player_name_proj"] == "Jacob deGrom"
 
 
+def test_join_projections_to_odds_matches_on_normalized_name_when_projection_has_pitcher_id():
+    projections = pd.DataFrame(
+        [
+            {
+                "pitcher": 12345,
+                "player_name": "Jacob deGrom",
+                "player_name_norm": "jacob degrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.78,
+            }
+        ]
+    )
+
+    odds_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob Degrom",
+                "player_name_norm": "jacob degrom",
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 6.5,
+                "price": -120,
+            }
+        ]
+    )
+
+    joined = join_projections_to_odds(
+        projections,
+        odds_df,
+        projection_join_key="player_name_norm",
+        odds_join_key="player_name_norm",
+    )
+
+    assert len(joined) == 1
+    assert joined.iloc[0]["participant_join_key_proj"] == "mlbam_player:12345"
+    assert joined.iloc[0]["participant_join_key_odds"] == "name:jacob degrom"
+    assert joined.iloc[0]["player_name_proj"] == "Jacob deGrom"
+
+
 def test_best_over_edges_filters_out_unders_and_picks_best_book():
     joined = pd.DataFrame(
         [

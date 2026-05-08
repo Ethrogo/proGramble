@@ -328,8 +328,8 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     assert calls["market"] == custom_market
     assert calls["join_kwargs"] == {
         "participant_key": "player_name",
-        "projection_join_key": "participant_join_key",
-        "odds_join_key": "participant_join_key",
+        "projection_join_key": "player_name_norm",
+        "odds_join_key": "player_name_norm",
         "sport": "MLB",
     }
     pd.testing.assert_frame_equal(calls["build_picks_joined"], joined_df)
@@ -595,6 +595,140 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     assert calls["build_policy"] is workflow.pick_ranking_policy
     assert calls["filter_policy"] is workflow.pick_ranking_policy
     assert calls["filter_limits"] == (1, 0)
+
+
+def test_run_daily_card_default_workflow_joins_live_odds_on_normalized_name(monkeypatch, tmp_path):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-18",
+                "game_pk": 111111,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "opp_strikeouts_per_game_last10": 9.4,
+                "opp_k_rate_last10": 0.255,
+            }
+        ]
+    )
+
+    today_preds = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "player_name_norm": "jacob degrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "lower_bound": 5.8,
+                "upper_bound": 7.8,
+                "std_dev": 1.0,
+            }
+        ]
+    )
+
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "predicted_strikeouts": 6.8,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
+    picks_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -120,
+                "edge": 1.3,
+                "pick_type": "official",
+                "implied_probability": 0.545,
+                "value_score": 0.5915,
+                "confidence_tier": "medium",
+            }
+        ]
+    )
+
+    calls = {}
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
+    monkeypatch.setattr(
+        daily_card,
+        "load_model_metadata",
+        lambda workflow=None: {"target": "strikeouts", "features": ["pitches_last3"]},
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "build_today_predictions_for_workflow",
+        lambda *, starters_df, pitcher_games, model, workflow: today_preds,
+    )
+
+    def fake_run_edge_pipeline(preds, market, **kwargs):
+        calls["joined_preds"] = preds.copy()
+        calls["join_kwargs"] = kwargs
+        return joined_df, joined_df
+
+    monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
+    monkeypatch.setattr(daily_card, "build_daily_picks", lambda joined, policy: picks_df)
+    monkeypatch.setattr(
+        daily_card,
+        "filter_postable_picks",
+        lambda picks, max_official=3, max_leans=1, policy=None: picks,
+    )
+
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
+    monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
+
+    daily_card.run_daily_card()
+
+    assert calls["join_kwargs"] == {
+        "participant_key": "player_name",
+        "projection_join_key": "player_name_norm",
+        "odds_join_key": "player_name_norm",
+        "sport": "MLB",
+    }
+    assert calls["joined_preds"].loc[0, "pitcher"] == 1
+    assert calls["joined_preds"].loc[0, "player_name_norm"] == "jacob degrom"
 
 
 def test_persist_official_picks_history_is_idempotent_and_preserves_manual_results(tmp_path, monkeypatch):

@@ -11,7 +11,6 @@ from common.workflows import (
     ProjectionOddsJoinKeys,
     WorkflowArtifactSpec,
 )
-from common.identity import PARTICIPANT_JOIN_KEY_COLUMN
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PostablePickLimits
 from pitcher_k.config import PITCHER_K_PROP_MARKET
 from pitcher_k.evaluate import apply_interval_calibration
@@ -73,8 +72,8 @@ MLB_PITCHER_STRIKEOUT_WORKFLOW = ModelingWorkflowSpec(
     feature_builder=build_mlb_pitcher_strikeout_features,
     predictor=predict_on_dataframe,
     projection_odds_join_keys=ProjectionOddsJoinKeys(
-        projection=PARTICIPANT_JOIN_KEY_COLUMN,
-        odds=PARTICIPANT_JOIN_KEY_COLUMN,
+        projection="player_name_norm",
+        odds="player_name_norm",
     ),
     pick_ranking_policy=DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
     prediction_columns=(
