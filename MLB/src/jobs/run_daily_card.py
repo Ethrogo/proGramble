@@ -881,13 +881,24 @@ def run_daily_card(
             odds_join_key=workflow.projection_odds_join_keys.odds,
             sport=workflow.sport,
         )
-        validate_joined_odds_contract(joined_df)
+        if joined_df.empty:
+            run_status = "degraded"
+            run_message = (
+                "Live odds were fetched but no matching odds rows were available for today's "
+                "projections, so no edges or picks were generated."
+            )
+            print(f"WARNING: {run_message}")
+            joined_df = empty_joined_odds_df()
+            picks_df = empty_final_picks_df()
+            post_df = empty_final_picks_df()
+        else:
+            validate_joined_odds_contract(joined_df)
 
-        picks_df = build_picks_fn(joined_df)
-        validate_final_picks_contract(picks_df)
+            picks_df = build_picks_fn(joined_df)
+            validate_final_picks_contract(picks_df)
 
-        post_df = filter_postable_picks_fn(picks_df)
-        validate_final_picks_contract(post_df)
+            post_df = filter_postable_picks_fn(picks_df)
+            validate_final_picks_contract(post_df)
     except requests.RequestException as exc:
         run_status = "degraded"
         run_message = (

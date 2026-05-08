@@ -915,6 +915,98 @@ def test_run_daily_card_handles_live_odds_http_error_gracefully(monkeypatch, tmp
     assert "Live odds fetch failed" in status_payload["message"]
 
 
+def test_run_daily_card_handles_empty_joined_odds_gracefully(monkeypatch, tmp_path):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-18",
+                "game_pk": 111111,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "opp_strikeouts_per_game_last10": 9.4,
+                "opp_k_rate_last10": 0.255,
+            }
+        ]
+    )
+    today_preds = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "lower_bound": 5.8,
+                "upper_bound": 7.8,
+                "std_dev": 1.0,
+            }
+        ]
+    )
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
+    monkeypatch.setattr(daily_card, "load_model_metadata", lambda workflow=None: {"target": "strikeouts"})
+    monkeypatch.setattr(
+        daily_card,
+        "build_today_predictions_for_workflow",
+        lambda *, starters_df, pitcher_games, model, workflow: today_preds,
+    )
+    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda *args, **kwargs: (pd.DataFrame(), pd.DataFrame()))
+
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "RUN_STATUS_PATH",
+        tmp_path / "data" / "outputs" / "run_daily_card_status.json",
+    )
+    monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
+
+    _, result_preds, result_picks, result_post = daily_card.run_daily_card()
+
+    assert not result_preds.empty
+    assert result_picks.empty
+    assert result_post.empty
+
+    loaded_edges = pd.read_csv(daily_card.EDGES_DIR / "today_joined_edges.csv")
+    loaded_picks = pd.read_csv(daily_card.PICKS_DIR / "today_all_picks.csv")
+    loaded_post = pd.read_csv(daily_card.PICKS_DIR / "today_postable_picks.csv")
+    status_payload = daily_card.json.loads(daily_card.RUN_STATUS_PATH.read_text(encoding="utf-8"))
+
+    assert loaded_edges.empty
+    assert loaded_picks.empty
+    assert loaded_post.empty
+    assert status_payload["status"] == "degraded"
+    assert "no matching odds rows were available" in status_payload["message"]
+
+
 def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_path, monkeypatch, capsys):
     latest_dir = tmp_path / "artifacts" / "latest"
     previous_dir = tmp_path / "artifacts" / "previous"
