@@ -10,12 +10,13 @@
   - historical line artifact support
   - grading and tracking
 
-## Scaffolded For Future Workflow Expansion
+## Partially Wired
 
 - `pitcher_walks`
-  - configuration scaffold exists in [src/pitcher_bb/config.py](../src/pitcher_bb/config.py)
+  - configuration exists in [src/pitcher_bb/config.py](../src/pitcher_bb/config.py)
   - market key: `pitcher_walks`
   - target column: `walks`
-  - initial base features are defined from shared pitcher workload/context columns
+  - training artifact workflow exists for pitcher-walk models
+  - initial base features are defined from shared pitcher workload/context columns plus walk-specific rolling features
 
-`pitcher_walks` is not yet a full workflow. The current training job, prediction workflow, and grading path remain strikeout-specific, so adding only the config/package is the correct implementation at this stage.
+`pitcher_walks` is not yet a full live-picks workflow. Training artifacts now have a dedicated module and artifact directory, but daily projections, live odds picks, and grading remain strikeout-specific.

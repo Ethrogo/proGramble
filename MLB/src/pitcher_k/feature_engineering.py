@@ -14,6 +14,7 @@ from common.contracts import (
 )
 from common.identity import normalize_participant_name
 from .config import STARTER_LIKE_MIN_BATTERS_FACED, STARTER_LIKE_MIN_PITCHES
+from .preprocessing import add_outcome_flags
 
 
 def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
@@ -28,8 +29,8 @@ def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
             "pitcher",
             "player_name",
             "pitch_type",
-            "is_k",
-            "is_whiff",
+            "description",
+            "events",
             "release_speed",
             "release_spin_rate",
             "batter",
@@ -40,12 +41,14 @@ def build_pitcher_game_table(sc: pd.DataFrame) -> pd.DataFrame:
         "statcast_df",
     )
     assert_non_empty(sc, "statcast_df")
+    sc = add_outcome_flags(sc)
 
     pitcher_games = (
         sc.groupby(["game_date", "game_pk", "pitcher", "player_name"])
         .agg(
             pitches=("pitch_type", "count"),
             strikeouts=("is_k", "sum"),
+            walks=("is_bb", "sum"),
             whiffs=("is_whiff", "sum"),
             avg_velo=("release_speed", "mean"),
             avg_spin=("release_spin_rate", "mean"),
@@ -174,10 +177,11 @@ def add_pitcher_team_info(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd.D
 def build_team_offense_k_table(sc: pd.DataFrame) -> pd.DataFrame:
     require_columns(
         sc,
-        ["game_date", "game_pk", "inning_topbot", "away_team", "home_team", "is_k", "batter"],
+        ["game_date", "game_pk", "inning_topbot", "away_team", "home_team", "description", "events", "batter"],
         "statcast_df",
     )
     assert_non_empty(sc, "statcast_df")
+    sc = add_outcome_flags(sc)
 
     temp = sc.reset_index(drop=True).copy()
 
@@ -232,6 +236,64 @@ def build_team_offense_k_table(sc: pd.DataFrame) -> pd.DataFrame:
     return team_offense
 
 
+def build_team_offense_bb_table(sc: pd.DataFrame) -> pd.DataFrame:
+    require_columns(
+        sc,
+        ["game_date", "game_pk", "inning_topbot", "away_team", "home_team", "description", "events", "batter"],
+        "statcast_df",
+    )
+    assert_non_empty(sc, "statcast_df")
+    sc = add_outcome_flags(sc)
+
+    temp = sc.reset_index(drop=True).copy()
+    temp["batting_team"] = np.where(
+        temp["inning_topbot"] == "Top",
+        temp["away_team"],
+        temp["home_team"],
+    )
+
+    team_offense = (
+        temp.groupby(["game_date", "game_pk", "batting_team"], as_index=False)
+        .agg(
+            team_batter_walks=("is_bb", "sum"),
+            batters_faced=("batter", "nunique"),
+        )
+    )
+    team_offense["team_bb_rate"] = (
+        team_offense["team_batter_walks"] / team_offense["batters_faced"]
+    )
+    team_offense["team_bb_rate"] = team_offense["team_bb_rate"].replace([np.inf, -np.inf], np.nan)
+    team_offense = team_offense.sort_values(["batting_team", "game_date"]).copy()
+
+    team_offense["opp_walks_per_game_last10"] = (
+        team_offense.groupby("batting_team")["team_batter_walks"]
+        .transform(lambda s: s.shift(1).rolling(10, min_periods=3).mean())
+    )
+    team_offense["opp_bb_rate_last10"] = (
+        team_offense.groupby("batting_team")["team_bb_rate"]
+        .transform(lambda s: s.shift(1).rolling(10, min_periods=3).mean())
+    )
+
+    require_columns(
+        team_offense,
+        [
+            "game_date",
+            "game_pk",
+            "batting_team",
+            "opp_walks_per_game_last10",
+            "opp_bb_rate_last10",
+        ],
+        "team_offense",
+    )
+    assert_no_duplicate_keys(
+        team_offense,
+        ["game_date", "game_pk", "batting_team"],
+        "team_offense",
+    )
+
+    return team_offense
+
+
 def add_opponent_k_features(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFrame:
     require_columns(
         pitcher_games,
@@ -267,6 +329,40 @@ def add_opponent_k_features(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd
     return pitcher_games
 
 
+def add_opponent_bb_features(pitcher_games: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFrame:
+    require_columns(
+        pitcher_games,
+        ["game_date", "game_pk", "opponent_team"],
+        "pitcher_games",
+    )
+    assert_non_empty(pitcher_games, "pitcher_games")
+
+    team_offense = build_team_offense_bb_table(sc)
+    opp_features = team_offense.rename(columns={"batting_team": "opponent_team"})[
+        [
+            "game_date",
+            "game_pk",
+            "opponent_team",
+            "opp_walks_per_game_last10",
+            "opp_bb_rate_last10",
+        ]
+    ]
+
+    pitcher_games = pitcher_games.merge(
+        opp_features,
+        on=["game_date", "game_pk", "opponent_team"],
+        how="left",
+    )
+
+    require_columns(
+        pitcher_games,
+        ["opp_walks_per_game_last10", "opp_bb_rate_last10"],
+        "pitcher_games",
+    )
+
+    return pitcher_games
+
+
 def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     """
     Add trailing rolling features using prior games only.
@@ -277,6 +373,7 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
             "pitcher",
             "game_date",
             "strikeouts",
+            "walks",
             "pitches",
             "batters_faced",
             "whiff_per_pitch",
@@ -291,6 +388,7 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
 
     rolling_cols = [
         "strikeouts",
+        "walks",
         "pitches",
         "batters_faced",
         "whiff_per_pitch",
@@ -319,6 +417,16 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     pitcher_games["strikeouts_p75_last10"] = pitcher_games.groupby("pitcher")["strikeouts"].transform(
         lambda s: s.shift(1).rolling(10, min_periods=3).quantile(0.75)
     )
+    walks_history = pitcher_games.groupby("pitcher")["walks"].transform(
+        lambda s: s.shift(1).rolling(10, min_periods=3).std(ddof=0)
+    )
+    pitcher_games["walks_stddev_last10"] = walks_history
+    pitcher_games["walks_p25_last10"] = pitcher_games.groupby("pitcher")["walks"].transform(
+        lambda s: s.shift(1).rolling(10, min_periods=3).quantile(0.25)
+    )
+    pitcher_games["walks_p75_last10"] = pitcher_games.groupby("pitcher")["walks"].transform(
+        lambda s: s.shift(1).rolling(10, min_periods=3).quantile(0.75)
+    )
 
     require_columns(
         pitcher_games,
@@ -333,6 +441,10 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
             "strikeouts_stddev_last10",
             "strikeouts_p25_last10",
             "strikeouts_p75_last10",
+            "walks_last10",
+            "walks_stddev_last10",
+            "walks_p25_last10",
+            "walks_p75_last10",
         ],
         "pitcher_games",
     )
@@ -369,10 +481,25 @@ def add_rate_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
         [np.inf, -np.inf],
         np.nan,
     )
+    if "walks_last10" in pitcher_games.columns:
+        pitcher_games["bb_per_pitch_last10"] = (
+            pitcher_games["walks_last10"] / pitcher_games["pitches_last10"]
+        )
+        pitcher_games["bb_rate_last10"] = (
+            pitcher_games["walks_last10"] / pitcher_games["batters_faced_last10"]
+        )
+        pitcher_games["bb_per_pitch_last10"] = pitcher_games["bb_per_pitch_last10"].replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+        pitcher_games["bb_rate_last10"] = pitcher_games["bb_rate_last10"].replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
 
     require_columns(
         pitcher_games,
-        ["k_per_pitch_last10", "k_rate_last10"],
+        ["k_per_pitch_last10", "k_rate_last10", "bb_per_pitch_last10", "bb_rate_last10"],
         "pitcher_games",
     )
 

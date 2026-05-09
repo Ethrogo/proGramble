@@ -5,18 +5,21 @@ PITCHER_BB_PROP_MARKET = "pitcher_walks"
 STARTER_LIKE_MIN_PITCHES = 40
 STARTER_LIKE_MIN_BATTERS_FACED = 12
 
-# Walk-specific rolling features are not engineered in the current shared
-# pipeline yet, so start with stable workload/context columns that already
-# exist in the pitcher feature set.
+# Build on the shared pitcher-game pipeline using walk-specific rolling and
+# opponent-context features plus a small workload baseline.
 BASE_FEATURES = [
     "pitches_last3",
     "pitches_last10",
     "batters_faced_last3",
     "batters_faced_last10",
+    "walks_last3",
+    "walks_last10",
     "avg_velo_last3",
     "avg_spin_last3",
-    "opp_strikeouts_per_game_last10",
-    "opp_k_rate_last10",
+    "bb_per_pitch_last10",
+    "bb_rate_last10",
+    "opp_walks_per_game_last10",
+    "opp_bb_rate_last10",
 ]
 
 TARGET_COL = "walks"

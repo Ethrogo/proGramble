@@ -5,13 +5,18 @@ import pandas as pd
 
 def add_outcome_flags(sc: pd.DataFrame) -> pd.DataFrame:
     """
-    Add strikeout and whiff indicator columns to pitch-level Statcast data.
+    Add strikeout, walk, and whiff indicator columns to pitch-level Statcast data.
     """
     sc = sc.copy()
 
     sc["is_k"] = sc["events"].isin([
         "strikeout",
         "strikeout_double_play"
+    ]).astype(int)
+
+    sc["is_bb"] = sc["events"].isin([
+        "walk",
+        "intent_walk",
     ]).astype(int)
 
     sc["is_whiff"] = sc["description"].isin([
