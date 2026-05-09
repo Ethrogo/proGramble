@@ -583,9 +583,62 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
     }
 
 
-def persist_official_picks_profit_reports() -> dict[str, object]:
+def _csv_artifact_has_rows(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        df = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return False
+    return not df.empty
+
+
+def _summary_artifact_has_content(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return any(
+        int(payload.get(key, 0) or 0) > 0
+        for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
+    )
+
+
+def _report_has_tracking_content(report: dict[str, object]) -> bool:
+    return any(
+        not report[df_name].empty
+        for df_name in ["graded_df", "summary_by_book_df", "skipped_df"]
+    ) or any(
+        int(report["overall_summary"].get(key, 0) or 0) > 0
+        for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
+    )
+
+
+def _existing_tracking_artifacts_have_content() -> bool:
+    return any(
+        [
+            _csv_artifact_has_rows(OFFICIAL_PICKS_GRADES_PATH),
+            _csv_artifact_has_rows(OFFICIAL_PICKS_BOOK_SUMMARY_PATH),
+            _csv_artifact_has_rows(OFFICIAL_PICKS_SKIPPED_PATH),
+            _summary_artifact_has_content(OFFICIAL_PICKS_OVERALL_SUMMARY_PATH),
+        ]
+    )
+
+
+def persist_official_picks_profit_reports(*, allow_empty_replacement: bool = False) -> dict[str, object]:
     history_df = load_official_picks_history()
     report = build_official_picks_profit_report(history_df)
+    if (
+        not allow_empty_replacement
+        and not _report_has_tracking_content(report)
+        and _existing_tracking_artifacts_have_content()
+    ):
+        raise ValueError(
+            "Refusing to overwrite non-empty tracking summaries with empty artifacts. "
+            "official_picks_history is empty or incomplete for rebuilding summaries."
+        )
     report["graded_df"].to_csv(OFFICIAL_PICKS_GRADES_PATH, index=False)
     report["summary_by_book_df"].to_csv(OFFICIAL_PICKS_BOOK_SUMMARY_PATH, index=False)
     report["skipped_df"].to_csv(OFFICIAL_PICKS_SKIPPED_PATH, index=False)
