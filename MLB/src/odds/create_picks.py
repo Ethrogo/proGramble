@@ -14,6 +14,23 @@ from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
 from odds.value import american_to_implied_probability
 
 
+def _resolve_prediction_column(
+    df: pd.DataFrame,
+    *,
+    requested: str = "predicted_value",
+) -> str:
+    if requested in df.columns:
+        return requested
+
+    candidates = [column for column in df.columns if column.startswith("predicted_")]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    raise ValueError(
+        f"joined_df is missing the configured prediction column '{requested}'."
+    )
+
+
 def _normalize_side(value: str) -> str:
     if not isinstance(value, str):
         return ""
@@ -34,6 +51,8 @@ def _american_odds_sort_key(price: float | int | None) -> float:
 def _choose_best_market_for_player(
     player_df: pd.DataFrame,
     policy: PickRankingPolicy,
+    *,
+    prediction_column: str,
 ) -> pd.Series:
     """
     Choose the best market based on the player's strongest edge direction.
@@ -41,11 +60,11 @@ def _choose_best_market_for_player(
     """
     require_columns(
         player_df,
-        ["predicted_strikeouts", "side_norm", "line"],
+        [prediction_column, "side_norm", "line"],
         "player_df",
     )
 
-    predicted = float(player_df["predicted_strikeouts"].iloc[0])
+    predicted = float(player_df[prediction_column].iloc[0])
 
     best_over = policy.select_best_market(player_df, "over")
     best_under = policy.select_best_market(player_df, "under")
@@ -60,6 +79,8 @@ def _choose_best_market_for_player(
 def build_daily_picks(
     joined_df: pd.DataFrame,
     policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+    *,
+    prediction_column: str = "predicted_value",
 ) -> pd.DataFrame:
     """
     Build final daily picks from joined projections + odds rows.
@@ -74,6 +95,12 @@ def build_daily_picks(
 
     df = joined_df.copy()
     group_key = PARTICIPANT_JOIN_KEY_COLUMN if PARTICIPANT_JOIN_KEY_COLUMN in df.columns else "player_name_proj"
+    resolved_prediction_column = _resolve_prediction_column(
+        df,
+        requested=prediction_column,
+    )
+    if prediction_column not in df.columns:
+        df[prediction_column] = df[resolved_prediction_column]
 
     if "player_name_proj" not in df.columns:
         if "player_name" in df.columns:
@@ -81,11 +108,11 @@ def build_daily_picks(
         else:
             raise ValueError("joined_df must include 'player_name_proj' or 'player_name'.")
 
-    validate_joined_odds_contract(df)
+    validate_joined_odds_contract(df, prediction_column=prediction_column)
 
     required_cols = [
         "player_name_proj",
-        "predicted_strikeouts",
+        prediction_column,
         "bookmaker",
         "side",
         "line",
@@ -95,7 +122,7 @@ def build_daily_picks(
     if missing:
         raise ValueError(f"Missing required columns for pick creation: {missing}")
 
-    df = df.dropna(subset=["player_name_proj", "predicted_strikeouts", "side", "line"])
+    df = df.dropna(subset=["player_name_proj", prediction_column, "side", "line"])
     if df.empty:
         return pd.DataFrame()
 
@@ -106,7 +133,11 @@ def build_daily_picks(
     best_rows: list[pd.Series] = []
 
     for _, player_df in df.groupby(group_key, sort=False):
-        best_row = _choose_best_market_for_player(player_df, policy)
+        best_row = _choose_best_market_for_player(
+            player_df,
+            policy,
+            prediction_column=prediction_column,
+        )
         if not best_row.empty:
             best_rows.append(best_row)
 
@@ -145,7 +176,9 @@ def build_daily_picks(
         "market_family",
         "team",
         "opponent",
+        "predicted_value",
         "predicted_strikeouts",
+        "predicted_walks",
         "lower_bound",
         "upper_bound",
         "std_dev",

@@ -58,22 +58,44 @@ def _shared_market_join_columns(left: pd.DataFrame, right: pd.DataFrame) -> list
     return [column for column in ["sport", "market_key"] if column in left.columns and column in right.columns]
 
 
+def _resolve_prediction_column(
+    df: pd.DataFrame,
+    *,
+    requested: str = "predicted_value",
+    context_name: str,
+) -> str:
+    if requested in df.columns:
+        return requested
+
+    candidates = [column for column in df.columns if column.startswith("predicted_")]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    raise ValueError(
+        f"{context_name} is missing the configured prediction column '{requested}'."
+    )
+
+
 def prepare_projection_df(
     projections: pd.DataFrame,
     *,
     participant_key: str = "player_name",
+    prediction_column: str = "predicted_value",
     projection_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     sport: str | None = None,
     market_key: str | None = None,
 ) -> pd.DataFrame:
-    require_columns(
-        projections,
-        [participant_key, "predicted_strikeouts"],
-        "projections_df",
-    )
+    require_columns(projections, [participant_key], "projections_df")
     assert_non_empty(projections, "projections_df")
 
     df = projections.copy()
+    resolved_prediction_column = _resolve_prediction_column(
+        df,
+        requested=prediction_column,
+        context_name="projections_df",
+    )
+    if prediction_column not in df.columns:
+        df[prediction_column] = df[resolved_prediction_column]
 
     df = ensure_participant_identity(
         df,
@@ -102,6 +124,7 @@ def join_projections_to_odds(
     odds_df: pd.DataFrame,
     *,
     participant_key: str = "player_name",
+    prediction_column: str = "predicted_value",
     projection_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     odds_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     sport: str | None = None,
@@ -110,6 +133,7 @@ def join_projections_to_odds(
     proj = prepare_projection_df(
         projections,
         participant_key=participant_key,
+        prediction_column=prediction_column,
         projection_join_key=projection_join_key,
         sport=sport,
         market_key=market_key,
@@ -148,11 +172,12 @@ def join_projections_to_odds(
 
     require_columns(
         merged,
-        ["predicted_strikeouts", "line"],
+        [prediction_column, "line"],
         "joined_odds_df",
     )
-
-    merged["edge"] = merged["predicted_strikeouts"] - merged["line"]
+    if "predicted_value" not in merged.columns:
+        merged["predicted_value"] = merged[prediction_column]
+    merged["edge"] = merged[prediction_column] - merged["line"]
 
     return merged
 
@@ -162,6 +187,7 @@ def join_projections_to_historical_lines(
     historical_lines_df: pd.DataFrame,
     *,
     participant_key: str = "player_name",
+    prediction_column: str = "predicted_value",
     projection_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     lines_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     projection_date_key: str = "game_date",
@@ -172,6 +198,7 @@ def join_projections_to_historical_lines(
     proj = prepare_projection_df(
         projections,
         participant_key=participant_key,
+        prediction_column=prediction_column,
         projection_join_key=projection_join_key,
         sport=sport,
         market_key=market_key,
@@ -217,10 +244,12 @@ def join_projections_to_historical_lines(
 
     require_columns(
         merged,
-        ["predicted_strikeouts", "line"],
+        [prediction_column, "line"],
         "joined_historical_lines_df",
     )
-    merged["edge"] = merged["predicted_strikeouts"] - merged["line"]
+    if "predicted_value" not in merged.columns:
+        merged["predicted_value"] = merged[prediction_column]
+    merged["edge"] = merged[prediction_column] - merged["line"]
     return merged
 
 
