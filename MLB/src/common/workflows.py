@@ -14,6 +14,7 @@ Predictor = Callable[[object, pd.DataFrame], pd.DataFrame]
 ArtifactDataLoader = Callable[[Path], pd.DataFrame]
 ArtifactModelLoader = Callable[[Path], object]
 PredictionMetadataAdjuster = Callable[[pd.DataFrame, dict | None], pd.DataFrame]
+PredictionOutputAdapter = Callable[[pd.DataFrame], pd.DataFrame]
 
 
 @dataclass(frozen=True)
@@ -29,10 +30,12 @@ class WorkflowArtifactSpec:
     model_filename: str
     model_loader: ArtifactModelLoader
     metadata_filename: str = "metadata.json"
+    artifact_subdir: str | None = None
 
 
 @dataclass(frozen=True)
 class ModelingWorkflowSpec:
+    prop_type: str
     sport: str
     participant_key: str
     market_key: str
@@ -45,7 +48,9 @@ class ModelingWorkflowSpec:
     participant_identity: ParticipantIdentitySpec = field(default_factory=ParticipantIdentitySpec)
     market_identity: MarketIdentitySpec = field(default_factory=MarketIdentitySpec)
     prediction_metadata_adjuster: PredictionMetadataAdjuster | None = None
+    prediction_output_adapter: PredictionOutputAdapter | None = None
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
+    enabled_in_default_daily_card: bool = True
 
     def resolved_postable_limits(self) -> PostablePickLimits:
         return self.postable_limits

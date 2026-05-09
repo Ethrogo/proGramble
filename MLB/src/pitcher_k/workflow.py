@@ -60,6 +60,7 @@ def apply_pitcher_k_metadata_uncertainty(
 
 
 MLB_PITCHER_STRIKEOUT_WORKFLOW = ModelingWorkflowSpec(
+    prop_type="pitcher_k",
     sport="MLB",
     participant_key="player_name",
     market_key=PITCHER_K_PROP_MARKET,
