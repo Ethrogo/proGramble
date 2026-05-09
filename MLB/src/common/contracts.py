@@ -40,6 +40,7 @@ JOINED_ODDS_REQUIRED_COLUMNS = [
 
 FINAL_PICKS_REQUIRED_COLUMNS = [
     "player_name",
+    "prop_type",
     "book",
     "pick_side",
     "line",

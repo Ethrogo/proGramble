@@ -123,11 +123,18 @@ def build_daily_picks(
     else:
         picks["player_name"] = picks["player_name_proj"]
 
+    if "prop_type" not in picks.columns:
+        if "market_key" in picks.columns:
+            picks["prop_type"] = picks["market_key"].fillna("").astype(str)
+        else:
+            picks["prop_type"] = ""
+
     picks = picks.drop(columns=["player_name_proj"])
     picks = picks.rename(columns={"bookmaker": "book"})
 
     preferred_cols = [
         "player_name",
+        "prop_type",
         PARTICIPANT_JOIN_KEY_COLUMN,
         "participant_id",
         "participant_source_id",
@@ -179,6 +186,13 @@ def filter_postable_picks(
     """
     if picks_df.empty:
         return picks_df.copy()
+
+    picks_df = picks_df.copy()
+    if "prop_type" not in picks_df.columns:
+        if "market_key" in picks_df.columns:
+            picks_df["prop_type"] = picks_df["market_key"].fillna("").astype(str)
+        else:
+            picks_df["prop_type"] = ""
 
     require_columns(picks_df, ["pick_type"], "picks_df")
 

@@ -74,6 +74,7 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     [
         {
             "player_name": "Jacob deGrom",
+            "prop_type": "pitcher_k",
             "team": "TEX",
             "opponent": "SEA",
             "predicted_strikeouts": 6.8,
@@ -188,6 +189,7 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     )
     assert len(loaded_post) == 1
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
+    assert loaded_post.loc[0, "prop_type"] == "pitcher_k"
     assert loaded_post.loc[0, "pick_type"] == "official"
     assert len(loaded_history) == 1
     assert loaded_history.loc[0, "game_date"] == "2026-04-19"
@@ -332,8 +334,8 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
         "odds_join_key": "player_name_norm",
         "sport": "MLB",
     }
-    pd.testing.assert_frame_equal(calls["build_picks_joined"], joined_df)
-    pd.testing.assert_frame_equal(calls["filter_postable_picks"], picks_df)
+    pd.testing.assert_frame_equal(calls["build_picks_joined"], joined_df.assign(prop_type="pitcher_k"))
+    pd.testing.assert_frame_equal(calls["filter_postable_picks"], picks_df.assign(prop_type="pitcher_k"))
 
 
 def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp_path):
@@ -517,6 +519,7 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     calls: dict[str, object] = {}
 
     workflow = ModelingWorkflowSpec(
+        prop_type="custom_prop",
         sport="MLB",
         participant_key="player_name",
         market_key="workflow_market",
@@ -664,6 +667,7 @@ def test_run_daily_card_default_workflow_joins_live_odds_on_normalized_name(monk
         [
             {
                 "player_name": "Jacob deGrom",
+                "prop_type": "pitcher_k",
                 "book": "DraftKings",
                 "pick_side": "over",
                 "line": 5.5,
@@ -729,6 +733,131 @@ def test_run_daily_card_default_workflow_joins_live_odds_on_normalized_name(monk
     }
     assert calls["joined_preds"].loc[0, "pitcher"] == 1
     assert calls["joined_preds"].loc[0, "player_name_norm"] == "jacob degrom"
+    assert calls["joined_preds"].loc[0, "prop_type"] == "pitcher_k"
+
+
+def test_run_daily_card_combines_ready_workflow_outputs(monkeypatch, tmp_path):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+    monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_GRADES_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_report.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_BOOK_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_by_book.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_summary.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_SKIPPED_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_skipped.csv",
+    )
+
+    workflows = [
+        ModelingWorkflowSpec(
+            prop_type="pitcher_k",
+            sport="MLB",
+            participant_key="player_name",
+            market_key="pitcher_strikeouts",
+            artifacts=WorkflowArtifactSpec(
+                history_filename="k_history.csv",
+                history_loader=lambda path: pd.DataFrame(),
+                model_filename="k_model.ubj",
+                model_loader=lambda path: "unused",
+            ),
+            feature_builder=lambda starters, history: starters,
+            predictor=lambda model, features: features,
+            projection_odds_join_keys=ProjectionOddsJoinKeys(
+                projection="player_name_norm",
+                odds="player_name_norm",
+            ),
+            pick_ranking_policy=DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+            prediction_columns=("player_name", "predicted_strikeouts", "lower_bound", "upper_bound", "std_dev"),
+        ),
+        ModelingWorkflowSpec(
+            prop_type="pitcher_bb",
+            sport="MLB",
+            participant_key="player_name",
+            market_key="pitcher_walks",
+            artifacts=WorkflowArtifactSpec(
+                history_filename="bb_history.csv",
+                history_loader=lambda path: pd.DataFrame(),
+                model_filename="bb_model.ubj",
+                model_loader=lambda path: "unused",
+            ),
+            feature_builder=lambda starters, history: starters,
+            predictor=lambda model, features: features,
+            projection_odds_join_keys=ProjectionOddsJoinKeys(
+                projection="player_name_norm",
+                odds="player_name_norm",
+            ),
+            pick_ranking_policy=DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+            prediction_columns=("player_name", "predicted_strikeouts", "lower_bound", "upper_bound", "std_dev"),
+        ),
+    ]
+
+    def fake_run_workflow_daily_card(*, starters_df, workflow, market, build_picks_fn, filter_postable_picks_fn):
+        if workflow.prop_type == "pitcher_k":
+            return (
+                pd.DataFrame([{"player_name": "Jacob deGrom", "predicted_strikeouts": 6.8, "prop_type": "pitcher_k"}]),
+                pd.DataFrame([{"player_name_proj": "Jacob deGrom", "predicted_strikeouts": 6.8, "bookmaker": "DraftKings", "side": "Over", "line": 5.5, "price": -120, "prop_type": "pitcher_k"}]),
+                pd.DataFrame([{"player_name": "Jacob deGrom", "prop_type": "pitcher_k", "book": "DraftKings", "pick_side": "over", "line": 5.5, "price": -120, "edge": 1.3, "pick_type": "official", "implied_probability": 0.545, "value_score": 0.59, "confidence_tier": "medium"}]),
+                pd.DataFrame([{"player_name": "Jacob deGrom", "prop_type": "pitcher_k", "book": "DraftKings", "pick_side": "over", "line": 5.5, "price": -120, "edge": 1.3, "pick_type": "official", "implied_probability": 0.545, "value_score": 0.59, "confidence_tier": "medium"}]),
+                "success",
+                None,
+            )
+        return (
+            pd.DataFrame([{"player_name": "Tarik Skubal", "predicted_strikeouts": 2.2, "prop_type": "pitcher_bb"}]),
+            pd.DataFrame([{"player_name_proj": "Tarik Skubal", "predicted_strikeouts": 2.2, "bookmaker": "FanDuel", "side": "Under", "line": 2.5, "price": -105, "prop_type": "pitcher_bb"}]),
+            pd.DataFrame([{"player_name": "Tarik Skubal", "prop_type": "pitcher_bb", "book": "FanDuel", "pick_side": "under", "line": 2.5, "price": -105, "edge": 0.3, "pick_type": "lean", "implied_probability": 0.512, "value_score": 0.146, "confidence_tier": "low"}]),
+            pd.DataFrame([{"player_name": "Tarik Skubal", "prop_type": "pitcher_bb", "book": "FanDuel", "pick_side": "under", "line": 2.5, "price": -105, "edge": 0.3, "pick_type": "lean", "implied_probability": 0.512, "value_score": 0.146, "confidence_tier": "low"}]),
+            "success",
+            None,
+        )
+
+    monkeypatch.setattr(daily_card, "run_workflow_daily_card", fake_run_workflow_daily_card)
+
+    _, result_preds, result_picks, result_post = daily_card.run_daily_card(workflows=workflows)
+
+    assert set(result_preds["prop_type"]) == {"pitcher_k", "pitcher_bb"}
+    assert set(result_picks["prop_type"]) == {"pitcher_k", "pitcher_bb"}
+    assert set(result_post["prop_type"]) == {"pitcher_k", "pitcher_bb"}
+    assert list(result_post["player_name"]) == ["Jacob deGrom", "Tarik Skubal"]
 
 
 def test_persist_official_picks_history_is_idempotent_and_preserves_manual_results(tmp_path, monkeypatch):

@@ -35,6 +35,7 @@ from common.identity import (
 )
 from common.workflows import ModelingWorkflowSpec
 from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
+from pitcher_bb.workflow import MLB_PITCHER_WALK_WORKFLOW
 from pitcher_k.data_loader import load_statcast_data
 from pitcher_k.feature_engineering import build_pitcher_game_table
 from pitcher_k.preprocessing import add_outcome_flags
@@ -62,6 +63,7 @@ OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "pick_key",
     "game_date",
     "player_name",
+    "prop_type",
     PARTICIPANT_JOIN_KEY_COLUMN,
     PARTICIPANT_ID_COLUMN,
     PARTICIPANT_SOURCE_ID_COLUMN,
@@ -112,6 +114,10 @@ OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS = [
 
 BuildPicksFn = Callable[[pd.DataFrame], pd.DataFrame]
 FilterPostablePicksFn = Callable[[pd.DataFrame], pd.DataFrame]
+DEFAULT_DAILY_CARD_WORKFLOWS = [
+    MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    MLB_PITCHER_WALK_WORKFLOW,
+]
 
 
 def ensure_output_dirs() -> None:
@@ -131,6 +137,38 @@ def empty_joined_odds_df() -> pd.DataFrame:
 
 def empty_final_picks_df() -> pd.DataFrame:
     return pd.DataFrame(columns=FINAL_PICKS_REQUIRED_COLUMNS)
+
+
+def _artifact_dir_candidates(workflow: ModelingWorkflowSpec) -> list[Path]:
+    artifact_subdir = workflow.artifacts.artifact_subdir
+    if artifact_subdir:
+        workflow_root = ARTIFACTS_DIR / artifact_subdir
+        return [
+            workflow_root / "latest",
+            workflow_root / "previous",
+        ]
+    return [
+        LATEST_ARTIFACTS_DIR,
+        PREVIOUS_ARTIFACTS_DIR,
+    ]
+
+
+def _tag_workflow_frame(
+    df: pd.DataFrame,
+    workflow: ModelingWorkflowSpec,
+) -> pd.DataFrame:
+    tagged = df.copy()
+    tagged["prop_type"] = workflow.prop_type
+    return tagged
+
+
+def _adapt_predictions_for_output(
+    today_preds: pd.DataFrame,
+    workflow: ModelingWorkflowSpec,
+) -> pd.DataFrame:
+    adapter = workflow.prediction_output_adapter
+    adapted = adapter(today_preds) if adapter is not None else today_preds.copy()
+    return _tag_workflow_frame(adapted, workflow)
 
 
 def _format_american_odds(price: float | int | str | None) -> str:
@@ -686,10 +724,10 @@ def persist_official_picks_history(
     return OFFICIAL_PICKS_HISTORY_PATH
 
 
-def resolve_artifact_path(filename: str) -> Path:
+def resolve_artifact_path(filename: str, workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW) -> Path:
     candidate_paths = [
-        LATEST_ARTIFACTS_DIR / filename,
-        PREVIOUS_ARTIFACTS_DIR / filename,
+        candidate_dir / filename
+        for candidate_dir in _artifact_dir_candidates(workflow)
     ]
 
     for path in candidate_paths:
@@ -702,21 +740,21 @@ def resolve_artifact_path(filename: str) -> Path:
 
 
 def load_workflow_history_artifact(workflow: ModelingWorkflowSpec) -> pd.DataFrame:
-    path = resolve_artifact_path(workflow.artifacts.history_filename)
+    path = resolve_artifact_path(workflow.artifacts.history_filename, workflow)
     history_df = workflow.artifacts.history_loader(path)
     print(f"Loaded workflow history artifact from: {path}")
     return history_df
 
 
 def load_workflow_model_artifact(workflow: ModelingWorkflowSpec):
-    path = resolve_artifact_path(workflow.artifacts.model_filename)
+    path = resolve_artifact_path(workflow.artifacts.model_filename, workflow)
     model = workflow.artifacts.model_loader(path)
     print(f"Loaded model artifact from: {path}")
     return model
 
 
 def load_model_metadata(workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW) -> dict:
-    model_path = resolve_artifact_path(workflow.artifacts.model_filename)
+    model_path = resolve_artifact_path(workflow.artifacts.model_filename, workflow)
     metadata_path = model_path.with_name(workflow.artifacts.metadata_filename)
 
     if not metadata_path.exists():
@@ -824,15 +862,43 @@ def save_outputs(
     save_run_status(status=run_status, message=run_message)
 
 
-def run_daily_card(
+def workflow_is_ready(workflow: ModelingWorkflowSpec) -> bool:
+    try:
+        resolve_artifact_path(workflow.artifacts.history_filename, workflow)
+        resolve_artifact_path(workflow.artifacts.model_filename, workflow)
+        resolve_artifact_path(workflow.artifacts.metadata_filename, workflow)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def resolve_daily_card_workflows(
+    workflows: list[ModelingWorkflowSpec] | None = None,
+) -> list[ModelingWorkflowSpec]:
+    if workflows is not None:
+        return workflows
+
+    resolved: list[ModelingWorkflowSpec] = []
+    for workflow in DEFAULT_DAILY_CARD_WORKFLOWS:
+        if not workflow.enabled_in_default_daily_card:
+            continue
+        if workflow_is_ready(workflow):
+            resolved.append(workflow)
+
+    if resolved:
+        return resolved
+
+    return [MLB_PITCHER_STRIKEOUT_WORKFLOW]
+
+
+def run_workflow_daily_card(
     *,
-    workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    starters_df: pd.DataFrame,
+    workflow: ModelingWorkflowSpec,
     market: str | None = None,
     build_picks_fn: BuildPicksFn | None = None,
     filter_postable_picks_fn: FilterPostablePicksFn | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    ensure_output_dirs()
-
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, str | None]:
     if build_picks_fn is None:
         def build_picks_fn(joined_df: pd.DataFrame) -> pd.DataFrame:
             return build_daily_picks(
@@ -851,8 +917,6 @@ def run_daily_card(
                 policy=workflow.pick_ranking_policy,
             )
 
-    starters_df = get_today_starters_df()
-    validate_starters_contract(starters_df)
     history_df = load_workflow_history_artifact(workflow)
     model = load_workflow_model_artifact(workflow)
     metadata = load_model_metadata(workflow)
@@ -868,6 +932,7 @@ def run_daily_card(
     if today_preds.empty:
         raise ValueError("No today predictions were generated.")
 
+    today_preds = _adapt_predictions_for_output(today_preds, workflow)
     selected_market = market or workflow.market_key
     run_status = "success"
     run_message: str | None = None
@@ -881,34 +946,98 @@ def run_daily_card(
             odds_join_key=workflow.projection_odds_join_keys.odds,
             sport=workflow.sport,
         )
+        joined_df = _tag_workflow_frame(joined_df, workflow)
         if joined_df.empty:
             run_status = "degraded"
             run_message = (
                 "Live odds were fetched but no matching odds rows were available for today's "
-                "projections, so no edges or picks were generated."
+                f"{workflow.prop_type} projections, so no edges or picks were generated."
             )
             print(f"WARNING: {run_message}")
-            joined_df = empty_joined_odds_df()
-            picks_df = empty_final_picks_df()
-            post_df = empty_final_picks_df()
+            joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)
+            picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+            post_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
         else:
             validate_joined_odds_contract(joined_df)
 
             picks_df = build_picks_fn(joined_df)
+            picks_df = _tag_workflow_frame(picks_df, workflow)
             validate_final_picks_contract(picks_df)
 
             post_df = filter_postable_picks_fn(picks_df)
+            post_df = _tag_workflow_frame(post_df, workflow)
             validate_final_picks_contract(post_df)
     except requests.RequestException as exc:
         run_status = "degraded"
         run_message = (
-            "Live odds fetch failed; projections were saved but no edges or picks were generated. "
-            f"Reason: {exc.__class__.__name__}: {exc}"
+            f"Live odds fetch failed for {workflow.prop_type}; projections were saved but no edges "
+            f"or picks were generated. Reason: {exc.__class__.__name__}: {exc}"
         )
         print(f"WARNING: {run_message}")
-        joined_df = empty_joined_odds_df()
-        picks_df = empty_final_picks_df()
-        post_df = empty_final_picks_df()
+        joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)
+        picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+        post_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+
+    return today_preds, joined_df, picks_df, post_df, run_status, run_message
+
+
+def run_daily_card(
+    *,
+    workflow: ModelingWorkflowSpec = MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    workflows: list[ModelingWorkflowSpec] | None = None,
+    market: str | None = None,
+    build_picks_fn: BuildPicksFn | None = None,
+    filter_postable_picks_fn: FilterPostablePicksFn | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ensure_output_dirs()
+
+    starters_df = get_today_starters_df()
+    validate_starters_contract(starters_df)
+
+    if workflows is not None:
+        selected_workflows = resolve_daily_card_workflows(workflows)
+    elif workflow is MLB_PITCHER_STRIKEOUT_WORKFLOW:
+        selected_workflows = resolve_daily_card_workflows()
+    else:
+        selected_workflows = [workflow]
+
+    today_preds_frames: list[pd.DataFrame] = []
+    joined_frames: list[pd.DataFrame] = []
+    picks_frames: list[pd.DataFrame] = []
+    post_frames: list[pd.DataFrame] = []
+    run_status = "success"
+    run_messages: list[str] = []
+
+    for active_workflow in selected_workflows:
+        (
+            workflow_today_preds,
+            workflow_joined_df,
+            workflow_picks_df,
+            workflow_post_df,
+            workflow_status,
+            workflow_message,
+        ) = run_workflow_daily_card(
+            starters_df=starters_df,
+            workflow=active_workflow,
+            market=market,
+            build_picks_fn=build_picks_fn,
+            filter_postable_picks_fn=filter_postable_picks_fn,
+        )
+        today_preds_frames.append(workflow_today_preds)
+        joined_frames.append(workflow_joined_df)
+        picks_frames.append(workflow_picks_df)
+        post_frames.append(workflow_post_df)
+
+        if workflow_status != "success":
+            run_status = "degraded"
+        if workflow_message:
+            run_messages.append(workflow_message)
+
+    today_preds = pd.concat(today_preds_frames, ignore_index=True) if today_preds_frames else pd.DataFrame()
+    joined_df = pd.concat(joined_frames, ignore_index=True) if joined_frames else empty_joined_odds_df()
+    picks_df = pd.concat(picks_frames, ignore_index=True) if picks_frames else empty_final_picks_df()
+    post_df = pd.concat(post_frames, ignore_index=True) if post_frames else empty_final_picks_df()
+    run_message = " ".join(run_messages) if run_messages else None
 
     save_outputs(
         starters_df=starters_df,
@@ -938,6 +1067,7 @@ if __name__ == "__main__":
         print(
             post_df[
                 [
+                    "prop_type",
                     "player_name",
                     "book",
                     "pick_side",
