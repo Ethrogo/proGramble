@@ -31,7 +31,7 @@ PITCHER_GAMES_REQUIRED_COLUMNS = [
 
 JOINED_ODDS_REQUIRED_COLUMNS = [
     "player_name_proj",
-    "predicted_strikeouts",
+    "predicted_value",
     "bookmaker",
     "side",
     "line",
@@ -191,14 +191,25 @@ def validate_pitcher_games_contract(df: pd.DataFrame) -> None:
     )
 
 
-def validate_joined_odds_contract(df: pd.DataFrame) -> None:
+def validate_joined_odds_contract(
+    df: pd.DataFrame,
+    *,
+    prediction_column: str = "predicted_value",
+) -> None:
     validate_dataframe_contract(
         df,
         name="joined_odds_df",
-        required_columns=JOINED_ODDS_REQUIRED_COLUMNS,
+        required_columns=[
+            "player_name_proj",
+            prediction_column,
+            "bookmaker",
+            "side",
+            "line",
+            "price",
+        ],
         non_null_columns=[
             "player_name_proj",
-            "predicted_strikeouts",
+            prediction_column,
             "bookmaker",
             "side",
             "line",

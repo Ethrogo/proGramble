@@ -83,11 +83,13 @@ OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "line",
     MARKET_SELECTION_KEY_COLUMN,
     MARKET_OFFER_KEY_COLUMN,
+    "predicted_value",
     "predicted_strikeouts",
     "edge",
     "confidence_tier",
     "pick_type",
     "result",
+    "actual_value",
     "actual_strikeouts",
     "record_source",
 ]
@@ -166,9 +168,23 @@ def _adapt_predictions_for_output(
     today_preds: pd.DataFrame,
     workflow: ModelingWorkflowSpec,
 ) -> pd.DataFrame:
-    adapter = workflow.prediction_output_adapter
-    adapted = adapter(today_preds) if adapter is not None else today_preds.copy()
+    adapted = today_preds.copy()
+    prediction_column = workflow.prop_fields.prediction
+    shared_prediction_column = workflow.prop_fields.shared_prediction
+    if prediction_column in adapted.columns and shared_prediction_column not in adapted.columns:
+        adapted[shared_prediction_column] = adapted[prediction_column]
     return _tag_workflow_frame(adapted, workflow)
+
+
+def _prediction_value_from_frame(
+    df: pd.DataFrame,
+) -> pd.Series:
+    if "predicted_value" in df.columns:
+        return df["predicted_value"]
+    candidates = [column for column in df.columns if column.startswith("predicted_")]
+    if len(candidates) == 1:
+        return df[candidates[0]]
+    return pd.Series([""] * len(df), index=df.index, dtype="object")
 
 
 def _format_american_odds(price: float | int | str | None) -> str:
@@ -347,7 +363,7 @@ def apply_statcast_results_to_official_picks_history(
         & (working["game_date"].astype(str) == game_date)
         & working.apply(_is_pitcher_strikeout_history_row, axis=1)
         & (
-            working["actual_strikeouts"].astype(str).str.strip().eq("")
+            working["actual_value"].astype(str).str.strip().eq("")
             | working["result"].astype(str).str.strip().eq("")
         )
     )
@@ -365,9 +381,8 @@ def apply_statcast_results_to_official_picks_history(
     if not resolved_mask.any():
         return working[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
 
-    pending.loc[resolved_mask, "actual_strikeouts"] = pending.loc[resolved_mask, "strikeouts"].apply(
-        _format_stat_value
-    )
+    pending.loc[resolved_mask, "actual_value"] = pending.loc[resolved_mask, "strikeouts"].apply(_format_stat_value)
+    pending.loc[resolved_mask, "actual_strikeouts"] = pending.loc[resolved_mask, "actual_value"]
     pending.loc[resolved_mask, "result"] = pending.loc[resolved_mask].apply(
         lambda row: _grade_pick_result_from_actual(
             actual=float(row["strikeouts"]),
@@ -398,7 +413,7 @@ def grade_official_picks_from_statcast(
         & (history_df["game_date"].astype(str) == target_date)
         & history_df.apply(_is_pitcher_strikeout_history_row, axis=1)
         & (
-            history_df["actual_strikeouts"].astype(str).str.strip().eq("")
+            history_df["actual_value"].astype(str).str.strip().eq("")
             | history_df["result"].astype(str).str.strip().eq("")
         )
     )
@@ -412,8 +427,8 @@ def grade_official_picks_from_statcast(
         pitcher_results_df,
         game_date=target_date,
     )
-    before = history_df["actual_strikeouts"].astype(str).str.strip()
-    after = updated_history_df["actual_strikeouts"].astype(str).str.strip()
+    before = history_df["actual_value"].astype(str).str.strip()
+    after = updated_history_df["actual_value"].astype(str).str.strip()
     updated_rows = int(((before == "") & (after != "")).sum())
     updated_history_df.to_csv(OFFICIAL_PICKS_HISTORY_PATH, index=False)
     persist_official_picks_profit_reports()
@@ -589,6 +604,24 @@ def load_official_picks_history() -> pd.DataFrame:
     missing = [col for col in OFFICIAL_PICKS_HISTORY_COLUMNS if col not in history_df.columns]
     for column in missing:
         history_df[column] = ""
+    if "predicted_value" in history_df.columns and "predicted_strikeouts" in history_df.columns:
+        history_df["predicted_value"] = history_df["predicted_value"].where(
+            history_df["predicted_value"].astype(str).str.strip() != "",
+            history_df["predicted_strikeouts"],
+        )
+        history_df["predicted_strikeouts"] = history_df["predicted_strikeouts"].where(
+            history_df["predicted_strikeouts"].astype(str).str.strip() != "",
+            history_df["predicted_value"],
+        )
+    if "actual_value" in history_df.columns and "actual_strikeouts" in history_df.columns:
+        history_df["actual_value"] = history_df["actual_value"].where(
+            history_df["actual_value"].astype(str).str.strip() != "",
+            history_df["actual_strikeouts"],
+        )
+        history_df["actual_strikeouts"] = history_df["actual_strikeouts"].where(
+            history_df["actual_strikeouts"].astype(str).str.strip() != "",
+            history_df["actual_value"],
+        )
 
     return history_df[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
 
@@ -676,6 +709,15 @@ def build_official_picks_history_rows(
     )
     history_rows["odds"] = history_rows["price"].apply(_format_american_odds)
     history_rows["result"] = ""
+    history_rows["predicted_value"] = _prediction_value_from_frame(history_rows)
+    if "predicted_strikeouts" in history_rows.columns:
+        history_rows["predicted_strikeouts"] = history_rows["predicted_strikeouts"].where(
+            history_rows["predicted_strikeouts"].notna(),
+            history_rows["predicted_value"],
+        )
+    else:
+        history_rows["predicted_strikeouts"] = history_rows["predicted_value"]
+    history_rows["actual_value"] = ""
     history_rows["actual_strikeouts"] = ""
     history_rows["record_source"] = "run_daily_card"
 
@@ -709,6 +751,8 @@ def persist_official_picks_history(
             existing_record = existing_by_key.loc[pick_key].to_dict()
             if existing_record.get("result") and not new_record.get("result"):
                 new_record["result"] = existing_record["result"]
+            if existing_record.get("actual_value") and not new_record.get("actual_value"):
+                new_record["actual_value"] = existing_record["actual_value"]
             if existing_record.get("actual_strikeouts") and not new_record.get("actual_strikeouts"):
                 new_record["actual_strikeouts"] = existing_record["actual_strikeouts"]
             if existing_record.get("record_source") and not new_record.get("record_source"):
@@ -811,6 +855,14 @@ def build_today_predictions_for_workflow(
         sport=workflow.sport,
         market_key=workflow.market_key,
     )
+    if workflow.prop_fields.prediction not in today_preds.columns:
+        raise ValueError(
+            "today_preds is missing the workflow prediction column "
+            f"'{workflow.prop_fields.prediction}'."
+        )
+    today_preds[workflow.prop_fields.shared_prediction] = today_preds[workflow.prop_fields.prediction]
+    if workflow.prop_fields.actual in today_preds.columns:
+        today_preds[workflow.prop_fields.shared_actual] = today_preds[workflow.prop_fields.actual]
     return today_preds
 
 
@@ -904,6 +956,7 @@ def run_workflow_daily_card(
             return build_daily_picks(
                 joined_df,
                 policy=workflow.pick_ranking_policy,
+                prediction_column=workflow.prop_fields.shared_prediction,
             )
 
     if filter_postable_picks_fn is None:
@@ -942,10 +995,13 @@ def run_workflow_daily_card(
             today_preds,
             selected_market,
             participant_key=workflow.participant_key,
+            prediction_column=workflow.prop_fields.shared_prediction,
             projection_join_key=workflow.projection_odds_join_keys.projection,
             odds_join_key=workflow.projection_odds_join_keys.odds,
             sport=workflow.sport,
         )
+        if not joined_df.empty and workflow.prop_fields.shared_prediction not in joined_df.columns:
+            joined_df[workflow.prop_fields.shared_prediction] = _prediction_value_from_frame(joined_df)
         joined_df = _tag_workflow_frame(joined_df, workflow)
         if joined_df.empty:
             run_status = "degraded"
@@ -958,7 +1014,10 @@ def run_workflow_daily_card(
             picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
             post_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
         else:
-            validate_joined_odds_contract(joined_df)
+            validate_joined_odds_contract(
+                joined_df,
+                prediction_column=workflow.prop_fields.shared_prediction,
+            )
 
             picks_df = build_picks_fn(joined_df)
             picks_df = _tag_workflow_frame(picks_df, workflow)
@@ -1073,7 +1132,7 @@ if __name__ == "__main__":
                     "pick_side",
                     "line",
                     "price",
-                    "predicted_strikeouts",
+                    "predicted_value",
                     "edge",
                     "pick_type",
                 ]

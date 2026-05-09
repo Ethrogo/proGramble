@@ -8,6 +8,7 @@ import xgboost as xgb
 from common.contracts import validate_pitcher_games_contract
 from common.workflows import (
     ModelingWorkflowSpec,
+    PropFieldSpec,
     ProjectionOddsJoinKeys,
     WorkflowArtifactSpec,
 )
@@ -64,6 +65,10 @@ MLB_PITCHER_STRIKEOUT_WORKFLOW = ModelingWorkflowSpec(
     sport="MLB",
     participant_key="player_name",
     market_key=PITCHER_K_PROP_MARKET,
+    prop_fields=PropFieldSpec(
+        prediction="predicted_strikeouts",
+        actual="actual_strikeouts",
+    ),
     artifacts=WorkflowArtifactSpec(
         history_filename="pitcher_games.csv",
         history_loader=load_pitcher_history_artifact,

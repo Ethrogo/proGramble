@@ -14,13 +14,23 @@ Predictor = Callable[[object, pd.DataFrame], pd.DataFrame]
 ArtifactDataLoader = Callable[[Path], pd.DataFrame]
 ArtifactModelLoader = Callable[[Path], object]
 PredictionMetadataAdjuster = Callable[[pd.DataFrame, dict | None], pd.DataFrame]
-PredictionOutputAdapter = Callable[[pd.DataFrame], pd.DataFrame]
 
 
 @dataclass(frozen=True)
 class ProjectionOddsJoinKeys:
     projection: str
     odds: str
+
+
+@dataclass(frozen=True)
+class PropFieldSpec:
+    prediction: str
+    actual: str
+    stddev: str = "std_dev"
+    lower_bound: str = "lower_bound"
+    upper_bound: str = "upper_bound"
+    shared_prediction: str = "predicted_value"
+    shared_actual: str = "actual_value"
 
 
 @dataclass(frozen=True)
@@ -45,10 +55,15 @@ class ModelingWorkflowSpec:
     projection_odds_join_keys: ProjectionOddsJoinKeys
     pick_ranking_policy: PickRankingPolicy
     prediction_columns: tuple[str, ...]
+    prop_fields: PropFieldSpec = field(
+        default_factory=lambda: PropFieldSpec(
+            prediction="predicted_strikeouts",
+            actual="actual_strikeouts",
+        )
+    )
     participant_identity: ParticipantIdentitySpec = field(default_factory=ParticipantIdentitySpec)
     market_identity: MarketIdentitySpec = field(default_factory=MarketIdentitySpec)
     prediction_metadata_adjuster: PredictionMetadataAdjuster | None = None
-    prediction_output_adapter: PredictionOutputAdapter | None = None
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
     enabled_in_default_daily_card: bool = True
 

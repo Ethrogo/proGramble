@@ -111,7 +111,11 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
         return joined_df, joined_df
 
     monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
-    monkeypatch.setattr(daily_card, "build_daily_picks", lambda joined, policy: picks_df)
+    monkeypatch.setattr(
+        daily_card,
+        "build_daily_picks",
+        lambda joined, policy, prediction_column="predicted_value": picks_df,
+    )
     monkeypatch.setattr(
         daily_card,
         "filter_postable_picks",
@@ -330,11 +334,15 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     assert calls["market"] == custom_market
     assert calls["join_kwargs"] == {
         "participant_key": "player_name",
+        "prediction_column": "predicted_value",
         "projection_join_key": "player_name_norm",
         "odds_join_key": "player_name_norm",
         "sport": "MLB",
     }
-    pd.testing.assert_frame_equal(calls["build_picks_joined"], joined_df.assign(prop_type="pitcher_k"))
+    pd.testing.assert_frame_equal(
+        calls["build_picks_joined"],
+        joined_df.assign(predicted_value=6.8, prop_type="pitcher_k"),
+    )
     pd.testing.assert_frame_equal(calls["filter_postable_picks"], picks_df.assign(prop_type="pitcher_k"))
 
 
@@ -573,8 +581,9 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
         calls["join_kwargs"] = kwargs
         return joined_df, joined_df
 
-    def fake_build_daily_picks(df, policy):
+    def fake_build_daily_picks(df, policy, prediction_column="predicted_value"):
         calls["build_policy"] = policy
+        calls["prediction_column"] = prediction_column
         return picks_df
 
     def fake_filter_postable_picks(df, max_official, max_leans, policy):
@@ -591,11 +600,13 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     assert calls["market"] == "workflow_market"
     assert calls["join_kwargs"] == {
         "participant_key": "player_name",
+        "prediction_column": "predicted_value",
         "projection_join_key": "participant_join_key",
         "odds_join_key": "participant_join_key",
         "sport": "MLB",
     }
     assert calls["build_policy"] is workflow.pick_ranking_policy
+    assert calls["prediction_column"] == "predicted_value"
     assert calls["filter_policy"] is workflow.pick_ranking_policy
     assert calls["filter_limits"] == (1, 0)
 
@@ -703,7 +714,11 @@ def test_run_daily_card_default_workflow_joins_live_odds_on_normalized_name(monk
         return joined_df, joined_df
 
     monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
-    monkeypatch.setattr(daily_card, "build_daily_picks", lambda joined, policy: picks_df)
+    monkeypatch.setattr(
+        daily_card,
+        "build_daily_picks",
+        lambda joined, policy, prediction_column="predicted_value": picks_df,
+    )
     monkeypatch.setattr(
         daily_card,
         "filter_postable_picks",
@@ -727,6 +742,7 @@ def test_run_daily_card_default_workflow_joins_live_odds_on_normalized_name(monk
 
     assert calls["join_kwargs"] == {
         "participant_key": "player_name",
+        "prediction_column": "predicted_value",
         "projection_join_key": "player_name_norm",
         "odds_join_key": "player_name_norm",
         "sport": "MLB",

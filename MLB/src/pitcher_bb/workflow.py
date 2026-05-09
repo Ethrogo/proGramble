@@ -6,7 +6,7 @@ import pandas as pd
 import xgboost as xgb
 
 from common.contracts import validate_pitcher_games_contract
-from common.workflows import ModelingWorkflowSpec, ProjectionOddsJoinKeys, WorkflowArtifactSpec
+from common.workflows import ModelingWorkflowSpec, PropFieldSpec, ProjectionOddsJoinKeys, WorkflowArtifactSpec
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PostablePickLimits
 from pitcher_bb.config import PITCHER_BB_PROP_MARKET
 from pitcher_bb.feature_tomorrow import build_tomorrow_features
@@ -74,17 +74,15 @@ def apply_pitcher_bb_metadata_uncertainty(
     return adjusted
 
 
-def adapt_pitcher_bb_predictions_for_daily_card(today_preds: pd.DataFrame) -> pd.DataFrame:
-    adapted = today_preds.copy()
-    adapted["predicted_strikeouts"] = adapted["predicted_walks"]
-    return adapted
-
-
 MLB_PITCHER_WALK_WORKFLOW = ModelingWorkflowSpec(
     prop_type="pitcher_bb",
     sport="MLB",
     participant_key="player_name",
     market_key=PITCHER_BB_PROP_MARKET,
+    prop_fields=PropFieldSpec(
+        prediction="predicted_walks",
+        actual="actual_walks",
+    ),
     artifacts=WorkflowArtifactSpec(
         history_filename="pitcher_games.csv",
         history_loader=load_pitcher_history_artifact,
@@ -107,7 +105,6 @@ MLB_PITCHER_WALK_WORKFLOW = ModelingWorkflowSpec(
         "std_dev",
     ),
     prediction_metadata_adjuster=apply_pitcher_bb_metadata_uncertainty,
-    prediction_output_adapter=adapt_pitcher_bb_predictions_for_daily_card,
     postable_limits=PostablePickLimits(
         max_official=3,
         max_leans=1,

@@ -11,7 +11,24 @@ from odds.compare import join_projections_to_historical_lines
 from odds.create_picks import build_daily_picks
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
 
-BACKTEST_REQUIRED_COLUMNS = ["actual_strikeouts"]
+
+def _resolve_value_column(
+    df: pd.DataFrame,
+    *,
+    requested: str,
+    prefix: str,
+    context_name: str,
+) -> str:
+    if requested in df.columns:
+        return requested
+
+    candidates = [column for column in df.columns if column.startswith(prefix)]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    raise ValueError(
+        f"{context_name} is missing the configured {prefix.rstrip('_')} column '{requested}'."
+    )
 
 
 def _line_band(line: float) -> str:
@@ -58,8 +75,14 @@ def _american_odds_profit_units(price: float, outcome: str) -> float:
 def grade_pick_backtest(
     picks_df: pd.DataFrame,
     *,
-    actual_column: str = "actual_strikeouts",
+    actual_column: str = "actual_value",
 ) -> pd.DataFrame:
+    resolved_actual_column = _resolve_value_column(
+        picks_df,
+        requested=actual_column,
+        prefix="actual_",
+        context_name="picks_backtest_df",
+    )
     require_columns(
         picks_df,
         [
@@ -70,7 +93,7 @@ def grade_pick_backtest(
             "price",
             "pick_type",
             "confidence_tier",
-            actual_column,
+            resolved_actual_column,
         ],
         "picks_backtest_df",
     )
@@ -78,7 +101,7 @@ def grade_pick_backtest(
     graded = picks_df.copy()
     graded["outcome"] = graded.apply(
         lambda row: _grade_pick_outcome(
-            actual=float(row[actual_column]),
+            actual=float(row[resolved_actual_column]),
             line=float(row["line"]),
             pick_side=str(row["pick_side"]).lower(),
         ),
@@ -146,15 +169,33 @@ def run_pick_backtest(
     joined_df: pd.DataFrame,
     *,
     policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
-    actual_column: str = "actual_strikeouts",
+    prediction_column: str = "predicted_value",
+    actual_column: str = "actual_value",
 ) -> dict:
     """
     Backtest the same market-selection and pick-tier workflow used for live cards.
     """
-    validate_joined_odds_contract(joined_df)
-    require_columns(joined_df, BACKTEST_REQUIRED_COLUMNS, "joined_odds_backtest_df")
+    scored_input = joined_df.copy()
+    resolved_prediction_column = _resolve_value_column(
+        scored_input,
+        requested=prediction_column,
+        prefix="predicted_",
+        context_name="joined_odds_backtest_df",
+    )
+    resolved_actual_column = _resolve_value_column(
+        scored_input,
+        requested=actual_column,
+        prefix="actual_",
+        context_name="joined_odds_backtest_df",
+    )
+    if prediction_column not in scored_input.columns:
+        scored_input[prediction_column] = scored_input[resolved_prediction_column]
+    if actual_column not in scored_input.columns:
+        scored_input[actual_column] = scored_input[resolved_actual_column]
 
-    scored_input = joined_df.dropna(subset=[actual_column]).copy()
+    validate_joined_odds_contract(scored_input, prediction_column=prediction_column)
+
+    scored_input = scored_input.dropna(subset=[actual_column]).copy()
     if scored_input.empty:
         return {
             "available": False,
@@ -168,7 +209,11 @@ def run_pick_backtest(
             "graded_picks": pd.DataFrame(),
         }
 
-    picks = build_daily_picks(scored_input, policy=policy)
+    picks = build_daily_picks(
+        scored_input,
+        policy=policy,
+        prediction_column=prediction_column,
+    )
     if picks.empty:
         return {
             "available": True,
@@ -215,7 +260,8 @@ def run_historical_workflow_backtest(
     participant_key: str = "player_name",
     projection_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
     lines_join_key: str = PARTICIPANT_JOIN_KEY_COLUMN,
-    actual_column: str = "actual_strikeouts",
+    prediction_column: str = "predicted_value",
+    actual_column: str = "actual_value",
     policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
     sport: str | None = None,
     market_key: str | None = None,
@@ -228,6 +274,7 @@ def run_historical_workflow_backtest(
         projections,
         historical_lines_df,
         participant_key=participant_key,
+        prediction_column=prediction_column,
         projection_join_key=projection_join_key,
         lines_join_key=lines_join_key,
         sport=sport,
@@ -248,6 +295,7 @@ def run_historical_workflow_backtest(
 
     return run_pick_backtest(
         joined,
+        prediction_column=prediction_column,
         actual_column=actual_column,
         policy=policy,
     )
