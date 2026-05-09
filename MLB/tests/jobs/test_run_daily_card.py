@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 import pytest
 import requests
@@ -1171,6 +1173,26 @@ def test_run_daily_card_handles_live_odds_http_error_gracefully(monkeypatch, tmp
     )
     monkeypatch.setattr(
         daily_card,
+        "OFFICIAL_PICKS_GRADES_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_report.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_BOOK_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_by_book.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_summary.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_SKIPPED_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_skipped.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
         "RUN_STATUS_PATH",
         tmp_path / "data" / "outputs" / "run_daily_card_status.json",
     )
@@ -1263,6 +1285,26 @@ def test_run_daily_card_handles_empty_joined_odds_gracefully(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(
         daily_card,
+        "OFFICIAL_PICKS_GRADES_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_report.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_BOOK_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_by_book.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_summary.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_SKIPPED_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_skipped.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
         "RUN_STATUS_PATH",
         tmp_path / "data" / "outputs" / "run_daily_card_status.json",
     )
@@ -1284,6 +1326,106 @@ def test_run_daily_card_handles_empty_joined_odds_gracefully(monkeypatch, tmp_pa
     assert loaded_post.empty
     assert status_payload["status"] == "degraded"
     assert "no matching odds rows were available" in status_payload["message"]
+
+
+def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summaries(
+    monkeypatch,
+    tmp_path,
+):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-18",
+                "game_pk": 111111,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+                "opp_strikeouts_per_game_last10": 9.4,
+                "opp_k_rate_last10": 0.255,
+            }
+        ]
+    )
+    today_preds = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+                "lower_bound": 5.8,
+                "upper_bound": 7.8,
+                "std_dev": 1.0,
+            }
+        ]
+    )
+
+    tracking_dir = tmp_path / "data" / "tracking"
+    outputs_dir = tmp_path / "data" / "outputs"
+    grades_path = tracking_dir / "official_picks_profit_report.csv"
+    by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
+    summary_path = tracking_dir / "official_picks_profit_summary.json"
+    skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+    history_path = tracking_dir / "official_picks_history.csv"
+
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame([{"pick_key": "seed", "player_name": "Pitcher A"}]).to_csv(grades_path, index=False)
+    pd.DataFrame([{"book": "DraftKings", "picks": 1}]).to_csv(by_book_path, index=False)
+    pd.DataFrame([{"pick_key": "pending-seed", "player_name": "Pitcher B"}]).to_csv(skipped_path, index=False)
+    summary_path.write_text(json.dumps({"picks": 1, "skipped_rows": 1}, indent=2), encoding="utf-8")
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
+    monkeypatch.setattr(daily_card, "load_model_metadata", lambda workflow=None: {"target": "strikeouts"})
+    monkeypatch.setattr(
+        daily_card,
+        "build_today_predictions_for_workflow",
+        lambda *, starters_df, pitcher_games, model, workflow: today_preds,
+    )
+    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda *args, **kwargs: (pd.DataFrame(), pd.DataFrame()))
+
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", outputs_dir)
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", outputs_dir / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", outputs_dir / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", outputs_dir / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tracking_dir)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+    monkeypatch.setattr(daily_card, "RUN_STATUS_PATH", outputs_dir / "run_daily_card_status.json")
+    monkeypatch.setattr(
+        daily_card,
+        "save_today_starters_csv",
+        lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv",
+    )
+
+    with pytest.raises(ValueError, match="Refusing to overwrite non-empty tracking summaries"):
+        daily_card.run_daily_card()
+
+    assert len(pd.read_csv(grades_path)) == 1
+    assert len(pd.read_csv(by_book_path)) == 1
+    assert len(pd.read_csv(skipped_path)) == 1
+    assert json.loads(summary_path.read_text(encoding="utf-8"))["picks"] == 1
 
 
 def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_path, monkeypatch, capsys):
@@ -1542,6 +1684,73 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     assert summary_payload["picks"] == 1
     assert summary_payload["units_profit"] == pytest.approx(100 / 110)
     assert skipped_df.empty
+
+
+def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_summaries_with_empty_history(
+    tmp_path,
+    monkeypatch,
+):
+    tracking_dir = tmp_path / "data" / "tracking"
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+    history_path = tracking_dir / "official_picks_history.csv"
+    grades_path = tracking_dir / "official_picks_profit_report.csv"
+    by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
+    summary_path = tracking_dir / "official_picks_profit_summary.json"
+    skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+
+    pd.DataFrame([{"pick_key": "seed", "player_name": "Pitcher A"}]).to_csv(grades_path, index=False)
+    pd.DataFrame([{"book": "DraftKings", "picks": 1}]).to_csv(by_book_path, index=False)
+    pd.DataFrame([{"pick_key": "pending-seed", "player_name": "Pitcher B"}]).to_csv(skipped_path, index=False)
+    summary_path.write_text(json.dumps({"picks": 1, "skipped_rows": 1}, indent=2), encoding="utf-8")
+    pd.DataFrame(columns=daily_card.OFFICIAL_PICKS_HISTORY_COLUMNS).to_csv(history_path, index=False)
+
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tracking_dir)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+
+    with pytest.raises(ValueError, match="Refusing to overwrite non-empty tracking summaries"):
+        daily_card.persist_official_picks_profit_reports()
+
+    assert len(pd.read_csv(grades_path)) == 1
+    assert len(pd.read_csv(by_book_path)) == 1
+    assert len(pd.read_csv(skipped_path)) == 1
+    assert json.loads(summary_path.read_text(encoding="utf-8"))["picks"] == 1
+
+
+def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_temp_paths(
+    tmp_path,
+    monkeypatch,
+):
+    tracking_dir = tmp_path / "data" / "tracking"
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+    history_path = tracking_dir / "official_picks_history.csv"
+    grades_path = tracking_dir / "official_picks_profit_report.csv"
+    by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
+    summary_path = tracking_dir / "official_picks_profit_summary.json"
+    skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+
+    pd.DataFrame(columns=daily_card.OFFICIAL_PICKS_HISTORY_COLUMNS).to_csv(history_path, index=False)
+
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tracking_dir)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+
+    daily_card.persist_official_picks_profit_reports()
+
+    assert grades_path.exists()
+    assert by_book_path.exists()
+    assert skipped_path.exists()
+    assert summary_path.exists()
+    assert pd.read_csv(grades_path).empty
+    assert pd.read_csv(by_book_path).empty
+    assert pd.read_csv(skipped_path).empty
+    assert json.loads(summary_path.read_text(encoding="utf-8"))["picks"] == 0
 
 
 def test_apply_statcast_results_to_official_picks_history_updates_yesterday_pick_results():
