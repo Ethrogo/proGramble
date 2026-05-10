@@ -348,6 +348,7 @@ def test_build_daily_picks_adds_implied_probability_value_score_and_confidence_t
     assert picks.loc[0, "implied_probability"] == pytest.approx(expected_implied_probability)
     assert picks.loc[0, "value_score"] == pytest.approx(expected_value_score)
     assert picks.loc[0, "confidence_tier"] in {"high", "medium", "low", "thin"}
+    assert picks.loc[0, "risk_tier"] in {"low", "medium", "high"}
 
 
 def test_build_daily_picks_preserves_projection_uncertainty_fields():
@@ -433,3 +434,32 @@ def test_filter_postable_picks_preserves_value_fields():
     assert "implied_probability" in postable.columns
     assert "value_score" in postable.columns
     assert "confidence_tier" in postable.columns
+
+
+def test_build_daily_picks_supports_pitcher_walks_value_and_risk_fields():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "bookmaker": "FanDuel",
+                "side": "Under",
+                "line": 2.5,
+                "price": -105,
+            }
+        ]
+    )
+
+    picks = build_daily_picks(joined_df, prediction_column="predicted_value")
+
+    assert picks.loc[0, "player_name"] == "Tarik Skubal"
+    assert picks.loc[0, "pick_side"] == "under"
+    assert picks.loc[0, "edge"] == pytest.approx(0.3)
+    assert picks.loc[0, "implied_probability"] == pytest.approx(105 / 205)
+    assert picks.loc[0, "value_score"] == pytest.approx(0.3 * (1 - (105 / 205)))
+    assert picks.loc[0, "confidence_tier"] == "thin"
+    assert picks.loc[0, "risk_tier"] == "medium"

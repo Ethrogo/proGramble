@@ -148,6 +148,7 @@ def build_daily_picks(
     picks["pick_type"] = picks["edge"].apply(policy.classify_pick_type)
     picks["value_score"] = picks["edge"].abs() * (1 - picks["implied_probability"])
     picks["confidence_tier"] = picks["value_score"].apply(policy.classify_confidence_tier)
+    picks["risk_tier"] = picks["implied_probability"].apply(policy.classify_risk_tier)
 
     if "player_name" in picks.columns:
         picks["player_name"] = picks["player_name_proj"].combine_first(picks["player_name"])
@@ -195,6 +196,7 @@ def build_daily_picks(
         "implied_probability",
         "value_score",
         "confidence_tier",
+        "risk_tier",
         "pick_type",
     ]
 

@@ -114,6 +114,12 @@ OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS = [
     "roi",
 ]
 
+SUPPORTED_STATCAST_GRADING_MARKETS = {
+    "": "strikeouts",
+    "pitcher_strikeouts": "strikeouts",
+    "pitcher_walks": "walks",
+}
+
 BuildPicksFn = Callable[[pd.DataFrame], pd.DataFrame]
 FilterPostablePicksFn = Callable[[pd.DataFrame], pd.DataFrame]
 DEFAULT_DAILY_CARD_WORKFLOWS = [
@@ -266,9 +272,14 @@ def _yesterday_game_date() -> str:
     ).strftime("%Y-%m-%d")
 
 
-def _is_pitcher_strikeout_history_row(row: pd.Series) -> bool:
+def _supports_statcast_history_row(row: pd.Series) -> bool:
     market_key = str(row.get("market_key", "") or "").strip()
-    return market_key in {"", "pitcher_strikeouts"}
+    return market_key in SUPPORTED_STATCAST_GRADING_MARKETS
+
+
+def _statcast_result_column_for_row(row: pd.Series) -> str | None:
+    market_key = str(row.get("market_key", "") or "").strip()
+    return SUPPORTED_STATCAST_GRADING_MARKETS.get(market_key)
 
 
 def _grade_pick_result_from_actual(actual: float, line: float, pick_side: str) -> str:
@@ -303,6 +314,7 @@ def load_pitcher_results_from_statcast(game_date: str) -> pd.DataFrame:
                 "pitcher",
                 "player_name",
                 "strikeouts",
+                "walks",
             ]
         )
 
@@ -350,18 +362,21 @@ def apply_statcast_results_to_official_picks_history(
         source_id_col="pitcher" if "pitcher" in pitcher_results.columns else PARTICIPANT_SOURCE_ID_COLUMN,
         source_id_type="mlbam_player",
     )
+    for stat_column in ["strikeouts", "walks"]:
+        if stat_column not in pitcher_results.columns:
+            pitcher_results[stat_column] = pd.NA
 
     result_lookup = pitcher_results.drop_duplicates(
         subset=["game_date", PARTICIPANT_JOIN_KEY_COLUMN],
         keep="last",
     )[
-        ["game_date", PARTICIPANT_JOIN_KEY_COLUMN, "strikeouts"]
+        ["game_date", PARTICIPANT_JOIN_KEY_COLUMN, "strikeouts", "walks"]
     ].copy()
 
     pending_mask = (
         (working["pick_type"] == "official")
         & (working["game_date"].astype(str) == game_date)
-        & working.apply(_is_pitcher_strikeout_history_row, axis=1)
+        & working.apply(_supports_statcast_history_row, axis=1)
         & (
             working["actual_value"].astype(str).str.strip().eq("")
             | working["result"].astype(str).str.strip().eq("")
@@ -377,15 +392,23 @@ def apply_statcast_results_to_official_picks_history(
         on=["game_date", PARTICIPANT_JOIN_KEY_COLUMN],
         how="left",
     )
-    resolved_mask = pending["strikeouts"].notna()
+    pending["statcast_result_column"] = pending.apply(_statcast_result_column_for_row, axis=1)
+    pending["actual_stat_value"] = pending.apply(
+        lambda row: row.get(str(row["statcast_result_column"]), pd.NA)
+        if row["statcast_result_column"]
+        else pd.NA,
+        axis=1,
+    )
+    resolved_mask = pd.to_numeric(pending["actual_stat_value"], errors="coerce").notna()
     if not resolved_mask.any():
         return working[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
 
-    pending.loc[resolved_mask, "actual_value"] = pending.loc[resolved_mask, "strikeouts"].apply(_format_stat_value)
-    pending.loc[resolved_mask, "actual_strikeouts"] = pending.loc[resolved_mask, "actual_value"]
+    pending.loc[resolved_mask, "actual_value"] = pending.loc[resolved_mask, "actual_stat_value"].apply(_format_stat_value)
+    strikeout_mask = resolved_mask & pending["statcast_result_column"].eq("strikeouts")
+    pending.loc[strikeout_mask, "actual_strikeouts"] = pending.loc[strikeout_mask, "actual_value"]
     pending.loc[resolved_mask, "result"] = pending.loc[resolved_mask].apply(
         lambda row: _grade_pick_result_from_actual(
-            actual=float(row["strikeouts"]),
+            actual=float(row["actual_stat_value"]),
             line=float(row["line"]),
             pick_side=str(row["pick_side"]),
         ),
@@ -411,7 +434,7 @@ def grade_official_picks_from_statcast(
     pending_mask = (
         (history_df["pick_type"] == "official")
         & (history_df["game_date"].astype(str) == target_date)
-        & history_df.apply(_is_pitcher_strikeout_history_row, axis=1)
+        & history_df.apply(_supports_statcast_history_row, axis=1)
         & (
             history_df["actual_value"].astype(str).str.strip().eq("")
             | history_df["result"].astype(str).str.strip().eq("")
