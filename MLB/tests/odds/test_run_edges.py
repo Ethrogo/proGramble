@@ -3,6 +3,8 @@
 import pandas as pd
 
 from odds import run_edges
+from common.contracts import validate_joined_odds_contract
+from pitcher_bb.config import PITCHER_BB_PROP_MARKET
 from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 
@@ -169,3 +171,73 @@ def test_run_edge_pipeline_returns_empty_when_odds_do_not_match_projection_names
 
     assert joined.empty
     assert best.empty
+
+
+def test_run_edge_pipeline_handles_pitcher_walks_market_with_shared_odds_shape(monkeypatch):
+    projections = pd.DataFrame(
+        [
+            {
+                "player_name": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "player_name_norm": "tarik skubal",
+            }
+        ]
+    )
+
+    fake_events = [
+        {
+            "id": "game_2",
+            "commence_time": "2026-04-18T19:10:00Z",
+            "home_team": "Detroit Tigers",
+            "away_team": "Cleveland Guardians",
+            "bookmakers": [
+                {
+                    "key": "fanduel",
+                    "last_update": "2026-04-18T14:00:00Z",
+                    "markets": [
+                        {
+                            "key": PITCHER_BB_PROP_MARKET,
+                            "outcomes": [
+                                {
+                                    "name": "Over",
+                                    "description": "Tarik Skubal",
+                                    "point": 1.5,
+                                    "price": -102,
+                                },
+                                {
+                                    "name": "Under",
+                                    "description": "Tarik Skubal",
+                                    "point": 1.5,
+                                    "price": -118,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+
+    def fake_fetch_all_player_props(market):
+        assert market == PITCHER_BB_PROP_MARKET
+        return fake_events
+
+    monkeypatch.setattr(run_edges, "fetch_all_player_props", fake_fetch_all_player_props)
+
+    joined, best = run_edges.run_edge_pipeline(
+        projections,
+        market=PITCHER_BB_PROP_MARKET,
+        prediction_column="predicted_value",
+        projection_join_key="player_name_norm",
+        odds_join_key="player_name_norm",
+    )
+
+    validate_joined_odds_contract(joined, prediction_column="predicted_value")
+    assert len(joined) == 2
+    assert set(joined["market_key"]) == {PITCHER_BB_PROP_MARKET}
+    assert set(joined["player_name_norm"]) == {"tarik skubal"}
+    assert joined["predicted_value"].iloc[0] == 2.2
+    assert best.iloc[0]["player_name_proj"] == "Tarik Skubal"
