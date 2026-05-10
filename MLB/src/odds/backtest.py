@@ -45,6 +45,19 @@ def _line_band(line: float) -> str:
     return "7.5+"
 
 
+def _edge_bucket(edge: float) -> str:
+    if pd.isna(edge):
+        return "unknown"
+    abs_edge = abs(float(edge))
+    if abs_edge < 0.5:
+        return "<0.5"
+    if abs_edge < 1.0:
+        return "0.5-1.0"
+    if abs_edge < 1.5:
+        return "1.0-1.5"
+    return "1.5+"
+
+
 def _grade_pick_outcome(actual: float, line: float, pick_side: str) -> str:
     if pick_side == "over":
         if actual > line:
@@ -116,6 +129,7 @@ def grade_pick_backtest(
         axis=1,
     )
     graded["line_band"] = graded["line"].apply(_line_band)
+    graded["edge_bucket"] = graded["edge"].apply(_edge_bucket)
     return graded
 
 
@@ -205,6 +219,7 @@ def run_pick_backtest(
             "by_confidence_tier": [],
             "by_book": [],
             "by_line_band": [],
+            "by_edge_bucket": [],
             "by_pick_side": [],
             "graded_picks": pd.DataFrame(),
         }
@@ -222,6 +237,7 @@ def run_pick_backtest(
             "by_confidence_tier": [],
             "by_book": [],
             "by_line_band": [],
+            "by_edge_bucket": [],
             "by_pick_side": [],
             "graded_picks": picks,
         }
@@ -234,6 +250,7 @@ def run_pick_backtest(
         "by_confidence_tier": _summarize_groups(graded, "confidence_tier"),
         "by_book": _summarize_groups(graded, "book"),
         "by_line_band": _summarize_groups(graded, "line_band"),
+        "by_edge_bucket": _summarize_groups(graded, "edge_bucket"),
         "by_pick_side": _summarize_groups(graded, "pick_side"),
         "graded_picks": graded,
     }
@@ -289,6 +306,7 @@ def run_historical_workflow_backtest(
             "by_confidence_tier": [],
             "by_book": [],
             "by_line_band": [],
+            "by_edge_bucket": [],
             "by_pick_side": [],
             "graded_picks": pd.DataFrame(),
         }

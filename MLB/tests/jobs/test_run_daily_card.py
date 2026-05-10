@@ -2019,6 +2019,66 @@ def test_apply_statcast_results_to_official_picks_history_updates_yesterday_pick
     assert updated.loc[0, "result"] == "W"
 
 
+def test_apply_statcast_results_to_official_picks_history_updates_pitcher_walk_results():
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-06|pitcher-walks-a",
+                "game_date": "2026-05-06",
+                "player_name": "Pitcher Walks A",
+                "participant_join_key": "mlbam_player:303",
+                "participant_id": "mlbam_player:303",
+                "participant_source_id": "303",
+                "participant_source_id_type": "mlbam_player",
+                "participant_name_norm": "pitcher walks a",
+                "sport": "MLB",
+                "market_key": "pitcher_walks",
+                "market_family": "player_prop",
+                "team": "AAA",
+                "opponent": "BBB",
+                "book": "FanDuel",
+                "bookmaker_key": "fanduel",
+                "event_id": "evt_walks",
+                "odds": "-105",
+                "price": -105,
+                "pick_side": "under",
+                "line": 2.5,
+                "market_selection_key": "MLB|pitcher_walks|mlbam_player:303|under|2.5",
+                "market_offer_key": "MLB|pitcher_walks|mlbam_player:303|under|2.5|fanduel",
+                "predicted_value": 2.2,
+                "edge": 0.3,
+                "confidence_tier": "low",
+                "pick_type": "official",
+                "result": "",
+                "actual_value": "",
+                "actual_strikeouts": "",
+                "record_source": "run_daily_card",
+            }
+        ]
+    )
+    pitcher_results_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-05-06",
+                "pitcher": 303,
+                "player_name": "Pitcher Walks A",
+                "strikeouts": 7,
+                "walks": 1,
+            }
+        ]
+    )
+
+    updated = daily_card.apply_statcast_results_to_official_picks_history(
+        history_df,
+        pitcher_results_df,
+        game_date="2026-05-06",
+    )
+
+    assert updated.loc[0, "actual_value"] == "1"
+    assert updated.loc[0, "actual_strikeouts"] == ""
+    assert updated.loc[0, "result"] == "W"
+
+
 def test_grade_official_picks_from_statcast_persists_updates_and_profit_reports(tmp_path, monkeypatch):
     tracking_dir = tmp_path / "data" / "tracking"
     tracking_dir.mkdir(parents=True, exist_ok=True)
@@ -2096,3 +2156,84 @@ def test_grade_official_picks_from_statcast_persists_updates_and_profit_reports(
     assert loaded_history.loc[0, "result"] == "L"
     assert grades_df.loc[0, "result"] == "L"
     assert summary_payload["losses"] == 1
+
+
+def test_grade_official_picks_from_statcast_persists_pitcher_walk_updates(tmp_path, monkeypatch):
+    tracking_dir = tmp_path / "data" / "tracking"
+    tracking_dir.mkdir(parents=True, exist_ok=True)
+    history_path = tracking_dir / "official_picks_history.csv"
+    grades_path = tracking_dir / "official_picks_profit_report.csv"
+    by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
+    summary_path = tracking_dir / "official_picks_profit_summary.json"
+    skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-06|pitcher-walks-a",
+                "game_date": "2026-05-06",
+                "player_name": "Pitcher Walks A",
+                "participant_join_key": "mlbam_player:303",
+                "participant_id": "mlbam_player:303",
+                "participant_source_id": "303",
+                "participant_source_id_type": "mlbam_player",
+                "participant_name_norm": "pitcher walks a",
+                "sport": "MLB",
+                "market_key": "pitcher_walks",
+                "market_family": "player_prop",
+                "team": "AAA",
+                "opponent": "BBB",
+                "book": "FanDuel",
+                "bookmaker_key": "fanduel",
+                "event_id": "evt_walks",
+                "odds": "-105",
+                "price": -105,
+                "pick_side": "under",
+                "line": 2.5,
+                "market_selection_key": "MLB|pitcher_walks|mlbam_player:303|under|2.5",
+                "market_offer_key": "MLB|pitcher_walks|mlbam_player:303|under|2.5|fanduel",
+                "predicted_value": 2.2,
+                "edge": 0.3,
+                "confidence_tier": "low",
+                "pick_type": "official",
+                "result": "",
+                "actual_value": "",
+                "actual_strikeouts": "",
+                "record_source": "run_daily_card",
+            }
+        ]
+    )
+    history_df.to_csv(history_path, index=False)
+
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_HISTORY_PATH", history_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+    monkeypatch.setattr(
+        daily_card,
+        "load_pitcher_results_from_statcast",
+        lambda game_date: pd.DataFrame(
+            [
+                {
+                    "game_date": game_date,
+                    "pitcher": 303,
+                    "player_name": "Pitcher Walks A",
+                    "strikeouts": 7,
+                    "walks": 1,
+                }
+            ]
+        ),
+    )
+
+    result = daily_card.grade_official_picks_from_statcast(game_date="2026-05-06")
+
+    loaded_history = pd.read_csv(history_path, keep_default_na=False)
+    grades_df = pd.read_csv(grades_path)
+    summary_payload = daily_card.json.loads(summary_path.read_text(encoding="utf-8"))
+
+    assert result["updated_rows"] == 1
+    assert str(loaded_history.loc[0, "actual_value"]) == "1"
+    assert loaded_history.loc[0, "result"] == "W"
+    assert grades_df.loc[0, "result"] == "W"
+    assert summary_payload["wins"] == 1

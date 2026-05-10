@@ -70,6 +70,11 @@ def test_run_pick_backtest_summarizes_workflow_by_betting_segments():
     assert by_band["4.5-5.5"]["picks"] == 1
     assert by_band["<=4.5"]["picks"] == 1
 
+    by_edge_bucket = {row["edge_bucket"]: row for row in backtest["by_edge_bucket"]}
+    assert by_edge_bucket["1.0-1.5"]["picks"] == 1
+    assert by_edge_bucket["0.5-1.0"]["picks"] == 1
+    assert by_edge_bucket["<0.5"]["picks"] == 1
+
     graded = backtest["graded_picks"]
     assert set(graded["outcome"]) == {"win", "loss"}
 
@@ -139,3 +144,46 @@ def test_run_historical_workflow_backtest_uses_native_lines_artifact_rows():
     assert backtest["available"] is True
     assert backtest["overall"][0]["picks"] == 2
     assert backtest["overall"][0]["wins"] == 2
+
+
+def test_run_pick_backtest_supports_pitcher_walks_and_edge_buckets():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Tarik Skubal",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "bookmaker": "FanDuel",
+                "side": "Under",
+                "line": 2.5,
+                "price": -105,
+                "actual_walks": 1,
+                "actual_value": 1,
+            },
+            {
+                "player_name_proj": "Chris Sale",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.1,
+                "predicted_value": 2.1,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 1.5,
+                "price": 110,
+                "actual_walks": 3,
+                "actual_value": 3,
+            },
+        ]
+    )
+
+    backtest = run_pick_backtest(
+        joined_df,
+        prediction_column="predicted_value",
+        actual_column="actual_value",
+    )
+
+    assert backtest["available"] is True
+    assert backtest["overall"][0]["picks"] == 2
+    assert backtest["overall"][0]["wins"] == 2
+    by_edge_bucket = {row["edge_bucket"]: row for row in backtest["by_edge_bucket"]}
+    assert set(by_edge_bucket) == {"0.5-1.0", "<0.5"}

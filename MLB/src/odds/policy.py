@@ -27,6 +27,11 @@ class PickRankingPolicy:
     market_ranking_rules: tuple[MarketRankingRule, ...]
     edge_tie_preference: str
     pick_type_order: tuple[str, ...]
+    risk_tier_thresholds: tuple[tuple[str, float], ...] = (
+        ("low", 0.58),
+        ("medium", 0.50),
+    )
+    risk_default_tier: str = "high"
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
 
     def classify_pick_type(self, edge: float) -> str:
@@ -43,6 +48,12 @@ class PickRankingPolicy:
             if value_score >= threshold:
                 return tier_name
         return self.confidence_default_tier
+
+    def classify_risk_tier(self, implied_probability: float) -> str:
+        for tier_name, threshold in self.risk_tier_thresholds:
+            if implied_probability >= threshold:
+                return tier_name
+        return self.risk_default_tier
 
     def select_best_market(self, player_df: pd.DataFrame, side: str) -> pd.Series:
         rule = self._market_rule_for_side(side)
@@ -150,6 +161,11 @@ DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY = PickRankingPolicy(
         ("low", 0.15),
     ),
     confidence_default_tier="thin",
+    risk_tier_thresholds=(
+        ("low", 0.58),
+        ("medium", 0.50),
+    ),
+    risk_default_tier="high",
     market_ranking_rules=(
         MarketRankingRule(
             side="over",
