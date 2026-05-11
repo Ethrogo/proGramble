@@ -10,7 +10,40 @@ from .config import (
     ODDS_SPORT,
     EVENT_DISCOVERY_MARKET,
     BOOKMAKERS,
+    BOOK_DISPLAY_NAMES,
+    BOOKMAKER_NOTES,
 )
+
+
+def summarize_event_bookmaker_coverage(
+    prop_events: list[dict],
+    *,
+    requested_bookmakers: list[str] | None = None,
+) -> dict[str, object]:
+    requested = requested_bookmakers or BOOKMAKERS
+    upstream_bookmaker_keys = sorted(
+        {
+            bookmaker.get("key", "")
+            for event in prop_events
+            for bookmaker in event.get("bookmakers", [])
+            if bookmaker.get("key")
+        }
+    )
+    missing_bookmakers = [book for book in requested if book not in upstream_bookmaker_keys]
+    return {
+        "requested_bookmakers": requested,
+        "upstream_bookmaker_keys": upstream_bookmaker_keys,
+        "upstream_bookmaker_names": [
+            BOOK_DISPLAY_NAMES.get(bookmaker_key, bookmaker_key)
+            for bookmaker_key in upstream_bookmaker_keys
+        ],
+        "missing_requested_bookmakers": missing_bookmakers,
+        "missing_requested_notes": {
+            bookmaker_key: BOOKMAKER_NOTES.get(bookmaker_key, "")
+            for bookmaker_key in missing_bookmakers
+            if BOOKMAKER_NOTES.get(bookmaker_key)
+        },
+    }
 
 
 def fetch_mlb_events(
@@ -86,8 +119,12 @@ def fetch_all_player_props(
     Fetch player prop odds for all today's MLB events for the given market.
     Returns a list of event-level prop payloads.
     """
-    events = fetch_mlb_events(sport=sport)
+    if bookmakers is None:
+        bookmakers = BOOKMAKERS
+
+    events = fetch_mlb_events(sport=sport, bookmakers=bookmakers)
     prop_events: list[dict] = []
+    failed_event_ids: list[str] = []
 
     for event in events:
         event_id = event.get("id")
@@ -106,6 +143,25 @@ def fetch_all_player_props(
                 prop_events.append(prop_data)
 
         except requests.HTTPError:
+            failed_event_ids.append(str(event_id))
             continue
+
+    coverage = summarize_event_bookmaker_coverage(
+        prop_events,
+        requested_bookmakers=bookmakers,
+    )
+    print(
+        "Live odds coverage:"
+        f" requested={coverage['requested_bookmakers']}"
+        f" upstream={coverage['upstream_bookmaker_keys']}"
+        f" missing={coverage['missing_requested_bookmakers']}"
+    )
+    if coverage["missing_requested_notes"]:
+        print(f"Live odds coverage notes: {coverage['missing_requested_notes']}")
+    if failed_event_ids:
+        print(
+            "WARNING: Live odds event fetches failed for event ids: "
+            f"{failed_event_ids}"
+        )
 
     return prop_events
