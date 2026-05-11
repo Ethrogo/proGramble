@@ -39,6 +39,10 @@ jobs:
         run: |
           python -m jobs.build_training_artifacts
 
+      - name: Build pitcher walks training artifacts
+        run: |
+          python -m jobs.build_training_artifacts_pitcher_bb
+
       - name: Run daily card
         run: |
           python -m jobs.run_daily_card

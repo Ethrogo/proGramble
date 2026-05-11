@@ -829,6 +829,29 @@ def test_build_today_predictions_for_pitcher_walk_workflow_adds_shared_predictio
     assert today_preds.loc[0, "participant_name_norm"] == "tarik skubal"
 
 
+def test_resolve_daily_card_workflows_includes_pitcher_walks_only_when_ready(monkeypatch):
+    monkeypatch.setattr(
+        daily_card,
+        "DEFAULT_DAILY_CARD_WORKFLOWS",
+        [daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW, daily_card.MLB_PITCHER_WALK_WORKFLOW],
+    )
+
+    monkeypatch.setattr(
+        daily_card,
+        "workflow_is_ready",
+        lambda workflow: workflow is daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    )
+    workflows_without_bb = daily_card.resolve_daily_card_workflows()
+    assert workflows_without_bb == [daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW]
+
+    monkeypatch.setattr(daily_card, "workflow_is_ready", lambda workflow: True)
+    workflows_with_bb = daily_card.resolve_daily_card_workflows()
+    assert workflows_with_bb == [
+        daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW,
+        daily_card.MLB_PITCHER_WALK_WORKFLOW,
+    ]
+
+
 def test_run_daily_card_combines_ready_workflow_outputs(monkeypatch, tmp_path):
     starters_df = pd.DataFrame(
         [
