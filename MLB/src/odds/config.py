@@ -12,6 +12,12 @@ EVENT_DISCOVERY_MARKET = "h2h"
 
 BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "williamhill_us"]
 
+BOOKMAKER_NOTES = {
+    # The Odds API documents this key as Caesars in the US region and notes that
+    # it is only available on paid subscriptions.
+    "williamhill_us": "Caesars (paid subscriptions only on The Odds API)",
+}
+
 BOOK_DISPLAY_NAMES = {
     "draftkings": "DraftKings",
     "fanduel": "FanDuel",
