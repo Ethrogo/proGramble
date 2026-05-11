@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from common.contracts import require_columns, validate_pitcher_games_contract
+from common.evaluation_artifacts import build_evaluation_summary
 from odds.historical_lines import build_historical_lines_artifact_df
 from pitcher_bb.config import (
     BASE_FEATURES,
@@ -38,6 +39,7 @@ PITCHER_GAMES_FILENAME = "pitcher_games.csv"
 MODEL_DF_FILENAME = "model_df.csv"
 HISTORICAL_LINES_FILENAME = "historical_lines.csv"
 METADATA_FILENAME = "metadata.json"
+EVALUATION_SUMMARY_FILENAME = "evaluation_summary.json"
 RAW_HISTORICAL_LINES_DIR = DATA_DIR / "raw" / "historical_lines"
 UNCERTAINTY_STDDEV_COLUMN = "walks_stddev_last10"
 
@@ -55,6 +57,7 @@ def artifact_paths(base_dir: Path) -> dict[str, Path]:
         "model_df": base_dir / MODEL_DF_FILENAME,
         "historical_lines": base_dir / HISTORICAL_LINES_FILENAME,
         "metadata": base_dir / METADATA_FILENAME,
+        "evaluation_summary": base_dir / EVALUATION_SUMMARY_FILENAME,
     }
 
 
@@ -265,6 +268,7 @@ def save_artifacts_to_dir(
     historical_lines_df: pd.DataFrame,
     model,
     metadata: dict,
+    evaluation_summary: dict,
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = artifact_paths(output_dir)
@@ -273,6 +277,10 @@ def save_artifacts_to_dir(
     historical_lines_df.to_csv(paths["historical_lines"], index=False)
     model.save_model(str(paths["model"]))
     paths["metadata"].write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    paths["evaluation_summary"].write_text(
+        json.dumps(evaluation_summary, indent=2),
+        encoding="utf-8",
+    )
     return paths
 
 
@@ -288,6 +296,11 @@ def build_training_artifacts() -> dict[str, Path]:
         pitcher_games,
         historical_lines_df=historical_lines_df,
     )
+    evaluation_summary = build_evaluation_summary(
+        metadata,
+        workflow_name="mlb_pitcher_walks",
+        artifact_family="pitcher_bb",
+    )
 
     promote_latest_to_previous()
     save_artifacts_to_dir(
@@ -297,6 +310,7 @@ def build_training_artifacts() -> dict[str, Path]:
         historical_lines_df=historical_lines_df,
         model=model,
         metadata=metadata,
+        evaluation_summary=evaluation_summary,
     )
     promote_staging_to_latest()
     return artifact_paths(LATEST_DIR)
