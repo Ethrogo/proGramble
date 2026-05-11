@@ -43,6 +43,11 @@ def test_save_artifacts_to_dir_writes_metadata_json(tmp_path):
         "training_window": {"train_split_date": "2025-08-01"},
         "evaluation_metrics": {"mae": 0.91},
     }
+    evaluation_summary = {
+        "artifact_type": "evaluation_summary",
+        "artifact_version": 1,
+        "sections": [],
+    }
 
     paths = training_job.save_artifacts_to_dir(
         output_dir=output_dir,
@@ -51,12 +56,16 @@ def test_save_artifacts_to_dir_writes_metadata_json(tmp_path):
         historical_lines_df=historical_lines_df,
         model=FakeModel(),
         metadata=metadata,
+        evaluation_summary=evaluation_summary,
     )
 
     saved_metadata = json.loads(paths["metadata"].read_text(encoding="utf-8"))
+    saved_evaluation_summary = json.loads(paths["evaluation_summary"].read_text(encoding="utf-8"))
 
     assert paths["metadata"].exists()
+    assert paths["evaluation_summary"].exists()
     assert saved_metadata == metadata
+    assert saved_evaluation_summary == evaluation_summary
 
 
 def test_promote_latest_to_previous_preserves_matching_metadata(tmp_path, monkeypatch):
@@ -77,6 +86,10 @@ def test_promote_latest_to_previous_preserves_matching_metadata(tmp_path, monkey
         '{"target": "strikeouts", "training_window": {"train_split_date": "2025-08-01"}}',
         encoding="utf-8",
     )
+    latest_paths["evaluation_summary"].write_text(
+        '{"artifact_type": "evaluation_summary", "artifact_version": 1, "sections": []}',
+        encoding="utf-8",
+    )
 
     monkeypatch.setattr(training_job, "LATEST_DIR", latest_dir)
     monkeypatch.setattr(training_job, "PREVIOUS_DIR", previous_dir)
@@ -85,10 +98,14 @@ def test_promote_latest_to_previous_preserves_matching_metadata(tmp_path, monkey
 
     previous_paths = training_job.artifact_paths(previous_dir)
     saved_metadata = json.loads(previous_paths["metadata"].read_text(encoding="utf-8"))
+    saved_evaluation_summary = json.loads(
+        previous_paths["evaluation_summary"].read_text(encoding="utf-8")
+    )
 
     assert previous_paths["model"].read_text(encoding="utf-8") == "model-bytes"
     assert saved_metadata["target"] == "strikeouts"
     assert saved_metadata["training_window"]["train_split_date"] == "2025-08-01"
+    assert saved_evaluation_summary["artifact_type"] == "evaluation_summary"
 
 
 def test_build_training_metadata_includes_richer_evaluation_sections():
@@ -150,6 +167,56 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
     assert metadata["uncertainty_model"]["interval_multiplier"] > 0
     assert metadata["uncertainty_model"]["calibration_rows"] > 0
     assert "documented_interpretation" in metadata["uncertainty_model"]
+
+
+def test_build_evaluation_summary_documents_modes_and_limitations():
+    metadata = {
+        "target": "strikeouts",
+        "training_window": {
+            "raw_statcast_start": "2024-03-28",
+            "raw_statcast_end": "2025-09-30",
+            "train_split_date": "2025-08-01",
+            "train_game_date_range": {"start": "2024-03-28", "end": "2025-07-31"},
+            "test_game_date_range": {"start": "2025-08-01", "end": "2025-09-30"},
+            "train_rows": 250,
+            "test_rows": 40,
+        },
+        "evaluation_metrics": {
+            "regression": {"mae": 0.9},
+            "bucketed_error": {"bucket_by": "predicted_strikeouts", "buckets": [{"rows": 4}]},
+            "uncertainty": {"rows": 40, "empirical_coverage": 0.8},
+            "workflow_backtest": {
+                "available": True,
+                "overall": [{"picks": 12, "decisions": 10, "profit_units": 1.5}],
+                "graded_pick_rows": 12,
+            },
+            "sample_sizes": {"train_rows": 250, "test_rows": 40},
+        },
+        "uncertainty_model": {
+            "documented_interpretation": "held-out interval meaning",
+            "interval_multiplier": 1.2,
+        },
+        "historical_lines_artifact": {
+            "limitations": "selected snapshots only",
+        },
+    }
+
+    summary = training_job.build_evaluation_summary(
+        metadata,
+        workflow_name="mlb_pitcher_strikeouts",
+        artifact_family="default",
+    )
+
+    sections = {section["name"]: section for section in summary["sections"]}
+    assert summary["artifact_type"] == "evaluation_summary"
+    assert sections["holdout_regression"]["mode"] == "fixed_holdout"
+    assert sections["holdout_regression"]["sample_size"]["rows"] == 40
+    assert sections["holdout_regression"]["date_range"]["start"] == "2025-08-01"
+    assert sections["workflow_backtest"]["mode"] == "fixed_holdout_workflow_backtest"
+    assert sections["workflow_backtest"]["sample_size"]["graded_pick_rows"] == 12
+    assert "selected snapshots only" in sections["workflow_backtest"]["limitations"]
+    assert sections["tracked_performance"]["mode"] == "all_time_tracked_performance"
+    assert sections["tracked_performance"]["included_in_reproducible_artifact"] is False
 
 
 def test_build_training_metadata_uses_native_historical_lines_for_real_backtest():

@@ -82,8 +82,11 @@ proGramble/
    - `pitcher_games.csv`
    - `model_df.csv`
    - `metadata.json`
+   - `evaluation_summary.json`
 
 Artifacts are written to `MLB/data/artifacts/_staging/`, validated, then promoted into `latest/`. If a previous `latest/` artifact set exists, it is copied into `previous/` first.
+
+`evaluation_summary.json` is the stable review artifact for model quality. It consolidates fixed-holdout regression metrics, fixed-holdout workflow backtest results, sample sizes, date ranges, and explicit limitations, while also documenting which evaluation modes are intentionally excluded from the reproducible build.
 
 ### 2. Daily card workflow
 
