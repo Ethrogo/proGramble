@@ -217,8 +217,13 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert loaded_history.loc[0, "pick_key"] == "2026-04-19|jacob degrom"
     assert loaded_grades.empty
     assert loaded_book_summary.empty
-    assert loaded_overall["picks"] == 0
-    assert loaded_overall["skipped_rows"] == 1
+    assert loaded_overall["current_regime_rule"] == {
+        "type": "start_date",
+        "start_date": daily_card.CURRENT_REGIME_START_DATE,
+    }
+    assert loaded_overall["summary_views"]["all_time"]["picks"] == 0
+    assert loaded_overall["summary_views"]["all_time"]["skipped_rows"] == 1
+    assert loaded_overall["summary_views"]["current_regime"]["picks"] == 0
 
 
 def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch, tmp_path):
@@ -1710,7 +1715,8 @@ def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summar
     assert len(pd.read_csv(grades_path)) == 1
     assert len(pd.read_csv(by_book_path)) == 1
     assert len(pd.read_csv(skipped_path)) == 1
-    assert json.loads(summary_path.read_text(encoding="utf-8"))["picks"] == 1
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary_payload["picks"] == 1
 
 
 def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_path, monkeypatch, capsys):
@@ -1889,24 +1895,32 @@ def test_build_official_picks_profit_report_grades_units_and_aggregates_by_book(
     assert pitcher_c["units_result"] == pytest.approx(0.0)
     assert pitcher_c["units_risked"] == pytest.approx(0.0)
 
-    by_book = {row["book"]: row for row in summary_by_book_df.to_dict(orient="records")}
-    assert by_book["DraftKings"]["units_profit"] == pytest.approx(100 / 110)
-    assert by_book["FanDuel"]["units_profit"] == pytest.approx(-1.0)
-    assert by_book["BetMGM"]["units_profit"] == pytest.approx(0.0)
-    assert by_book["DraftKings"]["roi"] == pytest.approx(100 / 110)
-    assert by_book["FanDuel"]["roi"] == pytest.approx(-1.0)
-    assert pd.isna(by_book["BetMGM"]["roi"])
+    by_scope_and_book = {
+        (row["summary_scope"], row["book"]): row
+        for row in summary_by_book_df.to_dict(orient="records")
+    }
+    assert by_scope_and_book[("all_time", "DraftKings")]["units_profit"] == pytest.approx(100 / 110)
+    assert by_scope_and_book[("all_time", "FanDuel")]["units_profit"] == pytest.approx(-1.0)
+    assert by_scope_and_book[("all_time", "BetMGM")]["units_profit"] == pytest.approx(0.0)
+    assert by_scope_and_book[("all_time", "DraftKings")]["roi"] == pytest.approx(100 / 110)
+    assert by_scope_and_book[("all_time", "FanDuel")]["roi"] == pytest.approx(-1.0)
+    assert pd.isna(by_scope_and_book[("all_time", "BetMGM")]["roi"])
 
     expected_profit = (100 / 110) - 1.0
-    assert overall_summary["picks"] == 3
-    assert overall_summary["wins"] == 1
-    assert overall_summary["losses"] == 1
-    assert overall_summary["pushes"] == 1
-    assert overall_summary["decisions"] == 2
-    assert overall_summary["units_risked"] == pytest.approx(2.0)
-    assert overall_summary["units_profit"] == pytest.approx(expected_profit)
-    assert overall_summary["roi"] == pytest.approx(expected_profit / 2.0)
-    assert overall_summary["skipped_rows"] == 1
+    assert overall_summary["current_regime_rule"] == {
+        "type": "start_date",
+        "start_date": daily_card.CURRENT_REGIME_START_DATE,
+    }
+    assert overall_summary["summary_views"]["all_time"]["picks"] == 3
+    assert overall_summary["summary_views"]["all_time"]["wins"] == 1
+    assert overall_summary["summary_views"]["all_time"]["losses"] == 1
+    assert overall_summary["summary_views"]["all_time"]["pushes"] == 1
+    assert overall_summary["summary_views"]["all_time"]["decisions"] == 2
+    assert overall_summary["summary_views"]["all_time"]["units_risked"] == pytest.approx(2.0)
+    assert overall_summary["summary_views"]["all_time"]["units_profit"] == pytest.approx(expected_profit)
+    assert overall_summary["summary_views"]["all_time"]["roi"] == pytest.approx(expected_profit / 2.0)
+    assert overall_summary["summary_views"]["all_time"]["skipped_rows"] == 1
+    assert overall_summary["summary_views"]["current_regime"]["picks"] == 0
     assert list(skipped_df["player_name"]) == ["Pitcher D"]
 
 
@@ -1964,11 +1978,64 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     skipped_df = pd.read_csv(skipped_path)
 
     assert grades_df.loc[0, "units_result"] == pytest.approx(100 / 110)
+    assert by_book_df.loc[0, "summary_scope"] == "all_time"
     assert by_book_df.loc[0, "book"] == "DraftKings"
     assert by_book_df.loc[0, "units_profit"] == pytest.approx(100 / 110)
-    assert summary_payload["picks"] == 1
-    assert summary_payload["units_profit"] == pytest.approx(100 / 110)
+    assert summary_payload["summary_views"]["all_time"]["picks"] == 1
+    assert summary_payload["summary_views"]["all_time"]["units_profit"] == pytest.approx(100 / 110)
+    assert summary_payload["summary_views"]["current_regime"]["picks"] == 0
     assert skipped_df.empty
+
+
+def test_build_official_picks_profit_report_includes_current_regime_view():
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-06|pitcher a",
+                "game_date": "2026-05-06",
+                "player_name": "Pitcher A",
+                "book": "DraftKings",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "over",
+                "line": 5.5,
+                "predicted_strikeouts": 6.4,
+                "edge": 0.9,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "W",
+                "actual_strikeouts": "7",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": f"{daily_card.CURRENT_REGIME_START_DATE}|pitcher b",
+                "game_date": daily_card.CURRENT_REGIME_START_DATE,
+                "player_name": "Pitcher B",
+                "book": "FanDuel",
+                "odds": "+100",
+                "price": 100,
+                "pick_side": "under",
+                "line": 4.5,
+                "predicted_strikeouts": 3.9,
+                "edge": 0.6,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+                "result": "L",
+                "actual_strikeouts": "5",
+                "record_source": "run_daily_card",
+            },
+        ]
+    )
+
+    report = daily_card.build_official_picks_profit_report(history_df)
+
+    assert report["overall_summary"]["summary_views"]["all_time"]["picks"] == 2
+    assert report["overall_summary"]["summary_views"]["current_regime"]["picks"] == 1
+    assert report["overall_summary"]["summary_views"]["current_regime"]["losses"] == 1
+
+    by_scope = report["summary_by_book_df"]["summary_scope"].tolist()
+    assert "all_time" in by_scope
+    assert "current_regime" in by_scope
 
 
 def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_summaries_with_empty_history(
@@ -2002,7 +2069,8 @@ def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_su
     assert len(pd.read_csv(grades_path)) == 1
     assert len(pd.read_csv(by_book_path)) == 1
     assert len(pd.read_csv(skipped_path)) == 1
-    assert json.loads(summary_path.read_text(encoding="utf-8"))["picks"] == 1
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary_payload["picks"] == 1
 
 
 def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_temp_paths(
@@ -2035,7 +2103,8 @@ def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_
     assert pd.read_csv(grades_path).empty
     assert pd.read_csv(by_book_path).empty
     assert pd.read_csv(skipped_path).empty
-    assert json.loads(summary_path.read_text(encoding="utf-8"))["picks"] == 0
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary_payload["summary_views"]["all_time"]["picks"] == 0
 
 
 def test_apply_statcast_results_to_official_picks_history_updates_yesterday_pick_results():
@@ -2231,7 +2300,8 @@ def test_grade_official_picks_from_statcast_persists_updates_and_profit_reports(
     assert str(loaded_history.loc[0, "actual_strikeouts"]) == "7"
     assert loaded_history.loc[0, "result"] == "L"
     assert grades_df.loc[0, "result"] == "L"
-    assert summary_payload["losses"] == 1
+    assert summary_payload["summary_views"]["all_time"]["losses"] == 1
+    assert summary_payload["summary_views"]["current_regime"]["losses"] == 0
 
 
 def test_grade_official_picks_from_statcast_persists_pitcher_walk_updates(tmp_path, monkeypatch):
@@ -2312,4 +2382,5 @@ def test_grade_official_picks_from_statcast_persists_pitcher_walk_updates(tmp_pa
     assert str(loaded_history.loc[0, "actual_value"]) == "1"
     assert loaded_history.loc[0, "result"] == "W"
     assert grades_df.loc[0, "result"] == "W"
-    assert summary_payload["wins"] == 1
+    assert summary_payload["summary_views"]["all_time"]["wins"] == 1
+    assert summary_payload["summary_views"]["current_regime"]["wins"] == 0

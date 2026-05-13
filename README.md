@@ -110,6 +110,17 @@ Outputs are written to:
 - `MLB/data/outputs/edges/today_joined_edges.csv`
 - `MLB/data/outputs/picks/today_all_picks.csv`
 - `MLB/data/outputs/picks/today_postable_picks.csv`
+- `MLB/data/tracking/official_picks_history.csv`
+- `MLB/data/tracking/official_picks_profit_report.csv`
+- `MLB/data/tracking/official_picks_profit_by_book.csv`
+- `MLB/data/tracking/official_picks_profit_summary.json`
+
+Tracked performance is reproducible from `official_picks_history.csv`. The repo publishes two summary views:
+
+- `all_time`: every tracked official pick that can be graded from the history ledger
+- `current_regime`: every tracked official pick with `game_date >= 2026-05-07`
+
+The current-regime rule is intentionally date-based so it can be rebuilt from tracked history alone, including older manual seed rows that may not carry model or policy version metadata.
 
 ### 3. Contracts and validation
 
@@ -192,6 +203,14 @@ cd MLB
 $env:PYTHONPATH = "src"
 $env:ODDS_API_KEY = "your_key_here"
 python -m jobs.run_daily_card
+```
+
+Rebuild tracked performance summaries from the history ledger:
+
+```powershell
+cd MLB
+$env:PYTHONPATH = "src"
+python -c "from jobs.run_daily_card import persist_official_picks_profit_reports; persist_official_picks_profit_reports(allow_empty_replacement=True)"
 ```
 
 ## Testing
