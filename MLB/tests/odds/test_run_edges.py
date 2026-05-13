@@ -64,13 +64,16 @@ def test_run_edge_pipeline_returns_joined_and_best_edges(monkeypatch):
         fake_fetch_all_player_props,
     )
 
-    joined, best = run_edges.run_edge_pipeline(
+    joined, best, diagnostics = run_edges.run_edge_pipeline(
         projections,
         market=PITCHER_K_PROP_MARKET,
     )
 
     assert len(joined) == 2
     assert len(best) == 1
+    assert diagnostics["raw_event_count"] == 1
+    assert diagnostics["normalized_odds_rows"] == 2
+    assert diagnostics["joined_rows"] == 2
     assert best.iloc[0]["player_name_proj"] == "Jacob deGrom"
     assert best.iloc[0]["bookmaker"] == "DraftKings"
 
@@ -87,7 +90,7 @@ def test_run_edge_pipeline_returns_empty_when_no_odds(monkeypatch):
         ]
     )
 
-    def fake_fetch_all_player_props(market):
+    def fake_fetch_all_player_props(market, **kwargs):
         assert market == PITCHER_K_PROP_MARKET
         return []
 
@@ -97,7 +100,7 @@ def test_run_edge_pipeline_returns_empty_when_no_odds(monkeypatch):
         fake_fetch_all_player_props,
     )
 
-    joined, best = run_edges.run_edge_pipeline(
+    joined, best, diagnostics = run_edges.run_edge_pipeline(
         projections,
         market=PITCHER_K_PROP_MARKET,
     )
@@ -106,6 +109,7 @@ def test_run_edge_pipeline_returns_empty_when_no_odds(monkeypatch):
     assert isinstance(best, pd.DataFrame)
     assert joined.empty
     assert best.empty
+    assert diagnostics["normalized_odds_rows"] == 0
 
 
 def test_run_edge_pipeline_returns_empty_when_odds_do_not_match_projection_names(monkeypatch):
@@ -164,13 +168,15 @@ def test_run_edge_pipeline_returns_empty_when_odds_do_not_match_projection_names
         fake_fetch_all_player_props,
     )
 
-    joined, best = run_edges.run_edge_pipeline(
+    joined, best, diagnostics = run_edges.run_edge_pipeline(
         projections,
         market=PITCHER_K_PROP_MARKET,
     )
 
     assert joined.empty
     assert best.empty
+    assert diagnostics["normalized_odds_rows"] == 2
+    assert diagnostics["joined_rows"] == 0
 
 
 def test_run_edge_pipeline_handles_pitcher_walks_market_with_shared_odds_shape(monkeypatch):
@@ -227,7 +233,7 @@ def test_run_edge_pipeline_handles_pitcher_walks_market_with_shared_odds_shape(m
 
     monkeypatch.setattr(run_edges, "fetch_all_player_props", fake_fetch_all_player_props)
 
-    joined, best = run_edges.run_edge_pipeline(
+    joined, best, diagnostics = run_edges.run_edge_pipeline(
         projections,
         market=PITCHER_BB_PROP_MARKET,
         prediction_column="predicted_value",
@@ -240,4 +246,70 @@ def test_run_edge_pipeline_handles_pitcher_walks_market_with_shared_odds_shape(m
     assert set(joined["market_key"]) == {PITCHER_BB_PROP_MARKET}
     assert set(joined["player_name_norm"]) == {"tarik skubal"}
     assert joined["predicted_value"].iloc[0] == 2.2
+    assert diagnostics["joined_rows"] == 2
     assert best.iloc[0]["player_name_proj"] == "Tarik Skubal"
+
+
+def test_run_edge_pipeline_retries_without_bookmaker_filter_when_filtered_fetch_has_no_rows(monkeypatch):
+    projections = pd.DataFrame(
+        [
+            {
+                "player_name": "Tarik Skubal",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "player_name_norm": "tarik skubal",
+            }
+        ]
+    )
+
+    calls: list[bool] = []
+
+    def fake_fetch_all_player_props(market, **kwargs):
+        assert market == PITCHER_BB_PROP_MARKET
+        use_configured = kwargs.get("use_configured_bookmakers", True)
+        calls.append(use_configured)
+        if use_configured:
+            return []
+        return [
+            {
+                "id": "game_2",
+                "commence_time": "2026-04-18T19:10:00Z",
+                "home_team": "Detroit Tigers",
+                "away_team": "Cleveland Guardians",
+                "bookmakers": [
+                    {
+                        "key": "fanduel",
+                        "last_update": "2026-04-18T14:00:00Z",
+                        "markets": [
+                            {
+                                "key": PITCHER_BB_PROP_MARKET,
+                                "outcomes": [
+                                    {
+                                        "name": "Over",
+                                        "description": "Tarik Skubal",
+                                        "point": 1.5,
+                                        "price": -102,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+    monkeypatch.setattr(run_edges, "fetch_all_player_props", fake_fetch_all_player_props)
+
+    joined, best, diagnostics = run_edges.run_edge_pipeline(
+        projections,
+        market=PITCHER_BB_PROP_MARKET,
+        prediction_column="predicted_value",
+        projection_join_key="player_name_norm",
+        odds_join_key="player_name_norm",
+    )
+
+    assert calls == [True, False]
+    assert len(joined) == 1
+    assert len(best) == 1
+    assert diagnostics["fetch_scope"] == "all_region_books"
+    assert diagnostics["bookmaker_filter_applied"] is False

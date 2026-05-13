@@ -20,7 +20,7 @@ def summarize_event_bookmaker_coverage(
     *,
     requested_bookmakers: list[str] | None = None,
 ) -> dict[str, object]:
-    requested = requested_bookmakers or BOOKMAKERS
+    requested = requested_bookmakers or []
     upstream_bookmaker_keys = sorted(
         {
             bookmaker.get("key", "")
@@ -68,10 +68,11 @@ def fetch_mlb_events(
         "apiKey": ODDS_API_KEY,
         "regions": "us",
         "markets": market,
-        "bookmakers": ",".join(bookmakers),
         "oddsFormat": odds_format,
         "dateFormat": date_format,
     }
+    if bookmakers:
+        params["bookmakers"] = ",".join(bookmakers)
 
     response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()
@@ -100,10 +101,11 @@ def fetch_event_player_props(
         "apiKey": ODDS_API_KEY,
         "regions": "us",
         "markets": market,
-        "bookmakers": ",".join(bookmakers),
         "oddsFormat": odds_format,
         "dateFormat": date_format,
     }
+    if bookmakers:
+        params["bookmakers"] = ",".join(bookmakers)
 
     response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()
@@ -114,12 +116,14 @@ def fetch_all_player_props(
     market: str,
     sport: str = ODDS_SPORT,
     bookmakers: list[str] | None = None,
+    *,
+    use_configured_bookmakers: bool = True,
 ) -> list[dict]:
     """
     Fetch player prop odds for all today's MLB events for the given market.
     Returns a list of event-level prop payloads.
     """
-    if bookmakers is None:
+    if bookmakers is None and use_configured_bookmakers:
         bookmakers = BOOKMAKERS
 
     events = fetch_mlb_events(sport=sport, bookmakers=bookmakers)
