@@ -15,6 +15,18 @@ from pitcher_bb.workflow import MLB_PITCHER_WALK_WORKFLOW
 from pitcher_k.config import PITCHER_K_PROP_MARKET
 
 
+def test_tracking_artifact_paths_are_isolated_from_committed_repo_files(tmp_path):
+    committed_tracking_dir = daily_card.PROJECT_ROOT / "data" / "tracking"
+
+    assert daily_card.TRACKING_DIR != committed_tracking_dir
+    assert daily_card.OFFICIAL_PICKS_HISTORY_PATH.parent == daily_card.TRACKING_DIR
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_HISTORY_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_GRADES_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_SKIPPED_PATH.parents
+
+
 def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp_path):
     starters_df = pd.DataFrame(
         [
