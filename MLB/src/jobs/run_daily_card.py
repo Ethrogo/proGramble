@@ -1000,6 +1000,47 @@ def workflow_is_ready(workflow: ModelingWorkflowSpec) -> bool:
     return True
 
 
+def _build_no_edges_message(
+    *,
+    workflow: ModelingWorkflowSpec,
+    diagnostics: dict[str, object] | None,
+) -> str:
+    diagnostics = diagnostics or {}
+    normalized_odds_rows = int(diagnostics.get("normalized_odds_rows", 0) or 0)
+    raw_event_count = int(diagnostics.get("raw_event_count", 0) or 0)
+    joined_rows = int(diagnostics.get("joined_rows", 0) or 0)
+    fetch_scope = str(diagnostics.get("fetch_scope", "") or "")
+    initial_fetch = diagnostics.get("initial_fetch")
+    initial_odds_rows = 0
+    if isinstance(initial_fetch, dict):
+        initial_odds_rows = int(initial_fetch.get("normalized_odds_rows", 0) or 0)
+
+    if normalized_odds_rows == 0 and initial_odds_rows == 0:
+        if fetch_scope == "all_region_books":
+            return (
+                "No live odds rows were returned for today's "
+                f"{workflow.prop_type} market from either the configured bookmakers or the broader "
+                "US bookmaker feed, so no edges or picks were generated."
+            )
+        return (
+            "No live odds rows were returned for today's "
+            f"{workflow.prop_type} market from the configured bookmakers, so no edges or picks "
+            "were generated."
+        )
+
+    if joined_rows == 0:
+        return (
+            "Live odds were available for today's "
+            f"{workflow.prop_type} market ({normalized_odds_rows} normalized rows across "
+            f"{raw_event_count} event(s)), but none matched today's projections, so no edges or "
+            "picks were generated."
+        )
+
+    return (
+        f"No edges or picks were generated for today's {workflow.prop_type} run."
+    )
+
+
 def resolve_daily_card_workflows(
     workflows: list[ModelingWorkflowSpec] | None = None,
 ) -> list[ModelingWorkflowSpec]:
@@ -1067,7 +1108,7 @@ def run_workflow_daily_card(
     run_message: str | None = None
 
     try:
-        joined_df, _ = run_edge_pipeline(
+        joined_df, _, edge_diagnostics = run_edge_pipeline(
             today_preds,
             selected_market,
             participant_key=workflow.participant_key,
@@ -1081,9 +1122,9 @@ def run_workflow_daily_card(
         joined_df = _tag_workflow_frame(joined_df, workflow)
         if joined_df.empty:
             run_status = "degraded"
-            run_message = (
-                "Live odds were fetched but no matching odds rows were available for today's "
-                f"{workflow.prop_type} projections, so no edges or picks were generated."
+            run_message = _build_no_edges_message(
+                workflow=workflow,
+                diagnostics=edge_diagnostics,
             )
             print(f"WARNING: {run_message}")
             joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)

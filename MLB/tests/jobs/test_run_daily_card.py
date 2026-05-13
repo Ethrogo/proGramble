@@ -112,7 +112,7 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
 
     def fake_run_edge_pipeline(preds, market, **kwargs):
         assert market == PITCHER_K_PROP_MARKET
-        return joined_df, joined_df
+        return joined_df, joined_df, {"raw_event_count": 1, "normalized_odds_rows": 1, "joined_rows": 1}
 
     monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
     monkeypatch.setattr(
@@ -317,7 +317,7 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     def fake_run_edge_pipeline(preds, market, **kwargs):
         calls["market"] = market
         calls["join_kwargs"] = kwargs
-        return joined_df, joined_df
+        return joined_df, joined_df, {"raw_event_count": 1, "normalized_odds_rows": 1, "joined_rows": 1}
 
     def fake_build_picks(joined):
         calls["build_picks_joined"] = joined.copy()
@@ -583,7 +583,7 @@ def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypa
     def fake_run_edge_pipeline(preds, market, **kwargs):
         calls["market"] = market
         calls["join_kwargs"] = kwargs
-        return joined_df, joined_df
+        return joined_df, joined_df, {"raw_event_count": 1, "normalized_odds_rows": 1, "joined_rows": 1}
 
     def fake_build_daily_picks(df, policy, prediction_column="predicted_value"):
         calls["build_policy"] = policy
@@ -715,7 +715,7 @@ def test_run_daily_card_default_workflow_joins_live_odds_on_normalized_name(monk
     def fake_run_edge_pipeline(preds, market, **kwargs):
         calls["joined_preds"] = preds.copy()
         calls["join_kwargs"] = kwargs
-        return joined_df, joined_df
+        return joined_df, joined_df, {"raw_event_count": 1, "normalized_odds_rows": 1, "joined_rows": 1}
 
     monkeypatch.setattr(daily_card, "run_edge_pipeline", fake_run_edge_pipeline)
     monkeypatch.setattr(
@@ -850,6 +850,31 @@ def test_resolve_daily_card_workflows_includes_pitcher_walks_only_when_ready(mon
         daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW,
         daily_card.MLB_PITCHER_WALK_WORKFLOW,
     ]
+
+
+def test_build_no_edges_message_distinguishes_empty_odds_from_join_miss():
+    no_odds_message = daily_card._build_no_edges_message(
+        workflow=MLB_PITCHER_WALK_WORKFLOW,
+        diagnostics={
+            "fetch_scope": "all_region_books",
+            "raw_event_count": 0,
+            "normalized_odds_rows": 0,
+            "joined_rows": 0,
+            "initial_fetch": {"normalized_odds_rows": 0},
+        },
+    )
+    no_join_message = daily_card._build_no_edges_message(
+        workflow=MLB_PITCHER_WALK_WORKFLOW,
+        diagnostics={
+            "fetch_scope": "configured_books",
+            "raw_event_count": 7,
+            "normalized_odds_rows": 24,
+            "joined_rows": 0,
+        },
+    )
+
+    assert "No live odds rows were returned" in no_odds_message
+    assert "none matched today's projections" in no_join_message
 
 
 def test_run_daily_card_combines_ready_workflow_outputs(monkeypatch, tmp_path):
@@ -1072,7 +1097,7 @@ def test_run_workflow_daily_card_uses_pitcher_walk_market_and_validates_joined_o
         calls["market"] = market
         calls["join_kwargs"] = kwargs
         calls["preds"] = preds.copy()
-        return joined_df, joined_df
+        return joined_df, joined_df, {"raw_event_count": 1, "normalized_odds_rows": 1, "joined_rows": 1}
 
     def fake_build_daily_picks(df, policy, prediction_column="predicted_value"):
         calls["prediction_column"] = prediction_column
@@ -1502,7 +1527,15 @@ def test_run_daily_card_handles_empty_joined_odds_gracefully(monkeypatch, tmp_pa
         "build_today_predictions_for_workflow",
         lambda *, starters_df, pitcher_games, model, workflow: today_preds,
     )
-    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda *args, **kwargs: (pd.DataFrame(), pd.DataFrame()))
+    monkeypatch.setattr(
+        daily_card,
+        "run_edge_pipeline",
+        lambda *args, **kwargs: (
+            pd.DataFrame(),
+            pd.DataFrame(),
+            {"raw_event_count": 0, "normalized_odds_rows": 0, "joined_rows": 0},
+        ),
+    )
 
     monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
@@ -1557,7 +1590,7 @@ def test_run_daily_card_handles_empty_joined_odds_gracefully(monkeypatch, tmp_pa
     assert loaded_picks.empty
     assert loaded_post.empty
     assert status_payload["status"] == "degraded"
-    assert "no matching odds rows were available" in status_payload["message"]
+    assert "No live odds rows were returned" in status_payload["message"]
 
 
 def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summaries(
@@ -1631,7 +1664,15 @@ def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summar
         "build_today_predictions_for_workflow",
         lambda *, starters_df, pitcher_games, model, workflow: today_preds,
     )
-    monkeypatch.setattr(daily_card, "run_edge_pipeline", lambda *args, **kwargs: (pd.DataFrame(), pd.DataFrame()))
+    monkeypatch.setattr(
+        daily_card,
+        "run_edge_pipeline",
+        lambda *args, **kwargs: (
+            pd.DataFrame(),
+            pd.DataFrame(),
+            {"raw_event_count": 0, "normalized_odds_rows": 0, "joined_rows": 0},
+        ),
+    )
 
     monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(daily_card, "OUTPUT_DIR", outputs_dir)
