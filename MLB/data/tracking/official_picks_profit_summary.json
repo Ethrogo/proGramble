@@ -1,13 +1,34 @@
 {
-  "books": 3,
-  "picks": 70,
-  "wins": 40,
-  "losses": 29,
-  "pushes": 1,
-  "decisions": 69,
-  "units_risked": 69.0,
-  "units_profit": 3.5830644184561975,
-  "win_rate": 0.5797101449275363,
-  "roi": 0.05192846983269851,
-  "skipped_rows": 3
+  "summary_views": {
+    "all_time": {
+      "books": 3,
+      "picks": 70,
+      "wins": 40,
+      "losses": 29,
+      "pushes": 1,
+      "decisions": 69,
+      "units_risked": 69.0,
+      "units_profit": 3.5830644184561975,
+      "win_rate": 0.5797101449275363,
+      "roi": 0.05192846983269851,
+      "skipped_rows": 3
+    },
+    "current_regime": {
+      "books": 3,
+      "picks": 18,
+      "wins": 11,
+      "losses": 7,
+      "pushes": 0,
+      "decisions": 18,
+      "units_risked": 18.0,
+      "units_profit": 2.409857065670074,
+      "win_rate": 0.6111111111111112,
+      "roi": 0.1338809480927819,
+      "skipped_rows": 3
+    }
+  },
+  "current_regime_rule": {
+    "type": "start_date",
+    "start_date": "2026-05-07"
+  }
 }

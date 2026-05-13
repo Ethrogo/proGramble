@@ -58,6 +58,7 @@ OFFICIAL_PICKS_GRADES_PATH = TRACKING_DIR / "official_picks_profit_report.csv"
 OFFICIAL_PICKS_BOOK_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_by_book.csv"
 OFFICIAL_PICKS_OVERALL_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary.json"
 OFFICIAL_PICKS_SKIPPED_PATH = TRACKING_DIR / "official_picks_profit_skipped.csv"
+CURRENT_REGIME_START_DATE = "2026-05-07"
 
 OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "pick_key",
@@ -102,6 +103,19 @@ OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS = OFFICIAL_PICKS_HISTORY_COLUMNS + [
 ]
 
 OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS = [
+    "book",
+    "picks",
+    "wins",
+    "losses",
+    "pushes",
+    "decisions",
+    "units_risked",
+    "units_profit",
+    "win_rate",
+    "roi",
+]
+OFFICIAL_PICKS_PROFIT_SUMMARY_SCOPE_COLUMNS = [
+    "summary_scope",
     "book",
     "picks",
     "wins",
@@ -470,6 +484,10 @@ def empty_official_picks_profit_summary_df() -> pd.DataFrame:
     return pd.DataFrame(columns=OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS)
 
 
+def empty_official_picks_profit_summary_by_scope_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=OFFICIAL_PICKS_PROFIT_SUMMARY_SCOPE_COLUMNS)
+
+
 def summarize_official_picks_profit_by_book(graded_df: pd.DataFrame) -> pd.DataFrame:
     if graded_df.empty:
         return empty_official_picks_profit_summary_df()
@@ -506,23 +524,68 @@ def summarize_official_picks_profit_by_book(graded_df: pd.DataFrame) -> pd.DataF
     ).reset_index(drop=True)
 
 
+def _empty_profit_summary_metrics() -> dict[str, int | float | None]:
+    return {
+        "books": 0,
+        "picks": 0,
+        "wins": 0,
+        "losses": 0,
+        "pushes": 0,
+        "decisions": 0,
+        "units_risked": 0.0,
+        "units_profit": 0.0,
+        "win_rate": None,
+        "roi": None,
+        "skipped_rows": 0,
+    }
+
+
+def _build_profit_summary_metrics(
+    graded_df: pd.DataFrame,
+    summary_by_book_df: pd.DataFrame,
+    skipped_df: pd.DataFrame,
+) -> dict[str, int | float | None]:
+    wins = int((graded_df["result_normalized"] == "W").sum())
+    losses = int((graded_df["result_normalized"] == "L").sum())
+    pushes = int((graded_df["result_normalized"] == "Push").sum())
+    decisions = wins + losses
+    units_risked = float(graded_df["units_risked"].sum()) if not graded_df.empty else 0.0
+    units_profit = float(pd.to_numeric(graded_df["units_result"], errors="coerce").fillna(0.0).sum())
+
+    return {
+        "books": int(summary_by_book_df["book"].nunique()) if not summary_by_book_df.empty else 0,
+        "picks": int(len(graded_df)),
+        "wins": wins,
+        "losses": losses,
+        "pushes": pushes,
+        "decisions": decisions,
+        "units_risked": units_risked,
+        "units_profit": units_profit,
+        "win_rate": (wins / decisions) if decisions else None,
+        "roi": (units_profit / units_risked) if units_risked else None,
+        "skipped_rows": int(len(skipped_df)),
+    }
+
+
+def _current_regime_mask(history_df: pd.DataFrame) -> pd.Series:
+    game_dates = pd.to_datetime(history_df.get("game_date", ""), errors="coerce")
+    return game_dates >= pd.Timestamp(CURRENT_REGIME_START_DATE)
+
+
 def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, object]:
     if history_df.empty:
         return {
             "graded_df": empty_official_picks_profit_report_df(),
-            "summary_by_book_df": empty_official_picks_profit_summary_df(),
+            "summary_by_book_df": empty_official_picks_profit_summary_by_scope_df(),
             "overall_summary": {
-                "books": 0,
-                "picks": 0,
-                "wins": 0,
-                "losses": 0,
-                "pushes": 0,
-                "decisions": 0,
-                "units_risked": 0.0,
-                "units_profit": 0.0,
-                "win_rate": None,
-                "roi": None,
-                "skipped_rows": 0,
+                "summary_views": {
+                    "all_time": _empty_profit_summary_metrics(),
+                    "current_regime": _empty_profit_summary_metrics(),
+                },
+                "current_regime_rule": {
+                    "type": "start_date",
+                    "start_date": CURRENT_REGIME_START_DATE,
+                },
             },
             "skipped_df": empty_official_picks_profit_report_df(),
         }
@@ -536,19 +599,16 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
     if official_df.empty:
         return {
             "graded_df": empty_official_picks_profit_report_df(),
-            "summary_by_book_df": empty_official_picks_profit_summary_df(),
+            "summary_by_book_df": empty_official_picks_profit_summary_by_scope_df(),
             "overall_summary": {
-                "books": 0,
-                "picks": 0,
-                "wins": 0,
-                "losses": 0,
-                "pushes": 0,
-                "decisions": 0,
-                "units_risked": 0.0,
-                "units_profit": 0.0,
-                "win_rate": None,
-                "roi": None,
-                "skipped_rows": 0,
+                "summary_views": {
+                    "all_time": _empty_profit_summary_metrics(),
+                    "current_regime": _empty_profit_summary_metrics(),
+                },
+                "current_regime_rule": {
+                    "type": "start_date",
+                    "start_date": CURRENT_REGIME_START_DATE,
+                },
             },
             "skipped_df": empty_official_picks_profit_report_df(),
         }
@@ -575,27 +635,47 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
 
     graded_df = working.loc[gradeable_mask, OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS].copy()
     skipped_df = working.loc[~gradeable_mask, OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS].copy()
-    summary_by_book_df = summarize_official_picks_profit_by_book(graded_df)
+    all_time_summary_by_book_df = summarize_official_picks_profit_by_book(graded_df)
 
-    wins = int((graded_df["result_normalized"] == "W").sum())
-    losses = int((graded_df["result_normalized"] == "L").sum())
-    pushes = int((graded_df["result_normalized"] == "Push").sum())
-    decisions = wins + losses
-    units_risked = float(graded_df["units_risked"].sum()) if not graded_df.empty else 0.0
-    units_profit = float(pd.to_numeric(graded_df["units_result"], errors="coerce").fillna(0.0).sum())
+    current_regime_history_df = official_df.loc[_current_regime_mask(official_df)].copy()
+    current_regime_keys = set(current_regime_history_df["pick_key"].astype(str))
+    current_regime_graded_df = graded_df.loc[
+        graded_df["pick_key"].astype(str).isin(current_regime_keys)
+    ].copy()
+    current_regime_skipped_df = skipped_df.loc[
+        skipped_df["pick_key"].astype(str).isin(current_regime_keys)
+    ].copy()
+    current_regime_summary_by_book_df = summarize_official_picks_profit_by_book(current_regime_graded_df)
+
+    summary_by_book_df = pd.concat(
+        [
+            all_time_summary_by_book_df.assign(summary_scope="all_time"),
+            current_regime_summary_by_book_df.assign(summary_scope="current_regime"),
+        ],
+        ignore_index=True,
+    )
+    if summary_by_book_df.empty:
+        summary_by_book_df = empty_official_picks_profit_summary_by_scope_df()
+    else:
+        summary_by_book_df = summary_by_book_df[OFFICIAL_PICKS_PROFIT_SUMMARY_SCOPE_COLUMNS].copy()
 
     overall_summary = {
-        "books": int(summary_by_book_df["book"].nunique()) if not summary_by_book_df.empty else 0,
-        "picks": int(len(graded_df)),
-        "wins": wins,
-        "losses": losses,
-        "pushes": pushes,
-        "decisions": decisions,
-        "units_risked": units_risked,
-        "units_profit": units_profit,
-        "win_rate": (wins / decisions) if decisions else None,
-        "roi": (units_profit / units_risked) if units_risked else None,
-        "skipped_rows": int(len(skipped_df)),
+        "summary_views": {
+            "all_time": _build_profit_summary_metrics(
+                graded_df=graded_df,
+                summary_by_book_df=all_time_summary_by_book_df,
+                skipped_df=skipped_df,
+            ),
+            "current_regime": _build_profit_summary_metrics(
+                graded_df=current_regime_graded_df,
+                summary_by_book_df=current_regime_summary_by_book_df,
+                skipped_df=current_regime_skipped_df,
+            ),
+        },
+        "current_regime_rule": {
+            "type": "start_date",
+            "start_date": CURRENT_REGIME_START_DATE,
+        },
     }
 
     return {
@@ -623,8 +703,15 @@ def _summary_artifact_has_content(path: Path) -> bool:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
+    summary_views = payload.get("summary_views", {})
+    if not summary_views:
+        return any(
+            int(payload.get(key, 0) or 0) > 0
+            for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
+        )
     return any(
-        int(payload.get(key, 0) or 0) > 0
+        int(summary.get(key, 0) or 0) > 0
+        for summary in summary_views.values()
         for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
     )
 
@@ -634,7 +721,8 @@ def _report_has_tracking_content(report: dict[str, object]) -> bool:
         not report[df_name].empty
         for df_name in ["graded_df", "summary_by_book_df", "skipped_df"]
     ) or any(
-        int(report["overall_summary"].get(key, 0) or 0) > 0
+        int(summary.get(key, 0) or 0) > 0
+        for summary in report["overall_summary"].get("summary_views", {}).values()
         for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
     )
 
