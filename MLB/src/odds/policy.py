@@ -110,9 +110,10 @@ class PickRankingPolicy:
         }
         picks = picks_df.copy()
         picks["pick_type_order"] = picks["pick_type"].map(order_lookup).fillna(99)
+        ranking_column = "adjusted_value_score" if "adjusted_value_score" in picks.columns else "value_score"
         return (
             picks.sort_values(
-                by=["pick_type_order", "value_score"],
+                by=["pick_type_order", ranking_column],
                 ascending=[True, False],
             )
             .drop(columns=["pick_type_order"])

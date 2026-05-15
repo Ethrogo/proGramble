@@ -48,6 +48,57 @@ def _american_odds_sort_key(price: float | int | None) -> float:
     return float(price)
 
 
+def _line_bucket(line: float | int | str | None) -> str:
+    numeric = pd.to_numeric(pd.Series([line]), errors="coerce").iloc[0]
+    if pd.isna(numeric):
+        return "unknown"
+    if float(numeric) < 5.5:
+        return "<5.5"
+    if float(numeric) <= 7.0:
+        return "5.5-7.0"
+    return "7.5+"
+
+
+def _archetype_from_pick(prop_type: str | None, line: float | int | str | None) -> str:
+    prop = str(prop_type or "").strip().lower()
+    bucket = _line_bucket(line)
+    if prop == "pitcher_k":
+        if bucket == "7.5+":
+            return "high-K ace"
+        if bucket == "<5.5":
+            return "contact-oriented low-K arm"
+        return "mid-K starter"
+    if prop == "pitcher_bb":
+        if bucket == "<5.5":
+            return "control specialist"
+        return "wild/high-BB arm"
+    return f"{prop or 'unknown'} {bucket}".strip()
+
+
+def _lookup_archetype_risk(
+    row: pd.Series,
+    archetype_risk_lookup: dict | None,
+) -> float:
+    if not archetype_risk_lookup:
+        return 0.0
+
+    prop_type = str(row.get("prop_type", "") or "").strip().lower()
+    pick_side = str(row.get("pick_side", "") or "").strip().lower()
+    line_bucket = str(row.get("line_bucket", "") or "").strip()
+    archetype = str(row.get("archetype", "") or "").strip()
+
+    lookup_order = [
+        ("combo", prop_type, pick_side, line_bucket, archetype),
+        ("line_bucket_side", prop_type, pick_side, line_bucket),
+        ("archetype", archetype),
+    ]
+    for key in lookup_order:
+        risk_score = archetype_risk_lookup.get(key)
+        if risk_score is not None:
+            return float(risk_score)
+    return 0.0
+
+
 def _choose_best_market_for_player(
     player_df: pd.DataFrame,
     policy: PickRankingPolicy,
@@ -81,6 +132,7 @@ def build_daily_picks(
     policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
     *,
     prediction_column: str = "predicted_value",
+    archetype_risk_lookup: dict | None = None,
 ) -> pd.DataFrame:
     """
     Build final daily picks from joined projections + odds rows.
@@ -161,8 +213,48 @@ def build_daily_picks(
         else:
             picks["prop_type"] = ""
 
+    picks["line_bucket"] = picks["line"].apply(_line_bucket)
+    picks["archetype"] = picks.apply(
+        lambda row: _archetype_from_pick(row.get("prop_type"), row.get("line")),
+        axis=1,
+    )
+    picks["archetype_risk_score"] = picks.apply(
+        lambda row: _lookup_archetype_risk(row, archetype_risk_lookup),
+        axis=1,
+    ).clip(lower=0.0, upper=0.35)
+    picks["adjusted_value_score"] = picks["value_score"] * (1 - picks["archetype_risk_score"])
+
     picks = picks.drop(columns=["player_name_proj"])
     picks = picks.rename(columns={"bookmaker": "book"})
+
+    order_lookup = {
+        pick_type: rank
+        for rank, pick_type in enumerate(policy.pick_type_order)
+    }
+    rank_seed = picks.copy()
+    rank_seed["pick_type_order"] = rank_seed["pick_type"].map(order_lookup).fillna(99)
+    raw_sorted = rank_seed.sort_values(
+        by=["pick_type_order", "value_score"],
+        ascending=[True, False],
+    ).copy()
+    raw_sorted["raw_value_score_rank"] = raw_sorted.groupby("pick_type_order", sort=False).cumcount() + 1
+    adjusted_sorted = rank_seed.sort_values(
+        by=["pick_type_order", "adjusted_value_score"],
+        ascending=[True, False],
+    ).copy()
+    adjusted_sorted["adjusted_value_score_rank"] = (
+        adjusted_sorted.groupby("pick_type_order", sort=False).cumcount() + 1
+    )
+    picks["raw_value_score_rank"] = picks.index.map(raw_sorted["raw_value_score_rank"].to_dict())
+    picks["adjusted_value_score_rank"] = picks.index.map(
+        adjusted_sorted["adjusted_value_score_rank"].to_dict()
+    )
+    picks["ranking_changed_by_risk"] = (
+        picks["raw_value_score_rank"] != picks["adjusted_value_score_rank"]
+    )
+    picks["ranking_delta_from_risk"] = (
+        picks["raw_value_score_rank"] - picks["adjusted_value_score_rank"]
+    )
 
     preferred_cols = [
         "player_name",
@@ -195,6 +287,14 @@ def build_daily_picks(
         "edge",
         "implied_probability",
         "value_score",
+        "adjusted_value_score",
+        "archetype_risk_score",
+        "line_bucket",
+        "archetype",
+        "raw_value_score_rank",
+        "adjusted_value_score_rank",
+        "ranking_changed_by_risk",
+        "ranking_delta_from_risk",
         "confidence_tier",
         "risk_tier",
         "pick_type",
