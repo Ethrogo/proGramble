@@ -980,6 +980,157 @@ def build_official_picks_concentration_audit(history_df: pd.DataFrame) -> dict[s
     }
 
 
+def _build_archetype_risk_lookup_from_audit(audit_payload: dict | None) -> dict[tuple, float]:
+    if not audit_payload:
+        return {}
+
+    max_penalty = 0.35
+    roi_weight = 0.60
+    concentration_weight = 0.25
+    repeat_weight = 0.15
+
+    def sample_weight(record: dict) -> float:
+        all_time = float(record.get("all_time_picks", record.get("picks", 0)) or 0.0)
+        current_regime = float(record.get("current_regime_picks", 0) or 0.0)
+        blended = (0.7 * current_regime) + (0.3 * all_time)
+        return min(1.0, blended / 20.0)
+
+    def underperformance(record: dict) -> float:
+        all_time_roi = record.get("all_time_roi", record.get("roi"))
+        current_regime_roi = record.get("current_regime_roi")
+        if current_regime_roi is None and all_time_roi is None:
+            return 0.0
+        blended_roi = (
+            0.7 * float(current_regime_roi if current_regime_roi is not None else all_time_roi or 0.0)
+            + 0.3 * float(all_time_roi or 0.0)
+        )
+        return max(0.0, 0.0 - blended_roi)
+
+    lookup: dict[tuple, float] = {}
+
+    scopes = audit_payload.get("scopes", {})
+    all_time_scope = scopes.get("all_time", {})
+    all_time_combo_records = all_time_scope.get("groupings", {}).get("by_combo", [])
+    current_combo_records = scopes.get("current_regime", {}).get("groupings", {}).get("by_combo", [])
+    all_time_combo_lookup = {
+        (
+            str(record.get("prop_type", "")).strip().lower(),
+            str(record.get("pick_side", "")).strip().lower(),
+            str(record.get("line_bucket", "")).strip(),
+            str(record.get("archetype", "")).strip(),
+        ): record
+        for record in all_time_combo_records
+    }
+    current_combo_lookup = {
+        (
+            str(record.get("prop_type", "")).strip().lower(),
+            str(record.get("pick_side", "")).strip().lower(),
+            str(record.get("line_bucket", "")).strip(),
+            str(record.get("archetype", "")).strip(),
+        ): record
+        for record in current_combo_records
+    }
+    combined_combo_keys = set(all_time_combo_lookup) | set(current_combo_lookup)
+    line_bucket_side_rollups: dict[tuple, dict[str, float]] = {}
+    for combo_key in combined_combo_keys:
+        all_record = all_time_combo_lookup.get(combo_key, {})
+        current_record = current_combo_lookup.get(combo_key, {})
+        combined_record = {
+            "all_time_picks": all_record.get("picks", 0),
+            "current_regime_picks": current_record.get("picks", 0),
+            "all_time_roi": all_record.get("roi"),
+            "current_regime_roi": current_record.get("roi"),
+            "share_of_official_picks": (
+                0.7 * float(current_record.get("share_of_official_picks", 0.0) or 0.0)
+                + 0.3 * float(all_record.get("share_of_official_picks", 0.0) or 0.0)
+            ),
+            "repeat_pitcher_frequency": (
+                0.7 * float(current_record.get("repeat_pitcher_frequency", 0.0) or 0.0)
+                + 0.3 * float(all_record.get("repeat_pitcher_frequency", 0.0) or 0.0)
+            ),
+        }
+        risk_score = min(
+            max_penalty,
+            sample_weight(combined_record)
+            * (
+                roi_weight * underperformance(combined_record)
+                + concentration_weight * float(combined_record["share_of_official_picks"])
+                + repeat_weight * float(combined_record["repeat_pitcher_frequency"])
+            ),
+        )
+        lookup[("combo", *combo_key)] = risk_score
+        line_bucket_side_key = ("line_bucket_side", combo_key[0], combo_key[1], combo_key[2])
+        rollup = line_bucket_side_rollups.setdefault(
+            line_bucket_side_key,
+            {
+                "weighted_risk": 0.0,
+                "total_picks": 0.0,
+            },
+        )
+        blended_picks = (0.7 * float(combined_record["current_regime_picks"])) + (
+            0.3 * float(combined_record["all_time_picks"])
+        )
+        rollup["weighted_risk"] += risk_score * blended_picks
+        rollup["total_picks"] += blended_picks
+
+    all_time_by_archetype = {
+        str(record.get("archetype", "")).strip(): record
+        for record in all_time_scope.get("groupings", {}).get("by_archetype", [])
+    }
+    current_by_archetype = {
+        str(record.get("archetype", "")).strip(): record
+        for record in scopes.get("current_regime", {}).get("groupings", {}).get("by_archetype", [])
+    }
+    combined_archetype_keys = set(all_time_by_archetype) | set(current_by_archetype)
+    for archetype_key in combined_archetype_keys:
+        all_record = all_time_by_archetype.get(archetype_key, {})
+        current_record = current_by_archetype.get(archetype_key, {})
+        combined_record = {
+            "all_time_picks": all_record.get("picks", 0),
+            "current_regime_picks": current_record.get("picks", 0),
+            "all_time_roi": all_record.get("roi"),
+            "current_regime_roi": current_record.get("roi"),
+            "share_of_official_picks": (
+                0.7 * float(current_record.get("share_of_official_picks", 0.0) or 0.0)
+                + 0.3 * float(all_record.get("share_of_official_picks", 0.0) or 0.0)
+            ),
+            "repeat_pitcher_frequency": (
+                0.7 * float(current_record.get("repeat_pitcher_frequency", 0.0) or 0.0)
+                + 0.3 * float(all_record.get("repeat_pitcher_frequency", 0.0) or 0.0)
+            ),
+        }
+        risk_score = min(
+            max_penalty,
+            sample_weight(combined_record)
+            * (
+                roi_weight * underperformance(combined_record)
+                + concentration_weight * float(combined_record["share_of_official_picks"])
+                + repeat_weight * float(combined_record["repeat_pitcher_frequency"])
+            ),
+        )
+        lookup[("archetype", archetype_key)] = risk_score
+
+    for line_bucket_side_key, rollup in line_bucket_side_rollups.items():
+        total_picks = float(rollup["total_picks"])
+        lookup[line_bucket_side_key] = (
+            float(rollup["weighted_risk"]) / total_picks
+            if total_picks
+            else 0.0
+        )
+
+    return lookup
+
+
+def load_archetype_risk_lookup() -> dict[tuple, float]:
+    if not OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.exists():
+        return {}
+    try:
+        audit_payload = json.loads(OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return _build_archetype_risk_lookup_from_audit(audit_payload)
+
+
 def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, object]:
     if history_df.empty:
         return {
@@ -1569,13 +1720,25 @@ def run_workflow_daily_card(
     build_picks_fn: BuildPicksFn | None = None,
     filter_postable_picks_fn: FilterPostablePicksFn | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, str | None]:
+    archetype_risk_lookup = load_archetype_risk_lookup()
+
     if build_picks_fn is None:
         def build_picks_fn(joined_df: pd.DataFrame) -> pd.DataFrame:
-            return build_daily_picks(
-                joined_df,
-                policy=workflow.pick_ranking_policy,
-                prediction_column=workflow.prop_fields.shared_prediction,
-            )
+            try:
+                return build_daily_picks(
+                    joined_df,
+                    policy=workflow.pick_ranking_policy,
+                    prediction_column=workflow.prop_fields.shared_prediction,
+                    archetype_risk_lookup=archetype_risk_lookup,
+                )
+            except TypeError as exc:
+                if "archetype_risk_lookup" not in str(exc):
+                    raise
+                return build_daily_picks(
+                    joined_df,
+                    policy=workflow.pick_ranking_policy,
+                    prediction_column=workflow.prop_fields.shared_prediction,
+                )
 
     if filter_postable_picks_fn is None:
         postable_limits = workflow.resolved_postable_limits()

@@ -102,6 +102,8 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
             "edge": 1.3,
             "implied_probability": 120 / 220,
             "value_score": 1.3 * (1 - (120 / 220)),
+            "adjusted_value_score": 1.3 * (1 - (120 / 220)),
+            "archetype_risk_score": 0.0,
             "confidence_tier": "medium",
             "pick_type": "official",
         }
@@ -218,6 +220,9 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
     assert loaded_post.loc[0, "prop_type"] == "pitcher_k"
     assert loaded_post.loc[0, "pick_type"] == "official"
+    assert "value_score" in loaded_post.columns
+    assert "adjusted_value_score" in loaded_post.columns
+    assert "archetype_risk_score" in loaded_post.columns
     assert len(loaded_history) == 1
     assert loaded_history.loc[0, "game_date"] == "2026-04-19"
     assert str(loaded_history.loc[0, "odds"]) == "-120"

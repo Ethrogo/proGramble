@@ -347,6 +347,8 @@ def test_build_daily_picks_adds_implied_probability_value_score_and_confidence_t
     assert picks.loc[0, "edge"] == pytest.approx(expected_edge)
     assert picks.loc[0, "implied_probability"] == pytest.approx(expected_implied_probability)
     assert picks.loc[0, "value_score"] == pytest.approx(expected_value_score)
+    assert picks.loc[0, "adjusted_value_score"] == pytest.approx(expected_value_score)
+    assert picks.loc[0, "archetype_risk_score"] == pytest.approx(0.0)
     assert picks.loc[0, "confidence_tier"] in {"high", "medium", "low", "thin"}
     assert picks.loc[0, "risk_tier"] in {"low", "medium", "high"}
 
@@ -376,23 +378,25 @@ def test_build_daily_picks_preserves_projection_uncertainty_fields():
     assert picks.loc[0, "upper_bound"] == pytest.approx(8.0)
     assert picks.loc[0, "std_dev"] == pytest.approx(1.2)
 
-def test_build_daily_picks_ranks_same_pick_type_by_value_score_not_raw_edge():
+def test_build_daily_picks_ranks_same_pick_type_by_adjusted_value_score():
     joined_df = pd.DataFrame(
         [
             {
-                "player_name_proj": "Expensive Bigger Edge",
+                "player_name_proj": "Penalized High K Ace",
                 "team": "AAA",
                 "opponent": "BBB",
-                "predicted_strikeouts": 6.3,
+                "prop_type": "pitcher_k",
+                "predicted_strikeouts": 8.6,
                 "bookmaker": "DraftKings",
                 "side": "Over",
-                "line": 5.5,
-                "price": -300,
+                "line": 7.5,
+                "price": 100,
             },
             {
-                "player_name_proj": "Plus Money Smaller Edge",
+                "player_name_proj": "Unpenalized Mid K Starter",
                 "team": "CCC",
                 "opponent": "DDD",
+                "prop_type": "pitcher_k",
                 "predicted_strikeouts": 6.26,
                 "bookmaker": "FanDuel",
                 "side": "Over",
@@ -402,13 +406,57 @@ def test_build_daily_picks_ranks_same_pick_type_by_value_score_not_raw_edge():
         ]
     )
 
-    picks = build_daily_picks(joined_df)
+    picks = build_daily_picks(
+        joined_df,
+        archetype_risk_lookup={
+            ("combo", "pitcher_k", "over", "7.5+", "high-K ace"): 0.35,
+        },
+    )
 
     assert len(picks) == 2
     assert list(picks["pick_type"]) == ["official", "official"]
-    assert picks.loc[0, "player_name"] == "Plus Money Smaller Edge"
-    assert picks.loc[0, "value_score"] > picks.loc[1, "value_score"]
-    assert picks.loc[0, "edge"] < picks.loc[1, "edge"]
+    assert picks.loc[0, "player_name"] == "Unpenalized Mid K Starter"
+    assert picks.loc[1, "player_name"] == "Penalized High K Ace"
+    assert picks.loc[1, "value_score"] > picks.loc[0, "value_score"]
+    assert picks.loc[0, "adjusted_value_score"] > picks.loc[1, "adjusted_value_score"]
+    assert picks.loc[1, "ranking_changed_by_risk"]
+
+
+def test_build_daily_picks_exposes_raw_and_adjusted_ranking_fields():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Shohei Ohtani",
+                "team": "LAD",
+                "opponent": "SFG",
+                "prop_type": "pitcher_k",
+                "predicted_strikeouts": 8.0,
+                "bookmaker": "FanDuel",
+                "side": "Under",
+                "line": 7.5,
+                "price": -110,
+            }
+        ]
+    )
+
+    picks = build_daily_picks(
+        joined_df,
+        archetype_risk_lookup={
+            ("combo", "pitcher_k", "under", "7.5+", "high-K ace"): 0.2,
+        },
+    )
+
+    assert "archetype_risk_score" in picks.columns
+    assert "adjusted_value_score" in picks.columns
+    assert "raw_value_score_rank" in picks.columns
+    assert "adjusted_value_score_rank" in picks.columns
+    assert "ranking_changed_by_risk" in picks.columns
+    assert "ranking_delta_from_risk" in picks.columns
+    assert picks.loc[0, "archetype"] == "high-K ace"
+    assert picks.loc[0, "line_bucket"] == "7.5+"
+    assert picks.loc[0, "adjusted_value_score"] == pytest.approx(
+        picks.loc[0, "value_score"] * 0.8
+    )
 
 def test_filter_postable_picks_preserves_value_fields():
     picks_df = pd.DataFrame(
