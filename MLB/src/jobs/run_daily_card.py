@@ -58,6 +58,7 @@ OFFICIAL_PICKS_GRADES_PATH = TRACKING_DIR / "official_picks_profit_report.csv"
 OFFICIAL_PICKS_BOOK_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_by_book.csv"
 OFFICIAL_PICKS_OVERALL_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary.json"
 OFFICIAL_PICKS_SKIPPED_PATH = TRACKING_DIR / "official_picks_profit_skipped.csv"
+OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH = TRACKING_DIR / "official_picks_concentration_audit.json"
 CURRENT_REGIME_START_DATE = "2026-05-07"
 
 OFFICIAL_PICKS_HISTORY_COLUMNS = [
@@ -572,6 +573,413 @@ def _current_regime_mask(history_df: pd.DataFrame) -> pd.Series:
     return game_dates >= pd.Timestamp(CURRENT_REGIME_START_DATE)
 
 
+def _audit_line_bucket(value: float | int | str | None) -> str:
+    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(numeric):
+        return "unknown"
+    if float(numeric) < 5.5:
+        return "<5.5"
+    if float(numeric) <= 7.0:
+        return "5.5-7.0"
+    return "7.5+"
+
+
+def _audit_pitcher_archetype(prop_type: str | None, line: float | int | str | None) -> str:
+    prop = str(prop_type or "").strip().lower()
+    bucket = _audit_line_bucket(line)
+
+    if prop == "pitcher_k":
+        if bucket == "7.5+":
+            return "high-K ace"
+        if bucket == "<5.5":
+            return "contact-oriented low-K arm"
+        return "mid-K starter"
+
+    if prop == "pitcher_bb":
+        if bucket == "<5.5":
+            return "control specialist"
+        return "wild/high-BB arm"
+
+    return f"{prop or 'unknown'} {bucket}".strip()
+
+
+def _json_ready_value(value):
+    if hasattr(value, "item"):
+        value = value.item()
+    if pd.isna(value):
+        return None
+    return value
+
+
+def _build_audit_group_records(
+    df: pd.DataFrame,
+    *,
+    group_columns: list[str],
+) -> list[dict]:
+    if df.empty:
+        return []
+
+    total_picks = int(len(df))
+    records: list[dict] = []
+
+    for group_key, group_df in df.groupby(group_columns, dropna=False, sort=False):
+        if not isinstance(group_key, tuple):
+            group_key = (group_key,)
+
+        picks = int(len(group_df))
+        graded_mask = group_df["is_gradeable"].fillna(False)
+        graded_df = group_df.loc[graded_mask].copy()
+        wins = int((group_df["result_normalized"] == "W").sum())
+        losses = int((group_df["result_normalized"] == "L").sum())
+        pushes = int((group_df["result_normalized"] == "Push").sum())
+        units_risked = float(pd.to_numeric(group_df["units_risked"], errors="coerce").fillna(0.0).sum())
+        units_profit = float(pd.to_numeric(group_df["units_result"], errors="coerce").fillna(0.0).sum())
+        pitcher_counts = (
+            group_df["player_name"]
+            .astype(str)
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .value_counts()
+        )
+        concentration_index = (
+            float(((pitcher_counts / picks) ** 2).sum())
+            if picks and not pitcher_counts.empty
+            else None
+        )
+        unique_pitchers = int(pitcher_counts.shape[0])
+        unique_game_dates = int(
+            group_df["game_date"]
+            .astype(str)
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .nunique()
+        )
+
+        record = {
+            column: _json_ready_value(value)
+            for column, value in zip(group_columns, group_key)
+        }
+        record.update(
+            {
+                "picks": picks,
+                "graded_picks": int(len(graded_df)),
+                "share_of_official_picks": (picks / total_picks) if total_picks else None,
+                "unique_pitchers": unique_pitchers,
+                "unique_game_dates": unique_game_dates,
+                "repeat_pitcher_frequency": (
+                    (picks - unique_pitchers) / picks
+                    if picks
+                    else None
+                ),
+                "wins": wins,
+                "losses": losses,
+                "pushes": pushes,
+                "decisions": wins + losses,
+                "units_risked": units_risked,
+                "units_profit": units_profit,
+                "roi": (units_profit / units_risked) if units_risked else None,
+                "average_edge": _json_ready_value(pd.to_numeric(group_df["edge"], errors="coerce").mean()),
+                "average_line": _json_ready_value(pd.to_numeric(group_df["line"], errors="coerce").mean()),
+                "concentration_index": concentration_index,
+            }
+        )
+        records.append(record)
+
+    return records
+
+
+def _sort_audit_records(
+    records: list[dict],
+    *,
+    key_fn,
+    reverse: bool = True,
+    limit: int | None = None,
+) -> list[dict]:
+    sorted_records = sorted(records, key=key_fn, reverse=reverse)
+    if limit is not None:
+        return sorted_records[:limit]
+    return sorted_records
+
+
+def _build_regime_comparison_records(
+    *,
+    all_time_records: list[dict],
+    current_regime_records: list[dict],
+    key_columns: list[str],
+) -> list[dict]:
+    all_lookup = {
+        tuple(record.get(column) for column in key_columns): record
+        for record in all_time_records
+    }
+    current_lookup = {
+        tuple(record.get(column) for column in key_columns): record
+        for record in current_regime_records
+    }
+    combined_keys = list(dict.fromkeys([*all_lookup.keys(), *current_lookup.keys()]))
+
+    records: list[dict] = []
+    for combined_key in combined_keys:
+        all_record = all_lookup.get(combined_key, {})
+        current_record = current_lookup.get(combined_key, {})
+        record = {
+            column: value
+            for column, value in zip(key_columns, combined_key)
+        }
+        all_time_picks = int(all_record.get("picks", 0) or 0)
+        current_picks = int(current_record.get("picks", 0) or 0)
+        all_time_units_profit = float(all_record.get("units_profit", 0.0) or 0.0)
+        current_units_profit = float(current_record.get("units_profit", 0.0) or 0.0)
+        record.update(
+            {
+                "all_time_picks": all_time_picks,
+                "current_regime_picks": current_picks,
+                "all_time_units_profit": all_time_units_profit,
+                "current_regime_units_profit": current_units_profit,
+                "all_time_roi": all_record.get("roi"),
+                "current_regime_roi": current_record.get("roi"),
+                "current_regime_share_of_all_time_picks": (
+                    current_picks / all_time_picks
+                    if all_time_picks
+                    else None
+                ),
+                "persists_in_current_regime": bool(
+                    current_picks > 0 and current_units_profit < 0
+                ),
+            }
+        )
+        records.append(record)
+
+    return records
+
+
+def build_official_picks_concentration_audit(history_df: pd.DataFrame) -> dict[str, object]:
+    working_history = history_df.copy()
+    for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
+        if column not in working_history.columns:
+            working_history[column] = ""
+
+    official_df = working_history.loc[working_history["pick_type"] == "official"].copy()
+    official_df["line_bucket"] = official_df["line"].apply(_audit_line_bucket)
+    official_df["archetype"] = official_df.apply(
+        lambda row: _audit_pitcher_archetype(row.get("prop_type"), row.get("line")),
+        axis=1,
+    )
+    official_df["result_normalized"] = official_df["result"].apply(_normalize_pick_result)
+    official_df["odds_numeric"] = official_df.apply(_resolve_history_row_odds, axis=1)
+    official_df["units_risked"] = 0.0
+    official_df["units_result"] = pd.NA
+
+    resolved_mask = official_df["result_normalized"].isin(["W", "L", "Push"])
+    valid_odds_mask = official_df["odds_numeric"].notna()
+    push_mask = official_df["result_normalized"] == "Push"
+    official_df["is_gradeable"] = resolved_mask & (valid_odds_mask | push_mask)
+
+    if official_df["is_gradeable"].any():
+        official_df.loc[official_df["is_gradeable"], "units_risked"] = official_df.loc[
+            official_df["is_gradeable"], "result_normalized"
+        ].apply(lambda result: 0.0 if result == "Push" else 1.0)
+        official_df.loc[official_df["is_gradeable"], "units_result"] = official_df.loc[
+            official_df["is_gradeable"]
+        ].apply(
+            lambda row: _profit_units_for_result(row["odds_numeric"], row["result_normalized"]),
+            axis=1,
+        )
+
+    def build_scope(scope_name: str, scoped_df: pd.DataFrame) -> dict[str, object]:
+        by_pitcher = _build_audit_group_records(scoped_df, group_columns=["player_name"])
+        by_archetype = _build_audit_group_records(scoped_df, group_columns=["archetype"])
+        by_pitcher_side = _build_audit_group_records(scoped_df, group_columns=["player_name", "pick_side"])
+        by_archetype_side = _build_audit_group_records(scoped_df, group_columns=["archetype", "pick_side"])
+        by_archetype_line_bucket = _build_audit_group_records(
+            scoped_df,
+            group_columns=["archetype", "line_bucket"],
+        )
+        by_combo = _build_audit_group_records(
+            scoped_df,
+            group_columns=["prop_type", "pick_side", "line_bucket", "archetype"],
+        )
+
+        scope_units_risked = float(pd.to_numeric(scoped_df["units_risked"], errors="coerce").fillna(0.0).sum())
+        scope_units_profit = float(pd.to_numeric(scoped_df["units_result"], errors="coerce").fillna(0.0).sum())
+        scope_roi = (scope_units_profit / scope_units_risked) if scope_units_risked else None
+
+        overselected_archetypes: list[dict] = []
+        for record in by_archetype:
+            record_copy = record.copy()
+            roi = record_copy.get("roi")
+            pick_share = record_copy.get("share_of_official_picks")
+            if roi is None or scope_roi is None or pick_share is None:
+                record_copy["roi_gap_vs_scope"] = None
+                record_copy["overselection_score"] = None
+            else:
+                roi_gap_vs_scope = float(roi) - float(scope_roi)
+                record_copy["roi_gap_vs_scope"] = roi_gap_vs_scope
+                record_copy["overselection_score"] = float(pick_share) * max(0.0, float(scope_roi) - float(roi))
+            overselected_archetypes.append(record_copy)
+
+        return {
+            "scope": scope_name,
+            "summary": {
+                "official_picks": int(len(scoped_df)),
+                "graded_picks": int(scoped_df["is_gradeable"].fillna(False).sum()),
+                "units_risked": scope_units_risked,
+                "units_profit": scope_units_profit,
+                "roi": scope_roi,
+            },
+            "questions": {
+                "largest_share_of_official_picks": _sort_audit_records(
+                    by_pitcher,
+                    key_fn=lambda record: (
+                        float(record.get("share_of_official_picks") or 0.0),
+                        int(record.get("picks", 0) or 0),
+                    ),
+                    limit=10,
+                ),
+                "largest_share_of_losses_or_negative_units": {
+                    "by_losses": _sort_audit_records(
+                        [record for record in by_pitcher if int(record.get("losses", 0) or 0) > 0],
+                        key_fn=lambda record: (
+                            int(record.get("losses", 0) or 0),
+                            -(float(record.get("units_profit") or 0.0)),
+                        ),
+                        limit=10,
+                    ),
+                    "by_negative_units": _sort_audit_records(
+                        by_pitcher,
+                        key_fn=lambda record: (
+                            -(float(record.get("units_profit") or 0.0)),
+                            int(record.get("picks", 0) or 0),
+                        ),
+                        limit=10,
+                    ),
+                },
+                "overselected_archetypes_relative_to_performance": _sort_audit_records(
+                    [
+                        record
+                        for record in overselected_archetypes
+                        if int(record.get("picks", 0) or 0) > 0
+                    ],
+                    key_fn=lambda record: (
+                        float(record.get("overselection_score") or 0.0),
+                        float(record.get("share_of_official_picks") or 0.0),
+                    ),
+                    limit=10,
+                ),
+                "repeatedly_failing_combos": _sort_audit_records(
+                    [
+                        record
+                        for record in by_combo
+                        if int(record.get("picks", 0) or 0) >= 2
+                    ],
+                    key_fn=lambda record: (
+                        -(float(record.get("units_profit") or 0.0)),
+                        int(record.get("losses", 0) or 0),
+                        int(record.get("picks", 0) or 0),
+                    ),
+                    limit=10,
+                ),
+            },
+            "groupings": {
+                "by_pitcher": by_pitcher,
+                "by_archetype": by_archetype,
+                "by_pitcher_side": by_pitcher_side,
+                "by_archetype_side": by_archetype_side,
+                "by_archetype_line_bucket": by_archetype_line_bucket,
+                "by_combo": by_combo,
+            },
+        }
+
+    all_time_scope = build_scope("all_time", official_df)
+    current_regime_scope = build_scope(
+        "current_regime",
+        official_df.loc[_current_regime_mask(official_df)].copy(),
+    )
+
+    regime_comparison = {
+        "overall": {
+            "all_time_official_picks": all_time_scope["summary"]["official_picks"],
+            "current_regime_official_picks": current_regime_scope["summary"]["official_picks"],
+            "current_regime_share_of_all_time_picks": (
+                current_regime_scope["summary"]["official_picks"] / all_time_scope["summary"]["official_picks"]
+                if all_time_scope["summary"]["official_picks"]
+                else None
+            ),
+            "all_time_units_profit": all_time_scope["summary"]["units_profit"],
+            "current_regime_units_profit": current_regime_scope["summary"]["units_profit"],
+            "all_time_roi": all_time_scope["summary"]["roi"],
+            "current_regime_roi": current_regime_scope["summary"]["roi"],
+        },
+        "by_pitcher": _sort_audit_records(
+            _build_regime_comparison_records(
+                all_time_records=all_time_scope["groupings"]["by_pitcher"],
+                current_regime_records=current_regime_scope["groupings"]["by_pitcher"],
+                key_columns=["player_name"],
+            ),
+            key_fn=lambda record: (
+                int(record.get("current_regime_picks", 0) or 0),
+                -(float(record.get("current_regime_units_profit") or 0.0)),
+                int(record.get("all_time_picks", 0) or 0),
+            ),
+            limit=20,
+        ),
+        "by_archetype": _sort_audit_records(
+            _build_regime_comparison_records(
+                all_time_records=all_time_scope["groupings"]["by_archetype"],
+                current_regime_records=current_regime_scope["groupings"]["by_archetype"],
+                key_columns=["archetype"],
+            ),
+            key_fn=lambda record: (
+                int(record.get("current_regime_picks", 0) or 0),
+                -(float(record.get("current_regime_units_profit") or 0.0)),
+                int(record.get("all_time_picks", 0) or 0),
+            ),
+            limit=20,
+        ),
+        "by_combo": _sort_audit_records(
+            _build_regime_comparison_records(
+                all_time_records=all_time_scope["groupings"]["by_combo"],
+                current_regime_records=current_regime_scope["groupings"]["by_combo"],
+                key_columns=["prop_type", "pick_side", "line_bucket", "archetype"],
+            ),
+            key_fn=lambda record: (
+                int(record.get("current_regime_picks", 0) or 0),
+                -(float(record.get("current_regime_units_profit") or 0.0)),
+                int(record.get("all_time_picks", 0) or 0),
+            ),
+            limit=20,
+        ),
+    }
+
+    return {
+        "artifact_type": "official_picks_concentration_audit",
+        "artifact_version": 1,
+        "current_regime_rule": {
+            "type": "start_date",
+            "start_date": CURRENT_REGIME_START_DATE,
+        },
+        "archetype_definition": {
+            "version": "v1_coarse_line_based",
+            "notes": [
+                "Archetypes are inferred from tracked prop type and posted line only.",
+                "This keeps the audit reproducible from official_picks_history.csv without external pitcher metadata.",
+                "market + side + line bucket groupings are included alongside the coarse archetypes.",
+            ],
+            "line_buckets": {
+                "<5.5": "low line bucket",
+                "5.5-7.0": "mid line bucket",
+                "7.5+": "high line bucket",
+            },
+        },
+        "scopes": {
+            "all_time": all_time_scope,
+            "current_regime": current_regime_scope,
+        },
+        "regime_comparison": regime_comparison,
+    }
+
+
 def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, object]:
     if history_df.empty:
         return {
@@ -741,6 +1149,7 @@ def _existing_tracking_artifacts_have_content() -> bool:
 def persist_official_picks_profit_reports(*, allow_empty_replacement: bool = False) -> dict[str, object]:
     history_df = load_official_picks_history()
     report = build_official_picks_profit_report(history_df)
+    concentration_audit = build_official_picks_concentration_audit(history_df)
     if (
         not allow_empty_replacement
         and not _report_has_tracking_content(report)
@@ -755,6 +1164,10 @@ def persist_official_picks_profit_reports(*, allow_empty_replacement: bool = Fal
     report["skipped_df"].to_csv(OFFICIAL_PICKS_SKIPPED_PATH, index=False)
     OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.write_text(
         json.dumps(report["overall_summary"], indent=2),
+        encoding="utf-8",
+    )
+    OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.write_text(
+        json.dumps(concentration_audit, indent=2),
         encoding="utf-8",
     )
     return report

@@ -80,4 +80,9 @@ def isolate_tracking_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         "OFFICIAL_PICKS_SKIPPED_PATH",
         tracking_dir / "official_picks_profit_skipped.csv",
     )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH",
+        tracking_dir / "official_picks_concentration_audit.json",
+    )
     return tracking_dir

@@ -25,6 +25,7 @@ def test_tracking_artifact_paths_are_isolated_from_committed_repo_files(tmp_path
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH.parents
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.parents
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_SKIPPED_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.parents
 
 
 def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp_path):
@@ -169,6 +170,11 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
         "OFFICIAL_PICKS_SKIPPED_PATH",
         tmp_path / "data" / "tracking" / "official_picks_profit_skipped.csv",
     )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_concentration_audit.json",
+    )
 
     saved_starters = {}
 
@@ -199,6 +205,7 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH.exists()
     assert daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.exists()
     assert daily_card.OFFICIAL_PICKS_SKIPPED_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.exists()
 
     loaded_post = pd.read_csv(daily_card.PICKS_DIR / "today_postable_picks.csv")
     loaded_history = pd.read_csv(daily_card.OFFICIAL_PICKS_HISTORY_PATH, keep_default_na=False)
@@ -224,6 +231,13 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert loaded_overall["summary_views"]["all_time"]["picks"] == 0
     assert loaded_overall["summary_views"]["all_time"]["skipped_rows"] == 1
     assert loaded_overall["summary_views"]["current_regime"]["picks"] == 0
+
+    loaded_audit = daily_card.json.loads(
+        daily_card.OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.read_text(encoding="utf-8")
+    )
+    assert loaded_audit["artifact_type"] == "official_picks_concentration_audit"
+    assert loaded_audit["scopes"]["all_time"]["summary"]["official_picks"] == 1
+    assert loaded_audit["scopes"]["all_time"]["questions"]["largest_share_of_official_picks"][0]["player_name"] == "Jacob deGrom"
 
 
 def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch, tmp_path):
@@ -1932,6 +1946,7 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
     summary_path = tracking_dir / "official_picks_profit_summary.json"
     skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
+    audit_path = tracking_dir / "official_picks_concentration_audit.json"
 
     history_df = pd.DataFrame(
         [
@@ -1964,6 +1979,7 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH", audit_path)
 
     daily_card.persist_official_picks_profit_reports()
 
@@ -1971,11 +1987,13 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     assert by_book_path.exists()
     assert summary_path.exists()
     assert skipped_path.exists()
+    assert audit_path.exists()
 
     grades_df = pd.read_csv(grades_path)
     by_book_df = pd.read_csv(by_book_path)
     summary_payload = daily_card.json.loads(summary_path.read_text(encoding="utf-8"))
     skipped_df = pd.read_csv(skipped_path)
+    audit_payload = daily_card.json.loads(audit_path.read_text(encoding="utf-8"))
 
     assert grades_df.loc[0, "units_result"] == pytest.approx(100 / 110)
     assert by_book_df.loc[0, "summary_scope"] == "all_time"
@@ -1984,6 +2002,7 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     assert summary_payload["summary_views"]["all_time"]["picks"] == 1
     assert summary_payload["summary_views"]["all_time"]["units_profit"] == pytest.approx(100 / 110)
     assert summary_payload["summary_views"]["current_regime"]["picks"] == 0
+    assert audit_payload["scopes"]["all_time"]["summary"]["official_picks"] == 1
     assert skipped_df.empty
 
 
@@ -2036,6 +2055,127 @@ def test_build_official_picks_profit_report_includes_current_regime_view():
     by_scope = report["summary_by_book_df"]["summary_scope"].tolist()
     assert "all_time" in by_scope
     assert "current_regime" in by_scope
+
+
+def test_build_official_picks_concentration_audit_answers_concentration_questions():
+    history_df = pd.DataFrame(
+        [
+            {
+                "pick_key": "2026-05-01|zac gallen over",
+                "game_date": "2026-05-01",
+                "player_name": "Zac Gallen",
+                "prop_type": "pitcher_k",
+                "book": "DraftKings",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "over",
+                "line": 7.5,
+                "edge": 0.9,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "L",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-08|zac gallen over",
+                "game_date": "2026-05-08",
+                "player_name": "Zac Gallen",
+                "prop_type": "pitcher_k",
+                "book": "FanDuel",
+                "odds": "-105",
+                "price": -105,
+                "pick_side": "over",
+                "line": 7.5,
+                "edge": 0.8,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+                "result": "L",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-09|shohei ohtani under",
+                "game_date": "2026-05-09",
+                "player_name": "Shohei Ohtani",
+                "prop_type": "pitcher_k",
+                "book": "BetMGM",
+                "odds": "-120",
+                "price": -120,
+                "pick_side": "under",
+                "line": 7.5,
+                "edge": 0.7,
+                "confidence_tier": "high",
+                "pick_type": "official",
+                "result": "L",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-10|chris sale over",
+                "game_date": "2026-05-10",
+                "player_name": "Chris Sale",
+                "prop_type": "pitcher_k",
+                "book": "DraftKings",
+                "odds": "+100",
+                "price": 100,
+                "pick_side": "over",
+                "line": 7.5,
+                "edge": 0.85,
+                "confidence_tier": "medium",
+                "pick_type": "official",
+                "result": "W",
+                "record_source": "run_daily_card",
+            },
+            {
+                "pick_key": "2026-05-11|simeon under walks",
+                "game_date": "2026-05-11",
+                "player_name": "Simeon Woods Richardson",
+                "prop_type": "pitcher_bb",
+                "book": "FanDuel",
+                "odds": "-110",
+                "price": -110,
+                "pick_side": "under",
+                "line": 2.5,
+                "edge": 0.5,
+                "confidence_tier": "low",
+                "pick_type": "official",
+                "result": "W",
+                "record_source": "run_daily_card",
+            },
+        ]
+    )
+
+    audit = daily_card.build_official_picks_concentration_audit(history_df)
+
+    assert audit["artifact_type"] == "official_picks_concentration_audit"
+    assert audit["current_regime_rule"]["start_date"] == daily_card.CURRENT_REGIME_START_DATE
+
+    all_time_scope = audit["scopes"]["all_time"]
+    current_regime_scope = audit["scopes"]["current_regime"]
+    assert all_time_scope["summary"]["official_picks"] == 5
+    assert current_regime_scope["summary"]["official_picks"] == 4
+
+    top_pick_share = all_time_scope["questions"]["largest_share_of_official_picks"][0]
+    assert top_pick_share["player_name"] == "Zac Gallen"
+    assert top_pick_share["picks"] == 2
+
+    top_losses = all_time_scope["questions"]["largest_share_of_losses_or_negative_units"]["by_losses"][0]
+    assert top_losses["player_name"] == "Zac Gallen"
+    assert top_losses["losses"] == 2
+
+    top_negative_units = all_time_scope["questions"]["largest_share_of_losses_or_negative_units"]["by_negative_units"][0]
+    assert top_negative_units["player_name"] == "Zac Gallen"
+
+    overselected_archetypes = all_time_scope["questions"]["overselected_archetypes_relative_to_performance"]
+    assert overselected_archetypes[0]["archetype"] == "high-K ace"
+
+    failing_combo = all_time_scope["questions"]["repeatedly_failing_combos"][0]
+    assert failing_combo["prop_type"] == "pitcher_k"
+    assert failing_combo["pick_side"] == "over"
+    assert failing_combo["line_bucket"] == "7.5+"
+    assert failing_combo["archetype"] == "high-K ace"
+
+    persisted_archetypes = audit["regime_comparison"]["by_archetype"]
+    assert persisted_archetypes[0]["archetype"] == "high-K ace"
+    assert persisted_archetypes[0]["current_regime_picks"] >= 1
 
 
 def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_summaries_with_empty_history(

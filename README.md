@@ -114,6 +114,7 @@ Outputs are written to:
 - `MLB/data/tracking/official_picks_profit_report.csv`
 - `MLB/data/tracking/official_picks_profit_by_book.csv`
 - `MLB/data/tracking/official_picks_profit_summary.json`
+- `MLB/data/tracking/official_picks_concentration_audit.json`
 
 Tracked performance is reproducible from `official_picks_history.csv`. The repo publishes two summary views:
 
@@ -121,6 +122,8 @@ Tracked performance is reproducible from `official_picks_history.csv`. The repo 
 - `current_regime`: every tracked official pick with `game_date >= 2026-05-07`
 
 The current-regime rule is intentionally date-based so it can be rebuilt from tracked history alone, including older manual seed rows that may not carry model or policy version metadata.
+
+The tracking build also publishes `official_picks_concentration_audit.json`, a reproducible concentration audit over official picks. The audit answers which pitchers dominate official-pick share, which pitchers account for the most losses or negative units, which coarse archetypes are over-selected relative to performance, which `market + side + line bucket + archetype` combinations are repeatedly failing, and whether those patterns persist in `current_regime` or mostly live in older history. Its v1 archetypes are intentionally coarse and line-based so the report can be rebuilt from tracked history alone.
 
 ### 3. Contracts and validation
 
