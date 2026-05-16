@@ -57,6 +57,8 @@ OFFICIAL_PICKS_HISTORY_PATH = TRACKING_DIR / "official_picks_history.csv"
 OFFICIAL_PICKS_GRADES_PATH = TRACKING_DIR / "official_picks_profit_report.csv"
 OFFICIAL_PICKS_BOOK_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_by_book.csv"
 OFFICIAL_PICKS_OVERALL_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary.json"
+OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary_all_time.json"
+OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary_current_regime.json"
 OFFICIAL_PICKS_SKIPPED_PATH = TRACKING_DIR / "official_picks_profit_skipped.csv"
 OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH = TRACKING_DIR / "official_picks_concentration_audit.json"
 CURRENT_REGIME_START_DATE = "2026-05-07"
@@ -703,6 +705,41 @@ def _empty_profit_summary_metrics() -> dict[str, int | float | None]:
     }
 
 
+def _current_regime_rule_payload() -> dict[str, str]:
+    return {
+        "type": "start_date",
+        "start_date": CURRENT_REGIME_START_DATE,
+    }
+
+
+def _summary_view_rule_payload(summary_scope: str) -> dict[str, str]:
+    if summary_scope == "current_regime":
+        return _current_regime_rule_payload()
+    return {
+        "type": "all_tracked_official_picks",
+        "source": "official_picks_history.csv",
+    }
+
+
+def _build_published_profit_summary_view(
+    *,
+    summary_scope: str,
+    metrics: dict[str, int | float | None],
+    by_book_df: pd.DataFrame,
+) -> dict[str, object]:
+    return {
+        "artifact_type": "official_picks_profit_summary_view",
+        "summary_scope": summary_scope,
+        "summary_scope_rule": _summary_view_rule_payload(summary_scope),
+        "summary_metrics": metrics,
+        "by_book": by_book_df.to_dict(orient="records"),
+        "reproducibility": {
+            "source_artifact": "official_picks_history.csv",
+            "rebuild_entrypoint": "jobs.run_daily_card.persist_official_picks_profit_reports",
+        },
+    }
+
+
 def _build_profit_summary_metrics(
     graded_df: pd.DataFrame,
     summary_by_book_df: pd.DataFrame,
@@ -1302,22 +1339,37 @@ def load_archetype_risk_lookup() -> dict[tuple, float]:
 
 def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, object]:
     if history_df.empty:
+        all_time_metrics = _empty_profit_summary_metrics()
+        current_regime_metrics = _empty_profit_summary_metrics()
         return {
             "graded_df": empty_official_picks_profit_report_df(),
             "summary_by_book_df": empty_official_picks_profit_summary_by_scope_df(),
             "overall_summary": {
                 "summary_views": {
-                    "all_time": _empty_profit_summary_metrics(),
-                    "current_regime": _empty_profit_summary_metrics(),
+                    "all_time": all_time_metrics,
+                    "current_regime": current_regime_metrics,
                 },
-                "current_regime_rule": {
-                    "type": "start_date",
-                    "start_date": CURRENT_REGIME_START_DATE,
-                },
+                "current_regime_rule": _current_regime_rule_payload(),
                 "segmented_views": {
                     segment: {}
                     for segment in TRACKING_SEGMENT_COLUMNS
                 },
+                "published_view_artifacts": {
+                    "all_time": OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.name,
+                    "current_regime": OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.name,
+                },
+            },
+            "published_summary_views": {
+                "all_time": _build_published_profit_summary_view(
+                    summary_scope="all_time",
+                    metrics=all_time_metrics,
+                    by_book_df=empty_official_picks_profit_summary_df(),
+                ),
+                "current_regime": _build_published_profit_summary_view(
+                    summary_scope="current_regime",
+                    metrics=current_regime_metrics,
+                    by_book_df=empty_official_picks_profit_summary_df(),
+                ),
             },
             "skipped_df": empty_official_picks_profit_report_df(),
         }
@@ -1330,22 +1382,37 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
 
     official_df = working_history[working_history["pick_type"] == "official"].copy()
     if official_df.empty:
+        all_time_metrics = _empty_profit_summary_metrics()
+        current_regime_metrics = _empty_profit_summary_metrics()
         return {
             "graded_df": empty_official_picks_profit_report_df(),
             "summary_by_book_df": empty_official_picks_profit_summary_by_scope_df(),
             "overall_summary": {
                 "summary_views": {
-                    "all_time": _empty_profit_summary_metrics(),
-                    "current_regime": _empty_profit_summary_metrics(),
+                    "all_time": all_time_metrics,
+                    "current_regime": current_regime_metrics,
                 },
-                "current_regime_rule": {
-                    "type": "start_date",
-                    "start_date": CURRENT_REGIME_START_DATE,
-                },
+                "current_regime_rule": _current_regime_rule_payload(),
                 "segmented_views": {
                     segment: {}
                     for segment in TRACKING_SEGMENT_COLUMNS
                 },
+                "published_view_artifacts": {
+                    "all_time": OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.name,
+                    "current_regime": OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.name,
+                },
+            },
+            "published_summary_views": {
+                "all_time": _build_published_profit_summary_view(
+                    summary_scope="all_time",
+                    metrics=all_time_metrics,
+                    by_book_df=empty_official_picks_profit_summary_df(),
+                ),
+                "current_regime": _build_published_profit_summary_view(
+                    summary_scope="current_regime",
+                    metrics=current_regime_metrics,
+                    by_book_df=empty_official_picks_profit_summary_df(),
+                ),
             },
             "skipped_df": empty_official_picks_profit_report_df(),
         }
@@ -1408,22 +1475,26 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
     else:
         summary_by_book_df = summary_by_book_df[OFFICIAL_PICKS_PROFIT_SUMMARY_SCOPE_COLUMNS].copy()
 
+    all_time_metrics = _build_profit_summary_metrics(
+        graded_df=graded_df,
+        summary_by_book_df=all_time_summary_by_book_df,
+        skipped_df=skipped_df,
+    )
+    current_regime_metrics = _build_profit_summary_metrics(
+        graded_df=current_regime_graded_df,
+        summary_by_book_df=current_regime_summary_by_book_df,
+        skipped_df=current_regime_skipped_df,
+    )
+
     overall_summary = {
         "summary_views": {
-            "all_time": _build_profit_summary_metrics(
-                graded_df=graded_df,
-                summary_by_book_df=all_time_summary_by_book_df,
-                skipped_df=skipped_df,
-            ),
-            "current_regime": _build_profit_summary_metrics(
-                graded_df=current_regime_graded_df,
-                summary_by_book_df=current_regime_summary_by_book_df,
-                skipped_df=current_regime_skipped_df,
-            ),
+            "all_time": all_time_metrics,
+            "current_regime": current_regime_metrics,
         },
-        "current_regime_rule": {
-            "type": "start_date",
-            "start_date": CURRENT_REGIME_START_DATE,
+        "current_regime_rule": _current_regime_rule_payload(),
+        "published_view_artifacts": {
+            "all_time": OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.name,
+            "current_regime": OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.name,
         },
         "segmented_views": {
             segment: _summarize_official_picks_profit_by_dimension(
@@ -1438,6 +1509,18 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
         "graded_df": graded_df,
         "summary_by_book_df": summary_by_book_df,
         "overall_summary": overall_summary,
+        "published_summary_views": {
+            "all_time": _build_published_profit_summary_view(
+                summary_scope="all_time",
+                metrics=all_time_metrics,
+                by_book_df=all_time_summary_by_book_df,
+            ),
+            "current_regime": _build_published_profit_summary_view(
+                summary_scope="current_regime",
+                metrics=current_regime_metrics,
+                by_book_df=current_regime_summary_by_book_df,
+            ),
+        },
         "skipped_df": skipped_df,
     }
 
@@ -1461,6 +1544,12 @@ def _summary_artifact_has_content(path: Path) -> bool:
         return False
     summary_views = payload.get("summary_views", {})
     if not summary_views:
+        summary_metrics = payload.get("summary_metrics", {})
+        if summary_metrics:
+            return any(
+                int(summary_metrics.get(key, 0) or 0) > 0
+                for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
+            )
         return any(
             int(payload.get(key, 0) or 0) > 0
             for key in ["books", "picks", "wins", "losses", "pushes", "decisions", "skipped_rows"]
@@ -1490,6 +1579,8 @@ def _existing_tracking_artifacts_have_content() -> bool:
             _csv_artifact_has_rows(OFFICIAL_PICKS_BOOK_SUMMARY_PATH),
             _csv_artifact_has_rows(OFFICIAL_PICKS_SKIPPED_PATH),
             _summary_artifact_has_content(OFFICIAL_PICKS_OVERALL_SUMMARY_PATH),
+            _summary_artifact_has_content(OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH),
+            _summary_artifact_has_content(OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH),
         ]
     )
 
@@ -1512,6 +1603,14 @@ def persist_official_picks_profit_reports(*, allow_empty_replacement: bool = Fal
     report["skipped_df"].to_csv(OFFICIAL_PICKS_SKIPPED_PATH, index=False)
     OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.write_text(
         json.dumps(report["overall_summary"], indent=2),
+        encoding="utf-8",
+    )
+    OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.write_text(
+        json.dumps(report["published_summary_views"]["all_time"], indent=2),
+        encoding="utf-8",
+    )
+    OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.write_text(
+        json.dumps(report["published_summary_views"]["current_regime"], indent=2),
         encoding="utf-8",
     )
     OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.write_text(
