@@ -158,6 +158,8 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
 
     evaluation = metadata["evaluation_metrics"]
 
+    assert metadata["artifact_version"] == 1
+    assert metadata["model_version"] == training_job.MODEL_VERSION_LABEL
     assert "regression" in evaluation
     assert "bucketed_error" in evaluation
     assert "uncertainty" in evaluation

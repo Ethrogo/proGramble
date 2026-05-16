@@ -42,6 +42,7 @@ METADATA_FILENAME = "metadata.json"
 EVALUATION_SUMMARY_FILENAME = "evaluation_summary.json"
 RAW_HISTORICAL_LINES_DIR = DATA_DIR / "raw" / "historical_lines"
 UNCERTAINTY_STDDEV_COLUMN = "walks_stddev_last10"
+MODEL_VERSION_LABEL = "pitcher_bb_model_v1"
 
 
 def ensure_artifact_dirs() -> None:
@@ -202,6 +203,8 @@ def build_training_metadata(
     )
 
     return {
+        "artifact_version": 1,
+        "model_version": MODEL_VERSION_LABEL,
         "target": TARGET_COL,
         "features": BASE_FEATURES,
         "model_params": {

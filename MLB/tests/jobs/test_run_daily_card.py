@@ -381,9 +381,25 @@ def test_run_daily_card_allows_explicit_market_and_workflow_behavior(monkeypatch
     }
     pd.testing.assert_frame_equal(
         calls["build_picks_joined"],
-        joined_df.assign(predicted_value=6.8, prop_type="pitcher_k"),
+        joined_df.assign(
+            predicted_value=6.8,
+            prop_type="pitcher_k",
+            record_source="run_daily_card",
+            model_version="pitcher_k_artifact_v1",
+            policy_version="mlb_pitcher_props_policy_v1",
+            tracking_regime="legacy_workflow",
+        ),
     )
-    pd.testing.assert_frame_equal(calls["filter_postable_picks"], picks_df.assign(prop_type="pitcher_k"))
+    pd.testing.assert_frame_equal(
+        calls["filter_postable_picks"],
+        picks_df.assign(
+            prop_type="pitcher_k",
+            record_source="run_daily_card",
+            model_version="pitcher_k_artifact_v1",
+            policy_version="mlb_pitcher_props_policy_v1",
+            tracking_regime="legacy_workflow",
+        ),
+    )
 
 
 def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp_path):
@@ -1248,6 +1264,10 @@ def test_persist_official_picks_history_is_idempotent_and_preserves_manual_resul
     assert str(loaded_history.loc[0, "actual_strikeouts"]) == "7"
     assert loaded_history.loc[0, "predicted_strikeouts"] == pytest.approx(6.8)
     assert loaded_history.loc[0, "edge"] == pytest.approx(1.3)
+    assert loaded_history.loc[0, "record_source"] == "manual_seed"
+    assert loaded_history.loc[0, "model_version"] == daily_card.LEGACY_MANUAL_MODEL_VERSION
+    assert loaded_history.loc[0, "policy_version"] == daily_card.LEGACY_MANUAL_POLICY_VERSION
+    assert loaded_history.loc[0, "tracking_regime"] == daily_card.TRACKING_REGIME_MANUAL_BACKFILL
 
 
 def test_build_official_picks_history_rows_handles_existing_game_date_in_post_df():
@@ -1290,7 +1310,49 @@ def test_build_official_picks_history_rows_handles_existing_game_date_in_post_df
 
     assert len(history_rows) == 1
     assert history_rows.loc[0, "game_date"] == "2026-04-19"
-    assert history_rows.loc[0, "pick_key"] == "2026-04-19|jacob degrom"
+
+
+def test_build_official_picks_history_rows_preserves_explicit_provenance_fields():
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-05-10",
+                "pitcher": 1,
+                "player_name": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+            }
+        ]
+    )
+    post_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "predicted_value": 2.2,
+                "book": "FanDuel",
+                "pick_side": "under",
+                "line": 2.5,
+                "price": -105,
+                "edge": 0.3,
+                "confidence_tier": "low",
+                "pick_type": "official",
+                "record_source": "run_daily_card",
+                "model_version": "pitcher_bb_model_v1",
+                "policy_version": "mlb_pitcher_props_policy_v1",
+                "tracking_regime": "current_workflow",
+            }
+        ]
+    )
+
+    history_rows = daily_card.build_official_picks_history_rows(starters_df, post_df)
+
+    assert history_rows.loc[0, "record_source"] == "run_daily_card"
+    assert history_rows.loc[0, "model_version"] == "pitcher_bb_model_v1"
+    assert history_rows.loc[0, "policy_version"] == "mlb_pitcher_props_policy_v1"
+    assert history_rows.loc[0, "tracking_regime"] == "current_workflow"
+    assert history_rows.loc[0, "pick_key"] == "2026-05-10|tarik skubal"
 
 
 def test_build_official_picks_history_rows_falls_back_to_unique_starter_date_when_merge_keeps_only_suffixed_dates():
@@ -1940,7 +2002,16 @@ def test_build_official_picks_profit_report_grades_units_and_aggregates_by_book(
     assert overall_summary["summary_views"]["all_time"]["roi"] == pytest.approx(expected_profit / 2.0)
     assert overall_summary["summary_views"]["all_time"]["skipped_rows"] == 1
     assert overall_summary["summary_views"]["current_regime"]["picks"] == 0
+    assert overall_summary["segmented_views"]["record_source"]["run_daily_card"]["picks"] == 3
+    assert overall_summary["segmented_views"]["model_version"][daily_card.LEGACY_WORKFLOW_MODEL_VERSION]["picks"] == 3
+    assert overall_summary["segmented_views"]["policy_version"][daily_card.LEGACY_WORKFLOW_POLICY_VERSION]["picks"] == 3
+    assert overall_summary["segmented_views"]["tracking_regime"][daily_card.TRACKING_REGIME_LEGACY_WORKFLOW]["picks"] == 3
     assert list(skipped_df["player_name"]) == ["Pitcher D"]
+
+    segmented_rows = summary_by_book_df.loc[
+        summary_by_book_df["segment_type"] == "record_source"
+    ]
+    assert set(segmented_rows["segment_value"]) == {"run_daily_card"}
 
 
 def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_path, monkeypatch):
@@ -2002,12 +2073,16 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
 
     assert grades_df.loc[0, "units_result"] == pytest.approx(100 / 110)
     assert by_book_df.loc[0, "summary_scope"] == "all_time"
+    assert by_book_df.loc[0, "segment_type"] == "summary_scope"
+    assert by_book_df.loc[0, "segment_value"] == "all_time"
     assert by_book_df.loc[0, "book"] == "DraftKings"
     assert by_book_df.loc[0, "units_profit"] == pytest.approx(100 / 110)
     assert summary_payload["summary_views"]["all_time"]["picks"] == 1
     assert summary_payload["summary_views"]["all_time"]["units_profit"] == pytest.approx(100 / 110)
     assert summary_payload["summary_views"]["current_regime"]["picks"] == 0
+    assert summary_payload["segmented_views"]["record_source"]["run_daily_card"]["picks"] == 1
     assert audit_payload["scopes"]["all_time"]["summary"]["official_picks"] == 1
+    assert audit_payload["provenance_groupings"]["record_source"][0]["record_source"] == "run_daily_card"
     assert skipped_df.empty
 
 

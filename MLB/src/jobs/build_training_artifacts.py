@@ -56,6 +56,7 @@ HISTORICAL_LINES_FILENAME = "historical_lines.csv"
 METADATA_FILENAME = "metadata.json"
 EVALUATION_SUMMARY_FILENAME = "evaluation_summary.json"
 RAW_HISTORICAL_LINES_DIR = DATA_DIR / "raw" / "historical_lines"
+MODEL_VERSION_LABEL = "pitcher_k_model_v1"
 
 
 def ensure_artifact_dirs() -> None:
@@ -254,6 +255,8 @@ def build_training_metadata(
         train_output["model"].predict(train_output["dtrain"]),
     )
     return {
+        "artifact_version": 1,
+        "model_version": MODEL_VERSION_LABEL,
         "target": TARGET_COL,
         "features": BASE_FEATURES,
         "model_params": {

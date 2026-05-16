@@ -60,6 +60,22 @@ OFFICIAL_PICKS_OVERALL_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summ
 OFFICIAL_PICKS_SKIPPED_PATH = TRACKING_DIR / "official_picks_profit_skipped.csv"
 OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH = TRACKING_DIR / "official_picks_concentration_audit.json"
 CURRENT_REGIME_START_DATE = "2026-05-07"
+LEGACY_WORKFLOW_MODEL_VERSION = "workflow_unversioned"
+LEGACY_MANUAL_MODEL_VERSION = "manual_unversioned"
+LEGACY_UNKNOWN_MODEL_VERSION = "unknown_unversioned"
+LEGACY_WORKFLOW_POLICY_VERSION = "workflow_unversioned"
+LEGACY_MANUAL_POLICY_VERSION = "manual_unversioned"
+LEGACY_UNKNOWN_POLICY_VERSION = "unknown_unversioned"
+TRACKING_REGIME_MANUAL_BACKFILL = "manual_backfill"
+TRACKING_REGIME_LEGACY_WORKFLOW = "legacy_workflow"
+TRACKING_REGIME_CURRENT_WORKFLOW = "current_workflow"
+TRACKING_REGIME_UNKNOWN = "unknown"
+TRACKING_SEGMENT_COLUMNS = [
+    "record_source",
+    "model_version",
+    "policy_version",
+    "tracking_regime",
+]
 
 OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "pick_key",
@@ -94,6 +110,9 @@ OFFICIAL_PICKS_HISTORY_COLUMNS = [
     "actual_value",
     "actual_strikeouts",
     "record_source",
+    "model_version",
+    "policy_version",
+    "tracking_regime",
 ]
 
 OFFICIAL_PICKS_PROFIT_REPORT_COLUMNS = OFFICIAL_PICKS_HISTORY_COLUMNS + [
@@ -117,6 +136,8 @@ OFFICIAL_PICKS_PROFIT_SUMMARY_COLUMNS = [
 ]
 OFFICIAL_PICKS_PROFIT_SUMMARY_SCOPE_COLUMNS = [
     "summary_scope",
+    "segment_type",
+    "segment_value",
     "book",
     "picks",
     "wins",
@@ -241,6 +262,105 @@ def _normalize_pick_result(result: str | None) -> str:
     if normalized == "push":
         return "Push"
     return ""
+
+
+def _normalize_record_source(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _is_manual_record_source(record_source: object) -> bool:
+    source = _normalize_record_source(record_source).lower()
+    return "manual" in source or "backfill" in source
+
+
+def _infer_tracking_regime(record_source: object, game_date: object) -> str:
+    if _is_manual_record_source(record_source):
+        return TRACKING_REGIME_MANUAL_BACKFILL
+
+    source = _normalize_record_source(record_source).lower()
+    parsed_game_date = pd.to_datetime(game_date, errors="coerce")
+    if source == "run_daily_card":
+        if not pd.isna(parsed_game_date) and parsed_game_date >= pd.Timestamp(CURRENT_REGIME_START_DATE):
+            return TRACKING_REGIME_CURRENT_WORKFLOW
+        return TRACKING_REGIME_LEGACY_WORKFLOW
+
+    if pd.isna(parsed_game_date):
+        return TRACKING_REGIME_UNKNOWN
+    if parsed_game_date >= pd.Timestamp(CURRENT_REGIME_START_DATE):
+        return TRACKING_REGIME_CURRENT_WORKFLOW
+    return TRACKING_REGIME_LEGACY_WORKFLOW
+
+
+def _default_model_version_for_record(record_source: object) -> str:
+    if _is_manual_record_source(record_source):
+        return LEGACY_MANUAL_MODEL_VERSION
+    source = _normalize_record_source(record_source).lower()
+    if source == "run_daily_card":
+        return LEGACY_WORKFLOW_MODEL_VERSION
+    return LEGACY_UNKNOWN_MODEL_VERSION
+
+
+def _default_policy_version_for_record(record_source: object) -> str:
+    if _is_manual_record_source(record_source):
+        return LEGACY_MANUAL_POLICY_VERSION
+    source = _normalize_record_source(record_source).lower()
+    if source == "run_daily_card":
+        return LEGACY_WORKFLOW_POLICY_VERSION
+    return LEGACY_UNKNOWN_POLICY_VERSION
+
+
+def _hydrate_history_provenance_columns(df: pd.DataFrame) -> pd.DataFrame:
+    hydrated = df.copy()
+    for column in TRACKING_SEGMENT_COLUMNS:
+        if column not in hydrated.columns:
+            hydrated[column] = ""
+
+    hydrated["record_source"] = hydrated["record_source"].apply(_normalize_record_source)
+    hydrated["model_version"] = hydrated.apply(
+        lambda row: str(row.get("model_version", "") or "").strip()
+        or _default_model_version_for_record(row.get("record_source")),
+        axis=1,
+    )
+    hydrated["policy_version"] = hydrated.apply(
+        lambda row: str(row.get("policy_version", "") or "").strip()
+        or _default_policy_version_for_record(row.get("record_source")),
+        axis=1,
+    )
+    hydrated["tracking_regime"] = hydrated.apply(
+        lambda row: str(row.get("tracking_regime", "") or "").strip()
+        or _infer_tracking_regime(row.get("record_source"), row.get("game_date")),
+        axis=1,
+    )
+    return hydrated
+
+
+def _resolve_model_version(workflow: ModelingWorkflowSpec, metadata: dict | None) -> str:
+    metadata = metadata or {}
+    explicit_version = str(metadata.get("model_version", "") or "").strip()
+    if explicit_version:
+        return explicit_version
+
+    artifact_version = metadata.get("artifact_version", 1)
+    training_window = metadata.get("training_window", {})
+    train_split_date = training_window.get("train_split_date") if isinstance(training_window, dict) else None
+    if train_split_date:
+        return f"{workflow.prop_type}_artifact_v{artifact_version}_split_{train_split_date}"
+    return f"{workflow.prop_type}_artifact_v{artifact_version}"
+
+
+def _annotate_workflow_provenance(
+    df: pd.DataFrame,
+    *,
+    workflow: ModelingWorkflowSpec,
+    metadata: dict | None,
+    game_date: object,
+) -> pd.DataFrame:
+    annotated = df.copy()
+    annotated["record_source"] = "run_daily_card"
+    annotated["model_version"] = _resolve_model_version(workflow, metadata)
+    annotated["policy_version"] = workflow.pick_ranking_policy.version
+    annotated["tracking_regime"] = _infer_tracking_regime("run_daily_card", game_date)
+    return annotated
 
 
 def _parse_american_odds(odds: float | int | str | None) -> float | None:
@@ -525,6 +645,48 @@ def summarize_official_picks_profit_by_book(graded_df: pd.DataFrame) -> pd.DataF
     ).reset_index(drop=True)
 
 
+def _summarize_official_picks_profit_by_dimension(
+    graded_df: pd.DataFrame,
+    *,
+    dimension: str,
+) -> dict[str, dict[str, int | float | None]]:
+    if graded_df.empty or dimension not in graded_df.columns:
+        return {}
+
+    segmented: dict[str, dict[str, int | float | None]] = {}
+    for segment_value, segment_df in graded_df.groupby(dimension, dropna=False, sort=True):
+        normalized_value = str(segment_value or "").strip() or TRACKING_REGIME_UNKNOWN
+        segmented[normalized_value] = _build_profit_summary_metrics(
+            graded_df=segment_df,
+            summary_by_book_df=summarize_official_picks_profit_by_book(segment_df),
+            skipped_df=empty_official_picks_profit_report_df(),
+        )
+    return segmented
+
+
+def _append_segmented_summary_rows(
+    rows: list[pd.DataFrame],
+    *,
+    graded_df: pd.DataFrame,
+    segment_type: str,
+) -> None:
+    if graded_df.empty or segment_type not in graded_df.columns:
+        return
+
+    for segment_value, segment_df in graded_df.groupby(segment_type, dropna=False, sort=True):
+        normalized_value = str(segment_value or "").strip() or TRACKING_REGIME_UNKNOWN
+        segment_summary = summarize_official_picks_profit_by_book(segment_df)
+        if segment_summary.empty:
+            continue
+        rows.append(
+            segment_summary.assign(
+                summary_scope="all_time",
+                segment_type=segment_type,
+                segment_value=normalized_value,
+            )
+        )
+
+
 def _empty_profit_summary_metrics() -> dict[str, int | float | None]:
     return {
         "books": 0,
@@ -569,6 +731,8 @@ def _build_profit_summary_metrics(
 
 
 def _current_regime_mask(history_df: pd.DataFrame) -> pd.Series:
+    if "tracking_regime" in history_df.columns:
+        return history_df["tracking_regime"].astype(str).eq(TRACKING_REGIME_CURRENT_WORKFLOW)
     game_dates = pd.to_datetime(history_df.get("game_date", ""), errors="coerce")
     return game_dates >= pd.Timestamp(CURRENT_REGIME_START_DATE)
 
@@ -759,6 +923,7 @@ def build_official_picks_concentration_audit(history_df: pd.DataFrame) -> dict[s
     for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
         if column not in working_history.columns:
             working_history[column] = ""
+    working_history = _hydrate_history_provenance_columns(working_history)
 
     official_df = working_history.loc[working_history["pick_type"] == "official"].copy()
     official_df["line_bucket"] = official_df["line"].apply(_audit_line_bucket)
@@ -976,6 +1141,10 @@ def build_official_picks_concentration_audit(history_df: pd.DataFrame) -> dict[s
             "all_time": all_time_scope,
             "current_regime": current_regime_scope,
         },
+        "provenance_groupings": {
+            segment: _build_audit_group_records(official_df, group_columns=[segment])
+            for segment in TRACKING_SEGMENT_COLUMNS
+        },
         "regime_comparison": regime_comparison,
     }
 
@@ -1145,6 +1314,10 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
                     "type": "start_date",
                     "start_date": CURRENT_REGIME_START_DATE,
                 },
+                "segmented_views": {
+                    segment: {}
+                    for segment in TRACKING_SEGMENT_COLUMNS
+                },
             },
             "skipped_df": empty_official_picks_profit_report_df(),
         }
@@ -1153,6 +1326,7 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
     for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
         if column not in working_history.columns:
             working_history[column] = ""
+    working_history = _hydrate_history_provenance_columns(working_history)
 
     official_df = working_history[working_history["pick_type"] == "official"].copy()
     if official_df.empty:
@@ -1167,6 +1341,10 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
                 "current_regime_rule": {
                     "type": "start_date",
                     "start_date": CURRENT_REGIME_START_DATE,
+                },
+                "segmented_views": {
+                    segment: {}
+                    for segment in TRACKING_SEGMENT_COLUMNS
                 },
             },
             "skipped_df": empty_official_picks_profit_report_df(),
@@ -1206,13 +1384,25 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
     ].copy()
     current_regime_summary_by_book_df = summarize_official_picks_profit_by_book(current_regime_graded_df)
 
-    summary_by_book_df = pd.concat(
-        [
-            all_time_summary_by_book_df.assign(summary_scope="all_time"),
-            current_regime_summary_by_book_df.assign(summary_scope="current_regime"),
-        ],
-        ignore_index=True,
-    )
+    summary_rows: list[pd.DataFrame] = [
+        all_time_summary_by_book_df.assign(
+            summary_scope="all_time",
+            segment_type="summary_scope",
+            segment_value="all_time",
+        ),
+        current_regime_summary_by_book_df.assign(
+            summary_scope="current_regime",
+            segment_type="summary_scope",
+            segment_value="current_regime",
+        ),
+    ]
+    for segment in TRACKING_SEGMENT_COLUMNS:
+        _append_segmented_summary_rows(
+            summary_rows,
+            graded_df=graded_df,
+            segment_type=segment,
+        )
+    summary_by_book_df = pd.concat(summary_rows, ignore_index=True)
     if summary_by_book_df.empty:
         summary_by_book_df = empty_official_picks_profit_summary_by_scope_df()
     else:
@@ -1234,6 +1424,13 @@ def build_official_picks_profit_report(history_df: pd.DataFrame) -> dict[str, ob
         "current_regime_rule": {
             "type": "start_date",
             "start_date": CURRENT_REGIME_START_DATE,
+        },
+        "segmented_views": {
+            segment: _summarize_official_picks_profit_by_dimension(
+                graded_df,
+                dimension=segment,
+            )
+            for segment in TRACKING_SEGMENT_COLUMNS
         },
     }
 
@@ -1350,6 +1547,7 @@ def load_official_picks_history() -> pd.DataFrame:
             history_df["actual_strikeouts"].astype(str).str.strip() != "",
             history_df["actual_value"],
         )
+    history_df = _hydrate_history_provenance_columns(history_df)
 
     return history_df[OFFICIAL_PICKS_HISTORY_COLUMNS].copy()
 
@@ -1447,7 +1645,13 @@ def build_official_picks_history_rows(
         history_rows["predicted_strikeouts"] = history_rows["predicted_value"]
     history_rows["actual_value"] = ""
     history_rows["actual_strikeouts"] = ""
-    history_rows["record_source"] = "run_daily_card"
+    if "record_source" not in history_rows.columns:
+        history_rows["record_source"] = "run_daily_card"
+    history_rows["record_source"] = history_rows["record_source"].where(
+        history_rows["record_source"].astype(str).str.strip() != "",
+        "run_daily_card",
+    )
+    history_rows = _hydrate_history_provenance_columns(history_rows)
 
     for column in OFFICIAL_PICKS_HISTORY_COLUMNS:
         if column not in history_rows.columns:
@@ -1483,14 +1687,30 @@ def persist_official_picks_history(
                 new_record["actual_value"] = existing_record["actual_value"]
             if existing_record.get("actual_strikeouts") and not new_record.get("actual_strikeouts"):
                 new_record["actual_strikeouts"] = existing_record["actual_strikeouts"]
-            if existing_record.get("record_source") and not new_record.get("record_source"):
+            if _is_manual_record_source(existing_record.get("record_source")):
                 new_record["record_source"] = existing_record["record_source"]
+                if existing_record.get("model_version"):
+                    new_record["model_version"] = existing_record["model_version"]
+                if existing_record.get("policy_version"):
+                    new_record["policy_version"] = existing_record["policy_version"]
+                if existing_record.get("tracking_regime"):
+                    new_record["tracking_regime"] = existing_record["tracking_regime"]
+            else:
+                if existing_record.get("record_source") and not new_record.get("record_source"):
+                    new_record["record_source"] = existing_record["record_source"]
+                if existing_record.get("model_version") and not new_record.get("model_version"):
+                    new_record["model_version"] = existing_record["model_version"]
+                if existing_record.get("policy_version") and not new_record.get("policy_version"):
+                    new_record["policy_version"] = existing_record["policy_version"]
+                if existing_record.get("tracking_regime") and not new_record.get("tracking_regime"):
+                    new_record["tracking_regime"] = existing_record["tracking_regime"]
 
         merged_rows.append(new_record)
 
     merged_df = pd.DataFrame(merged_rows, columns=OFFICIAL_PICKS_HISTORY_COLUMNS)
     untouched_existing = existing_df[~existing_df["pick_key"].isin(merged_df["pick_key"])]
     history_df = pd.concat([untouched_existing, merged_df], ignore_index=True)
+    history_df = _hydrate_history_provenance_columns(history_df)
     history_df = history_df[OFFICIAL_PICKS_HISTORY_COLUMNS]
     history_df.to_csv(OFFICIAL_PICKS_HISTORY_PATH, index=False)
     return OFFICIAL_PICKS_HISTORY_PATH
@@ -1767,6 +1987,13 @@ def run_workflow_daily_card(
         raise ValueError("No today predictions were generated.")
 
     today_preds = _adapt_predictions_for_output(today_preds, workflow)
+    workflow_game_date = pd.to_datetime(starters_df["game_date"], errors="coerce").min()
+    today_preds = _annotate_workflow_provenance(
+        today_preds,
+        workflow=workflow,
+        metadata=metadata,
+        game_date=workflow_game_date,
+    )
     selected_market = market or workflow.market_key
     run_status = "success"
     run_message: str | None = None
@@ -1784,6 +2011,12 @@ def run_workflow_daily_card(
         if not joined_df.empty and workflow.prop_fields.shared_prediction not in joined_df.columns:
             joined_df[workflow.prop_fields.shared_prediction] = _prediction_value_from_frame(joined_df)
         joined_df = _tag_workflow_frame(joined_df, workflow)
+        joined_df = _annotate_workflow_provenance(
+            joined_df,
+            workflow=workflow,
+            metadata=metadata,
+            game_date=workflow_game_date,
+        )
         if joined_df.empty:
             run_status = "degraded"
             run_message = _build_no_edges_message(
@@ -1794,6 +2027,24 @@ def run_workflow_daily_card(
             joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)
             picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
             post_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+            joined_df = _annotate_workflow_provenance(
+                joined_df,
+                workflow=workflow,
+                metadata=metadata,
+                game_date=workflow_game_date,
+            )
+            picks_df = _annotate_workflow_provenance(
+                picks_df,
+                workflow=workflow,
+                metadata=metadata,
+                game_date=workflow_game_date,
+            )
+            post_df = _annotate_workflow_provenance(
+                post_df,
+                workflow=workflow,
+                metadata=metadata,
+                game_date=workflow_game_date,
+            )
         else:
             validate_joined_odds_contract(
                 joined_df,
@@ -1802,10 +2053,22 @@ def run_workflow_daily_card(
 
             picks_df = build_picks_fn(joined_df)
             picks_df = _tag_workflow_frame(picks_df, workflow)
+            picks_df = _annotate_workflow_provenance(
+                picks_df,
+                workflow=workflow,
+                metadata=metadata,
+                game_date=workflow_game_date,
+            )
             validate_final_picks_contract(picks_df)
 
             post_df = filter_postable_picks_fn(picks_df)
             post_df = _tag_workflow_frame(post_df, workflow)
+            post_df = _annotate_workflow_provenance(
+                post_df,
+                workflow=workflow,
+                metadata=metadata,
+                game_date=workflow_game_date,
+            )
             validate_final_picks_contract(post_df)
     except requests.RequestException as exc:
         run_status = "degraded"
@@ -1817,6 +2080,24 @@ def run_workflow_daily_card(
         joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)
         picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
         post_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+        joined_df = _annotate_workflow_provenance(
+            joined_df,
+            workflow=workflow,
+            metadata=metadata,
+            game_date=workflow_game_date,
+        )
+        picks_df = _annotate_workflow_provenance(
+            picks_df,
+            workflow=workflow,
+            metadata=metadata,
+            game_date=workflow_game_date,
+        )
+        post_df = _annotate_workflow_provenance(
+            post_df,
+            workflow=workflow,
+            metadata=metadata,
+            game_date=workflow_game_date,
+        )
 
     return today_preds, joined_df, picks_df, post_df, run_status, run_message
 

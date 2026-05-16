@@ -96,6 +96,8 @@ def test_build_training_metadata_uses_walk_target_and_features():
         historical_lines_df=pd.DataFrame(),
     )
 
+    assert metadata["artifact_version"] == 1
+    assert metadata["model_version"] == training_job.MODEL_VERSION_LABEL
     assert metadata["target"] == "walks"
     assert "walks_last3" not in metadata["features"] or isinstance(metadata["features"], list)
     assert metadata["uncertainty_model"]["base_stddev_column"] == "walks_stddev_last10"

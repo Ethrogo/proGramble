@@ -20,6 +20,7 @@ class PostablePickLimits:
 
 @dataclass(frozen=True)
 class PickRankingPolicy:
+    version: str
     official_edge_threshold: float
     lean_edge_threshold: float
     confidence_tier_thresholds: tuple[tuple[str, float], ...]
@@ -154,6 +155,7 @@ class PickRankingPolicy:
 
 
 DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY = PickRankingPolicy(
+    version="mlb_pitcher_props_policy_v1",
     official_edge_threshold=0.75,
     lean_edge_threshold=0.40,
     confidence_tier_thresholds=(
