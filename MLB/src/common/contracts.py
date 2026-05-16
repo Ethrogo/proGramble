@@ -217,7 +217,11 @@ def validate_joined_odds_contract(
     )
 
 
-def validate_final_picks_contract(df: pd.DataFrame) -> None:
+def validate_final_picks_contract(
+    df: pd.DataFrame,
+    *,
+    require_non_empty_frame: bool = True,
+) -> None:
     validate_dataframe_contract(
         df,
         name="final_picks_df",
@@ -230,6 +234,7 @@ def validate_final_picks_contract(df: pd.DataFrame) -> None:
             "edge",
             "pick_type",
         ],
+        require_non_empty_frame=require_non_empty_frame,
     )
 
 

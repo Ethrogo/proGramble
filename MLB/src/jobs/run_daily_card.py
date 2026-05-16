@@ -2069,7 +2069,7 @@ def run_workflow_daily_card(
                 metadata=metadata,
                 game_date=workflow_game_date,
             )
-            validate_final_picks_contract(post_df)
+            validate_final_picks_contract(post_df, require_non_empty_frame=False)
     except requests.RequestException as exc:
         run_status = "degraded"
         run_message = (
