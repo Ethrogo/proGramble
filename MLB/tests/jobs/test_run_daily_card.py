@@ -24,6 +24,8 @@ def test_tracking_artifact_paths_are_isolated_from_committed_repo_files(tmp_path
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_GRADES_PATH.parents
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH.parents
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.parents
+    assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.parents
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_SKIPPED_PATH.parents
     assert committed_tracking_dir not in daily_card.OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.parents
 
@@ -169,6 +171,16 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     )
     monkeypatch.setattr(
         daily_card,
+        "OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_summary_all_time.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_profit_summary_current_regime.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
         "OFFICIAL_PICKS_SKIPPED_PATH",
         tmp_path / "data" / "tracking" / "official_picks_profit_skipped.csv",
     )
@@ -206,6 +218,8 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert daily_card.OFFICIAL_PICKS_GRADES_PATH.exists()
     assert daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH.exists()
     assert daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.exists()
     assert daily_card.OFFICIAL_PICKS_SKIPPED_PATH.exists()
     assert daily_card.OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.exists()
 
@@ -215,6 +229,12 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     loaded_book_summary = pd.read_csv(daily_card.OFFICIAL_PICKS_BOOK_SUMMARY_PATH)
     loaded_overall = daily_card.json.loads(
         daily_card.OFFICIAL_PICKS_OVERALL_SUMMARY_PATH.read_text(encoding="utf-8")
+    )
+    loaded_all_time_summary = daily_card.json.loads(
+        daily_card.OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.read_text(encoding="utf-8")
+    )
+    loaded_current_regime_summary = daily_card.json.loads(
+        daily_card.OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.read_text(encoding="utf-8")
     )
     assert len(loaded_post) == 1
     assert loaded_post.loc[0, "player_name"] == "Jacob deGrom"
@@ -236,6 +256,14 @@ def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp
     assert loaded_overall["summary_views"]["all_time"]["picks"] == 0
     assert loaded_overall["summary_views"]["all_time"]["skipped_rows"] == 1
     assert loaded_overall["summary_views"]["current_regime"]["picks"] == 0
+    assert loaded_overall["published_view_artifacts"] == {
+        "all_time": "official_picks_profit_summary_all_time.json",
+        "current_regime": "official_picks_profit_summary_current_regime.json",
+    }
+    assert loaded_all_time_summary["summary_scope"] == "all_time"
+    assert loaded_all_time_summary["summary_metrics"]["skipped_rows"] == 1
+    assert loaded_current_regime_summary["summary_scope"] == "current_regime"
+    assert loaded_current_regime_summary["summary_metrics"]["picks"] == 0
 
     loaded_audit = daily_card.json.loads(
         daily_card.OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH.read_text(encoding="utf-8")
@@ -1949,6 +1977,8 @@ def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summar
     grades_path = tracking_dir / "official_picks_profit_report.csv"
     by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
     summary_path = tracking_dir / "official_picks_profit_summary.json"
+    all_time_summary_path = tracking_dir / "official_picks_profit_summary_all_time.json"
+    current_regime_summary_path = tracking_dir / "official_picks_profit_summary_current_regime.json"
     skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
     history_path = tracking_dir / "official_picks_history.csv"
 
@@ -1987,6 +2017,12 @@ def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summar
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH", all_time_summary_path)
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH",
+        current_regime_summary_path,
+    )
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
     monkeypatch.setattr(daily_card, "RUN_STATUS_PATH", outputs_dir / "run_daily_card_status.json")
     monkeypatch.setattr(
@@ -2003,6 +2039,8 @@ def test_run_daily_card_degraded_run_does_not_overwrite_existing_tracking_summar
     assert len(pd.read_csv(skipped_path)) == 1
     summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
     assert summary_payload["picks"] == 1
+    assert not all_time_summary_path.exists()
+    assert not current_regime_summary_path.exists()
 
 
 def test_load_model_metadata_reads_matching_file_from_selected_artifact_dir(tmp_path, monkeypatch, capsys):
@@ -2226,6 +2264,8 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     grades_path = tracking_dir / "official_picks_profit_report.csv"
     by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
     summary_path = tracking_dir / "official_picks_profit_summary.json"
+    all_time_summary_path = tracking_dir / "official_picks_profit_summary_all_time.json"
+    current_regime_summary_path = tracking_dir / "official_picks_profit_summary_current_regime.json"
     skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
     audit_path = tracking_dir / "official_picks_concentration_audit.json"
 
@@ -2259,6 +2299,16 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH",
+        tracking_dir / "official_picks_profit_summary_all_time.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH",
+        tracking_dir / "official_picks_profit_summary_current_regime.json",
+    )
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH", audit_path)
 
@@ -2267,12 +2317,20 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     assert grades_path.exists()
     assert by_book_path.exists()
     assert summary_path.exists()
+    assert daily_card.OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.exists()
+    assert daily_card.OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.exists()
     assert skipped_path.exists()
     assert audit_path.exists()
 
     grades_df = pd.read_csv(grades_path)
     by_book_df = pd.read_csv(by_book_path)
     summary_payload = daily_card.json.loads(summary_path.read_text(encoding="utf-8"))
+    all_time_summary_payload = daily_card.json.loads(
+        daily_card.OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH.read_text(encoding="utf-8")
+    )
+    current_regime_summary_payload = daily_card.json.loads(
+        daily_card.OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH.read_text(encoding="utf-8")
+    )
     skipped_df = pd.read_csv(skipped_path)
     audit_payload = daily_card.json.loads(audit_path.read_text(encoding="utf-8"))
 
@@ -2285,6 +2343,11 @@ def test_persist_official_picks_profit_reports_writes_tracking_artifacts(tmp_pat
     assert summary_payload["summary_views"]["all_time"]["picks"] == 1
     assert summary_payload["summary_views"]["all_time"]["units_profit"] == pytest.approx(100 / 110)
     assert summary_payload["summary_views"]["current_regime"]["picks"] == 0
+    assert all_time_summary_payload["summary_scope"] == "all_time"
+    assert all_time_summary_payload["summary_metrics"]["picks"] == 1
+    assert all_time_summary_payload["summary_metrics"]["units_profit"] == pytest.approx(100 / 110)
+    assert current_regime_summary_payload["summary_scope"] == "current_regime"
+    assert current_regime_summary_payload["summary_metrics"]["picks"] == 0
     assert summary_payload["segmented_views"]["record_source"]["run_daily_card"]["picks"] == 1
     assert audit_payload["scopes"]["all_time"]["summary"]["official_picks"] == 1
     assert audit_payload["provenance_groupings"]["record_source"][0]["record_source"] == "run_daily_card"
@@ -2336,6 +2399,9 @@ def test_build_official_picks_profit_report_includes_current_regime_view():
     assert report["overall_summary"]["summary_views"]["all_time"]["picks"] == 2
     assert report["overall_summary"]["summary_views"]["current_regime"]["picks"] == 1
     assert report["overall_summary"]["summary_views"]["current_regime"]["losses"] == 1
+    assert report["published_summary_views"]["all_time"]["summary_scope"] == "all_time"
+    assert report["published_summary_views"]["current_regime"]["summary_scope"] == "current_regime"
+    assert report["published_summary_views"]["current_regime"]["summary_metrics"]["picks"] == 1
 
     by_scope = report["summary_by_book_df"]["summary_scope"].tolist()
     assert "all_time" in by_scope
@@ -2473,6 +2539,8 @@ def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_su
     grades_path = tracking_dir / "official_picks_profit_report.csv"
     by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
     summary_path = tracking_dir / "official_picks_profit_summary.json"
+    all_time_summary_path = tracking_dir / "official_picks_profit_summary_all_time.json"
+    current_regime_summary_path = tracking_dir / "official_picks_profit_summary_current_regime.json"
     skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
 
     pd.DataFrame([{"pick_key": "seed", "player_name": "Pitcher A"}]).to_csv(grades_path, index=False)
@@ -2486,6 +2554,12 @@ def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_su
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH", all_time_summary_path)
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH",
+        current_regime_summary_path,
+    )
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
 
     with pytest.raises(ValueError, match="Refusing to overwrite non-empty tracking summaries"):
@@ -2496,6 +2570,8 @@ def test_persist_official_picks_profit_reports_refuses_to_overwrite_non_empty_su
     assert len(pd.read_csv(skipped_path)) == 1
     summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
     assert summary_payload["picks"] == 1
+    assert not all_time_summary_path.exists()
+    assert not current_regime_summary_path.exists()
 
 
 def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_temp_paths(
@@ -2508,6 +2584,8 @@ def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_
     grades_path = tracking_dir / "official_picks_profit_report.csv"
     by_book_path = tracking_dir / "official_picks_profit_by_book.csv"
     summary_path = tracking_dir / "official_picks_profit_summary.json"
+    all_time_summary_path = tracking_dir / "official_picks_profit_summary_all_time.json"
+    current_regime_summary_path = tracking_dir / "official_picks_profit_summary_current_regime.json"
     skipped_path = tracking_dir / "official_picks_profit_skipped.csv"
 
     pd.DataFrame(columns=daily_card.OFFICIAL_PICKS_HISTORY_COLUMNS).to_csv(history_path, index=False)
@@ -2517,6 +2595,12 @@ def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_GRADES_PATH", grades_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_BOOK_SUMMARY_PATH", by_book_path)
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_OVERALL_SUMMARY_PATH", summary_path)
+    monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH", all_time_summary_path)
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH",
+        current_regime_summary_path,
+    )
     monkeypatch.setattr(daily_card, "OFFICIAL_PICKS_SKIPPED_PATH", skipped_path)
 
     daily_card.persist_official_picks_profit_reports()
@@ -2525,11 +2609,17 @@ def test_persist_official_picks_profit_reports_allows_empty_outputs_in_isolated_
     assert by_book_path.exists()
     assert skipped_path.exists()
     assert summary_path.exists()
+    assert all_time_summary_path.exists()
+    assert current_regime_summary_path.exists()
     assert pd.read_csv(grades_path).empty
     assert pd.read_csv(by_book_path).empty
     assert pd.read_csv(skipped_path).empty
     summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    all_time_summary_payload = json.loads(all_time_summary_path.read_text(encoding="utf-8"))
+    current_regime_summary_payload = json.loads(current_regime_summary_path.read_text(encoding="utf-8"))
     assert summary_payload["summary_views"]["all_time"]["picks"] == 0
+    assert all_time_summary_payload["summary_metrics"]["picks"] == 0
+    assert current_regime_summary_payload["summary_metrics"]["picks"] == 0
 
 
 def test_apply_statcast_results_to_official_picks_history_updates_yesterday_pick_results():

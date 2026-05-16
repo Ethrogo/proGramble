@@ -77,6 +77,16 @@ def isolate_tracking_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     )
     monkeypatch.setattr(
         daily_card,
+        "OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH",
+        tracking_dir / "official_picks_profit_summary_all_time.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH",
+        tracking_dir / "official_picks_profit_summary_current_regime.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
         "OFFICIAL_PICKS_SKIPPED_PATH",
         tracking_dir / "official_picks_profit_skipped.csv",
     )
