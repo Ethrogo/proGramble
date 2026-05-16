@@ -1187,6 +1187,118 @@ def test_run_workflow_daily_card_uses_pitcher_walk_market_and_validates_joined_o
     assert result_message is None
 
 
+def test_run_workflow_daily_card_allows_empty_postable_picks(monkeypatch):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    pitcher_games = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-18",
+                "game_pk": 111111,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "pitching_team": "TEX",
+                "opponent_team": "SEA",
+            }
+        ]
+    )
+    today_preds = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "player_name_norm": "jacob degrom",
+                "pitcher": 1,
+                "team": "TEX",
+                "opponent": "SEA",
+                "predicted_strikeouts": 6.8,
+            }
+        ]
+    )
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Jacob deGrom",
+                "player_name_norm": "jacob degrom",
+                "predicted_value": 6.8,
+                "predicted_strikeouts": 6.8,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 5.5,
+                "price": -120,
+            }
+        ]
+    )
+    picks_df = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -120,
+                "edge": 1.3,
+                "pick_type": "official",
+                "implied_probability": 0.545,
+                "value_score": 0.5915,
+                "confidence_tier": "medium",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(daily_card, "load_workflow_history_artifact", lambda workflow: pitcher_games)
+    monkeypatch.setattr(daily_card, "load_workflow_model_artifact", lambda workflow: "fake_model")
+    monkeypatch.setattr(daily_card, "load_model_metadata", lambda workflow=None: {"target": "strikeouts"})
+    monkeypatch.setattr(
+        daily_card,
+        "build_today_predictions_for_workflow",
+        lambda *, starters_df, pitcher_games, model, workflow: today_preds,
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "run_edge_pipeline",
+        lambda preds, market, **kwargs: (
+            joined_df,
+            joined_df,
+            {"raw_event_count": 1, "normalized_odds_rows": 1, "joined_rows": 1},
+        ),
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "build_daily_picks",
+        lambda joined, policy, prediction_column="predicted_value": picks_df,
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "filter_postable_picks",
+        lambda picks, max_official=3, max_leans=1, policy=None: daily_card.empty_final_picks_df(),
+    )
+
+    _, _, result_picks, result_post, result_status, result_message = daily_card.run_workflow_daily_card(
+        starters_df=starters_df,
+        workflow=daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW,
+    )
+
+    assert len(result_picks) == 1
+    assert result_post.empty
+    assert set(daily_card.empty_final_picks_df().columns).issubset(result_post.columns)
+    assert result_status == "success"
+    assert result_message is None
+
+
 def test_persist_official_picks_history_is_idempotent_and_preserves_manual_results(tmp_path, monkeypatch):
     starters_df = pd.DataFrame(
         [
