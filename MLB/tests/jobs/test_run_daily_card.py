@@ -1299,6 +1299,99 @@ def test_run_workflow_daily_card_allows_empty_postable_picks(monkeypatch):
     assert result_message is None
 
 
+def test_run_daily_card_preserves_other_workflow_picks_when_one_workflow_has_no_postable_rows(monkeypatch, tmp_path):
+    starters_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2026-04-19",
+                "game_pk": 123456,
+                "pitcher": 1,
+                "player_name": "Jacob deGrom",
+                "team": "TEX",
+                "opponent": "SEA",
+                "home_team": "TEX",
+                "away_team": "SEA",
+                "is_home": 1,
+                "p_throws": "R",
+            }
+        ]
+    )
+    strikeout_picks = pd.DataFrame(
+        [
+            {
+                "player_name": "Jacob deGrom",
+                "prop_type": "pitcher_k",
+                "book": "DraftKings",
+                "pick_side": "over",
+                "line": 5.5,
+                "price": -120,
+                "edge": 1.3,
+                "pick_type": "official",
+                "implied_probability": 0.545,
+                "value_score": 0.5915,
+                "confidence_tier": "medium",
+                "record_source": "run_daily_card",
+                "model_version": "pitcher_k_artifact_v1",
+                "policy_version": "mlb_pitcher_props_policy_v1",
+                "tracking_regime": "legacy_workflow",
+            }
+        ]
+    )
+    walk_picks = daily_card.empty_final_picks_df().assign(
+        prop_type=pd.Series(dtype="object"),
+        record_source=pd.Series(dtype="object"),
+        model_version=pd.Series(dtype="object"),
+        policy_version=pd.Series(dtype="object"),
+        tracking_regime=pd.Series(dtype="object"),
+    )
+    calls = {"count": 0}
+
+    monkeypatch.setattr(daily_card, "get_today_starters_df", lambda: starters_df)
+    monkeypatch.setattr(daily_card, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(daily_card, "OUTPUT_DIR", tmp_path / "data" / "outputs")
+    monkeypatch.setattr(daily_card, "PROJECTIONS_DIR", tmp_path / "data" / "outputs" / "projections")
+    monkeypatch.setattr(daily_card, "EDGES_DIR", tmp_path / "data" / "outputs" / "edges")
+    monkeypatch.setattr(daily_card, "PICKS_DIR", tmp_path / "data" / "outputs" / "picks")
+    monkeypatch.setattr(daily_card, "TRACKING_DIR", tmp_path / "data" / "tracking")
+    monkeypatch.setattr(
+        daily_card,
+        "OFFICIAL_PICKS_HISTORY_PATH",
+        tmp_path / "data" / "tracking" / "official_picks_history.csv",
+    )
+    monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
+    monkeypatch.setattr(daily_card, "grade_official_picks_from_statcast", lambda: None)
+    monkeypatch.setattr(daily_card, "persist_official_picks_profit_reports", lambda *args, **kwargs: {})
+
+    def fake_run_workflow_daily_card(*, starters_df, workflow, market, build_picks_fn, filter_postable_picks_fn):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return (
+                pd.DataFrame([{"player_name": "Jacob deGrom", "prop_type": "pitcher_k"}]),
+                daily_card.empty_joined_odds_df(),
+                strikeout_picks,
+                strikeout_picks.copy(),
+                "success",
+                None,
+            )
+        return (
+            pd.DataFrame([{"player_name": "Jacob deGrom", "prop_type": "pitcher_bb"}]),
+            daily_card.empty_joined_odds_df(),
+            walk_picks.copy(),
+            walk_picks.copy(),
+            "success",
+            None,
+        )
+
+    monkeypatch.setattr(daily_card, "run_workflow_daily_card", fake_run_workflow_daily_card)
+
+    _, _, result_picks, result_post = daily_card.run_daily_card()
+
+    assert list(result_picks["prop_type"]) == ["pitcher_k"]
+    assert list(result_post["prop_type"]) == ["pitcher_k"]
+    saved_post = pd.read_csv(tmp_path / "data" / "outputs" / "picks" / "today_postable_picks.csv")
+    assert list(saved_post["prop_type"]) == ["pitcher_k"]
+
+
 def test_persist_official_picks_history_is_idempotent_and_preserves_manual_results(tmp_path, monkeypatch):
     starters_df = pd.DataFrame(
         [
