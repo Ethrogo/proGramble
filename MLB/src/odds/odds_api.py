@@ -50,6 +50,8 @@ def fetch_mlb_events(
     sport: str = ODDS_SPORT,
     market: str = EVENT_DISCOVERY_MARKET,
     bookmakers: list[str] | None = None,
+    *,
+    use_configured_bookmakers: bool = True,
     odds_format: str = "american",
     date_format: str = "iso",
 ) -> list[dict]:
@@ -60,7 +62,7 @@ def fetch_mlb_events(
     if not ODDS_API_KEY:
         raise ValueError("ODDS_API_KEY is missing")
 
-    if bookmakers is None:
+    if bookmakers is None and use_configured_bookmakers:
         bookmakers = BOOKMAKERS
 
     url = f"{ODDS_API_BASE}/{sport}/odds"
@@ -84,6 +86,8 @@ def fetch_event_player_props(
     market: str,
     sport: str = ODDS_SPORT,
     bookmakers: list[str] | None = None,
+    *,
+    use_configured_bookmakers: bool = True,
     odds_format: str = "american",
     date_format: str = "iso",
 ) -> dict:
@@ -93,7 +97,7 @@ def fetch_event_player_props(
     if not ODDS_API_KEY:
         raise ValueError("ODDS_API_KEY is missing")
 
-    if bookmakers is None:
+    if bookmakers is None and use_configured_bookmakers:
         bookmakers = BOOKMAKERS
 
     url = f"{ODDS_API_BASE}/{sport}/events/{event_id}/odds"
@@ -126,7 +130,11 @@ def fetch_all_player_props(
     if bookmakers is None and use_configured_bookmakers:
         bookmakers = BOOKMAKERS
 
-    events = fetch_mlb_events(sport=sport, bookmakers=bookmakers)
+    events = fetch_mlb_events(
+        sport=sport,
+        bookmakers=bookmakers,
+        use_configured_bookmakers=use_configured_bookmakers,
+    )
     prop_events: list[dict] = []
     failed_event_ids: list[str] = []
 
@@ -141,6 +149,7 @@ def fetch_all_player_props(
                 sport=sport,
                 market=market,
                 bookmakers=bookmakers,
+                use_configured_bookmakers=use_configured_bookmakers,
             )
 
             if prop_data and prop_data.get("bookmakers"):

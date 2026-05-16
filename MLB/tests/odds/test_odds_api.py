@@ -169,6 +169,35 @@ def test_fetch_all_player_props_passes_custom_bookmakers_to_event_discovery(monk
     assert event_calls["kwargs"]["bookmakers"] == ["draftkings", "williamhill_us"]
 
 
+def test_fetch_all_player_props_without_configured_bookmakers_removes_bookmaker_filter(monkeypatch):
+    event_calls = {}
+    prop_calls = {}
+
+    def fake_fetch_mlb_events(**kwargs):
+        event_calls["kwargs"] = kwargs
+        return [{"id": "event_1"}]
+
+    def fake_fetch_event_player_props(event_id: str, market: str, **kwargs):
+        prop_calls["event_id"] = event_id
+        prop_calls["market"] = market
+        prop_calls["kwargs"] = kwargs
+        return {"id": event_id, "bookmakers": [{"key": "espnbet"}]}
+
+    monkeypatch.setattr(odds_api, "fetch_mlb_events", fake_fetch_mlb_events)
+    monkeypatch.setattr(odds_api, "fetch_event_player_props", fake_fetch_event_player_props)
+
+    result = odds_api.fetch_all_player_props(
+        market=PITCHER_K_PROP_MARKET,
+        use_configured_bookmakers=False,
+    )
+
+    assert len(result) == 1
+    assert event_calls["kwargs"]["bookmakers"] is None
+    assert event_calls["kwargs"]["use_configured_bookmakers"] is False
+    assert prop_calls["kwargs"]["bookmakers"] is None
+    assert prop_calls["kwargs"]["use_configured_bookmakers"] is False
+
+
 def test_summarize_event_bookmaker_coverage_reports_missing_caesars_with_note():
     coverage = odds_api.summarize_event_bookmaker_coverage(
         [
