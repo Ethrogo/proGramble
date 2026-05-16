@@ -11,6 +11,7 @@ from odds.policy import (
 def test_default_policy_preserves_thresholds_and_caps():
     policy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY
 
+    assert policy.version == "mlb_pitcher_props_policy_v1"
     assert policy.classify_pick_type(0.75) == "official"
     assert policy.classify_pick_type(0.40) == "lean"
     assert policy.classify_pick_type(0.39) == "pass"
@@ -48,6 +49,7 @@ def test_default_policy_preserves_market_tie_breakers():
 
 def test_policy_can_change_edge_tie_break_preference_and_postable_caps():
     policy = PickRankingPolicy(
+        version="test_policy_v1",
         official_edge_threshold=0.75,
         lean_edge_threshold=0.40,
         confidence_tier_thresholds=(
