@@ -1,0 +1,63 @@
+{
+  "artifact_type": "official_picks_profit_summary_view",
+  "summary_scope": "current_regime",
+  "summary_scope_rule": {
+    "type": "start_date",
+    "start_date": "2026-05-07"
+  },
+  "summary_metrics": {
+    "books": 3,
+    "picks": 30,
+    "wins": 16,
+    "losses": 14,
+    "pushes": 0,
+    "decisions": 30,
+    "units_risked": 30.0,
+    "units_profit": -0.14954247545561916,
+    "win_rate": 0.5333333333333333,
+    "roi": -0.004984749181853972,
+    "skipped_rows": 5
+  },
+  "by_book": [
+    {
+      "book": "DraftKings",
+      "picks": 13,
+      "wins": 7,
+      "losses": 6,
+      "pushes": 0,
+      "decisions": 13,
+      "units_risked": 13.0,
+      "units_profit": 0.17132215869561995,
+      "win_rate": 0.5384615384615384,
+      "roi": 0.013178627591970766
+    },
+    {
+      "book": "BetMGM",
+      "picks": 6,
+      "wins": 3,
+      "losses": 3,
+      "pushes": 0,
+      "decisions": 6,
+      "units_risked": 6.0,
+      "units_profit": 0.07194616977225665,
+      "win_rate": 0.5,
+      "roi": 0.011991028295376108
+    },
+    {
+      "book": "FanDuel",
+      "picks": 11,
+      "wins": 6,
+      "losses": 5,
+      "pushes": 0,
+      "decisions": 11,
+      "units_risked": 11.0,
+      "units_profit": -0.39281080392349543,
+      "win_rate": 0.5454545454545454,
+      "roi": -0.03571007308395413
+    }
+  ],
+  "reproducibility": {
+    "source_artifact": "official_picks_history.csv",
+    "rebuild_entrypoint": "jobs.run_daily_card.persist_official_picks_profit_reports"
+  }
+}
