@@ -1,3 +1,4 @@
+#Fix: Im lazy and kinda bored and this doesnt do much
 import pandas as pd
 
 from jobs import build_historical_lines_artifact as historical_lines_job
