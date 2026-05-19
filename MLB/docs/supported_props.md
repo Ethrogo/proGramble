@@ -18,5 +18,6 @@
   - target column: `walks`
   - training artifact workflow exists for pitcher-walk models
   - initial base features are defined from shared pitcher workload/context columns plus walk-specific rolling features
+  - Needs specific pick policy to be implemented
 
 `pitcher_walks` is not yet a full live-picks workflow. Training artifacts now have a dedicated module and artifact directory, but daily projections, live odds picks, and grading remain strikeout-specific.
