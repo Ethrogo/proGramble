@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -29,6 +30,7 @@ TIMEZONE = ZoneInfo("America/New_York")
 
 
 def load_workflow_runs() -> list[dict]:
+    print(f"[stage] loading workflow runs from {RUNS_CACHE}")
     if not RUNS_CACHE.exists():
         raise FileNotFoundError(
             f"Missing local workflow cache: {RUNS_CACHE}. "
@@ -74,10 +76,12 @@ def select_one_run_per_day(runs: list[dict]) -> pd.DataFrame:
         .reset_index(drop=True)
     )
     selected["multiple_runs_that_day"] = selected["runs_that_day"] > 1
+    print(f"[stage] selected {len(selected)} successful ET dates from {len(runs_df)} workflow runs")
     return selected
 
 
 def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
+    import gc
     import sys
 
     sys.path.insert(0, str(ROOT / "src"))
@@ -91,12 +95,14 @@ def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
     }
 
     if MODEL_DF_CACHE.exists():
+        print(f"[stage] loading cached model_df from {MODEL_DF_CACHE}")
         model_df = pd.read_pickle(MODEL_DF_CACHE)
         metadata["model_df_rows"] = int(len(model_df))
         return model_df, metadata
 
     for artifact_model_df in (LATEST_MODEL_DF, PREVIOUS_MODEL_DF):
         if artifact_model_df.exists():
+            print(f"[stage] loading artifact model_df from {artifact_model_df}")
             model_df = pd.read_csv(artifact_model_df, parse_dates=["game_date"])
             MODEL_DF_CACHE.parent.mkdir(parents=True, exist_ok=True)
             model_df.to_pickle(MODEL_DF_CACHE)
@@ -106,11 +112,13 @@ def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
             return model_df, metadata
 
     if PITCHER_GAMES_CACHE.exists():
+        print(f"[stage] loading cached pitcher_games from {PITCHER_GAMES_CACHE}")
         pitcher_games = pd.read_pickle(PITCHER_GAMES_CACHE)
     else:
         pitcher_games = None
         for artifact_pitcher_games in (LATEST_PITCHER_GAMES, PREVIOUS_PITCHER_GAMES):
             if artifact_pitcher_games.exists():
+                print(f"[stage] loading artifact pitcher_games from {artifact_pitcher_games}")
                 pitcher_games = pd.read_csv(artifact_pitcher_games, parse_dates=["game_date"])
                 metadata["used_artifact_pitcher_games"] = True
                 metadata["artifact_pitcher_games_source"] = str(artifact_pitcher_games)
@@ -122,23 +130,40 @@ def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
                     f"Missing local Statcast cache: {STATCAST_CACHE}. "
                     "Build the local tmp/actions_audit cache before running this script."
                 )
+            print(f"[stage] loading raw Statcast cache from {STATCAST_CACHE}")
             statcast_df = pd.read_pickle(STATCAST_CACHE)
             metadata["statcast_rows"] = int(len(statcast_df))
 
+            print("[stage] adding outcome flags")
             sc_with_flags = preprocessing.add_outcome_flags(statcast_df)
+            del statcast_df
+            gc.collect()
+
+            print("[stage] building pitcher game table")
             pitcher_games = feature_engineering.build_pitcher_game_table(sc_with_flags)
+            print("[stage] adding pitcher team info")
             pitcher_games = feature_engineering.add_pitcher_team_info(pitcher_games, sc_with_flags)
+            print("[stage] adding opponent k features")
             pitcher_games = feature_engineering.add_opponent_k_features(pitcher_games, sc_with_flags)
+            del sc_with_flags
+            gc.collect()
+
+            print("[stage] adding rolling pitcher features")
             pitcher_games = feature_engineering.add_rolling_pitcher_features(pitcher_games)
+            print("[stage] adding rate features")
             pitcher_games = feature_engineering.add_rate_features(pitcher_games)
+            print("[stage] filtering starter-like appearances")
             pitcher_games = feature_engineering.filter_starter_like_appearances(pitcher_games)
 
         PITCHER_GAMES_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[stage] saving pitcher_games cache to {PITCHER_GAMES_CACHE}")
         pitcher_games.to_pickle(PITCHER_GAMES_CACHE)
 
     metadata["pitcher_games_rows"] = int(len(pitcher_games))
+    print("[stage] building model_df")
     model_df = feature_model.build_model_df(pitcher_games)
     MODEL_DF_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[stage] saving model_df cache to {MODEL_DF_CACHE}")
     model_df.to_pickle(MODEL_DF_CACHE)
     metadata["model_df_rows"] = int(len(model_df))
     return model_df, metadata
@@ -153,7 +178,9 @@ def compute_current_overfit_metrics(model_df: pd.DataFrame) -> dict:
     sys.path.insert(0, str(ROOT / "src"))
     from pitcher_k import config, train
 
+    print("[stage] splitting train and test")
     train_df, test_df = train.time_split(model_df, config.TRAIN_SPLIT_DATE)
+    print("[stage] building DMatrix objects")
     dtrain, dtest, _, _, y_train, y_test = train.make_dmats(
         train_df=train_df,
         test_df=test_df,
@@ -162,6 +189,7 @@ def compute_current_overfit_metrics(model_df: pd.DataFrame) -> dict:
     )
 
     evals_result: dict[str, dict[str, list[float]]] = {}
+    print("[stage] training current XGBoost model")
     model = xgb.train(
         params=config.XGB_PARAMS,
         dtrain=dtrain,
@@ -297,6 +325,7 @@ def build_summary(selected_runs: pd.DataFrame, cache_metadata: dict, current_met
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    started = time.perf_counter()
 
     runs = load_workflow_runs()
     selected_runs = select_one_run_per_day(runs)
@@ -314,6 +343,7 @@ def main() -> None:
     print(f"Saved {CURRENT_BOOSTING_PNG}")
     print(f"Saved {RUNS_CALENDAR_PNG}")
     print(f"Saved {RUNS_CSV}")
+    print(f"[done] total runtime: {time.perf_counter() - started:.1f}s")
 
 
 if __name__ == "__main__":
