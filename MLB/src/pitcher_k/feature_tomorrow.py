@@ -148,10 +148,17 @@ def build_tomorrow_features(
 
         feature_row["k_per_pitch_last10"] = _safe_div(last10["strikeouts"].sum(), last10["pitches"].sum())
         feature_row["k_rate_last10"] = _safe_div(last10["strikeouts"].sum(), last10["batters_faced"].sum())
+        feature_row["pitches_per_batter_last10"] = _safe_div(
+            last10["pitches"].sum(),
+            last10["batters_faced"].sum(),
+        )
         feature_row["whiff_per_pitch_last10"] = _safe_div(last10["whiffs"].sum(), last10["pitches"].sum())
 
         feature_row["avg_velo_last10"] = last10["avg_velo"].mean()
         feature_row["avg_spin_last10"] = last10["avg_spin"].mean()
+        feature_row["pitches_trend_last3_vs_last10"] = (
+            feature_row["pitches_last3"] - feature_row["pitches_last10"]
+        )
 
         feature_row["k_trend_last3_vs_last10"] = (
             feature_row["strikeouts_last3"] - feature_row["strikeouts_last10"]

@@ -454,11 +454,11 @@ def add_rolling_pitcher_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
 
 def add_rate_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     """
-    Add derived strikeout rate features from rolling windows.
+    Add derived strikeout, workload, and trend features from rolling windows.
     """
     require_columns(
         pitcher_games,
-        ["strikeouts_last10", "pitches_last10", "batters_faced_last10"],
+        ["strikeouts_last10", "pitches_last3", "pitches_last10", "batters_faced_last10"],
         "pitcher_games",
     )
     assert_non_empty(pitcher_games, "pitcher_games")
@@ -472,12 +472,22 @@ def add_rate_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
     pitcher_games["k_rate_last10"] = (
         pitcher_games["strikeouts_last10"] / pitcher_games["batters_faced_last10"]
     )
+    pitcher_games["pitches_per_batter_last10"] = (
+        pitcher_games["pitches_last10"] / pitcher_games["batters_faced_last10"]
+    )
+    pitcher_games["pitches_trend_last3_vs_last10"] = (
+        pitcher_games["pitches_last3"] - pitcher_games["pitches_last10"]
+    )
 
     pitcher_games["k_per_pitch_last10"] = pitcher_games["k_per_pitch_last10"].replace(
         [np.inf, -np.inf],
         np.nan,
     )
     pitcher_games["k_rate_last10"] = pitcher_games["k_rate_last10"].replace(
+        [np.inf, -np.inf],
+        np.nan,
+    )
+    pitcher_games["pitches_per_batter_last10"] = pitcher_games["pitches_per_batter_last10"].replace(
         [np.inf, -np.inf],
         np.nan,
     )
@@ -499,7 +509,14 @@ def add_rate_features(pitcher_games: pd.DataFrame) -> pd.DataFrame:
 
     require_columns(
         pitcher_games,
-        ["k_per_pitch_last10", "k_rate_last10", "bb_per_pitch_last10", "bb_rate_last10"],
+        [
+            "k_per_pitch_last10",
+            "k_rate_last10",
+            "pitches_per_batter_last10",
+            "pitches_trend_last3_vs_last10",
+            "bb_per_pitch_last10",
+            "bb_rate_last10",
+        ],
         "pitcher_games",
     )
 
