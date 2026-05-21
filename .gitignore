@@ -28,6 +28,7 @@ MANIFEST
 
 # Large Data
 data/*.csv
+MLB/tmp/*
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
