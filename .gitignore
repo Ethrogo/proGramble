@@ -148,6 +148,7 @@ env.bak/
 venv.bak/
 MLB/data/artifacts/_staging/
 MLB/data/artifacts/latest/
+MLB/tmp/
 MLB/data/artifacts/previous/
 MLB/data/inputs/starters/today_starters.csv
 MLB/data/outputs/
