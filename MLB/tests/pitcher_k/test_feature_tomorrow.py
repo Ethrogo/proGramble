@@ -3,6 +3,7 @@
 import pandas as pd
 import pytest
 
+from pitcher_k.config import BASE_FEATURES
 from pitcher_k.feature_tomorrow import build_tomorrow_features
 
 
@@ -127,21 +128,13 @@ def test_build_tomorrow_features_creates_expected_output_columns():
         "team",
         "opponent",
         "is_home",
-        "pitches_last3",
-        "pitches_last10",
-        "whiff_per_pitch_last3",
-        "avg_velo_last3",
-        "avg_spin_last3",
-        "k_per_pitch_last10",
-        "k_rate_last10",
-        "opp_strikeouts_per_game_last10",
-        "opp_k_rate_last10",
         "strikeouts_stddev_last10",
         "strikeouts_p25_last10",
         "strikeouts_p75_last10",
     }
 
     assert expected_cols.issubset(features.columns)
+    assert set(BASE_FEATURES).issubset(features.columns)
     assert features.attrs["skipped_pitchers"] == 0
 
 
@@ -241,6 +234,12 @@ def test_build_tomorrow_features_uses_only_starter_like_history():
     assert len(features) == 1
     assert features.loc[0, "pitches_last3"] == pytest.approx(expected_last3["pitches"].mean())
     assert features.loc[0, "pitches_last10"] == pytest.approx(expected_last10["pitches"].mean())
+    assert features.loc[0, "pitches_trend_last3_vs_last10"] == pytest.approx(
+        expected_last3["pitches"].mean() - expected_last10["pitches"].mean()
+    )
+    assert features.loc[0, "pitches_per_batter_last10"] == pytest.approx(
+        expected_last10["pitches"].sum() / expected_last10["batters_faced"].sum()
+    )
     assert features.loc[0, "k_rate_last10"] == pytest.approx(
         expected_last10["strikeouts"].sum() / expected_last10["batters_faced"].sum()
     )

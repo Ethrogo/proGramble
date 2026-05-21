@@ -4,6 +4,7 @@ from pitcher_k import train as train_mod
 
 
 def _row(game_date: str, strikeouts: int, pitches_last3: float) -> dict:
+    pitches_last10 = pitches_last3 + 2.0
     return {
         "game_date": game_date,
         "game_pk": int(game_date.replace("-", "")),
@@ -11,12 +12,13 @@ def _row(game_date: str, strikeouts: int, pitches_last3: float) -> dict:
         "player_name": "Starter One",
         "strikeouts": strikeouts,
         "pitches_last3": pitches_last3,
-        "pitches_last10": pitches_last3 + 2.0,
+        "pitches_last10": pitches_last10,
         "whiff_per_pitch_last3": 0.12,
+        "pitches_trend_last3_vs_last10": pitches_last3 - pitches_last10,
         "avg_velo_last3": 96.1,
         "avg_spin_last3": 2450.0,
-        "k_per_pitch_last10": 0.08,
         "k_rate_last10": 0.27,
+        "pitches_per_batter_last10": 3.7,
         "opp_strikeouts_per_game_last10": 8.8,
         "opp_k_rate_last10": 0.24,
     }

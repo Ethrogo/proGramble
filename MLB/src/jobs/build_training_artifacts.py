@@ -24,6 +24,7 @@ from pitcher_k.config import (
     RAW_STATCAST_START,
     RAW_STATCAST_END,
     TARGET_COL,
+    TARGET_FORMULATION,
     TRAIN_SPLIT_DATE,
     TRAIN_VALIDATION_FRACTION,
     XGB_EARLY_STOPPING_ROUNDS,
@@ -267,6 +268,7 @@ def build_training_metadata(
         "artifact_version": 1,
         "model_version": MODEL_VERSION_LABEL,
         "target": TARGET_COL,
+        "target_formulation": TARGET_FORMULATION,
         "features": BASE_FEATURES,
         "model_params": {
             "xgb_params": XGB_PARAMS,

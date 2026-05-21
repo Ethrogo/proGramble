@@ -85,7 +85,7 @@ def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
     import sys
 
     sys.path.insert(0, str(ROOT / "src"))
-    from pitcher_k import feature_engineering, feature_model, preprocessing
+    from pitcher_k import config, feature_engineering, feature_model, preprocessing
 
     metadata: dict[str, object] = {
         "used_pitcher_games_cache": PITCHER_GAMES_CACHE.exists(),
@@ -97,13 +97,23 @@ def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
     if MODEL_DF_CACHE.exists():
         print(f"[stage] loading cached model_df from {MODEL_DF_CACHE}")
         model_df = pd.read_pickle(MODEL_DF_CACHE)
-        metadata["model_df_rows"] = int(len(model_df))
-        return model_df, metadata
+        missing_model_features = [feature for feature in config.BASE_FEATURES if feature not in model_df.columns]
+        if not missing_model_features:
+            metadata["model_df_rows"] = int(len(model_df))
+            return model_df, metadata
+        print(f"[stage] cached model_df is missing features {missing_model_features}; rebuilding cache")
 
     for artifact_model_df in (LATEST_MODEL_DF, PREVIOUS_MODEL_DF):
         if artifact_model_df.exists():
             print(f"[stage] loading artifact model_df from {artifact_model_df}")
             model_df = pd.read_csv(artifact_model_df, parse_dates=["game_date"])
+            missing_model_features = [feature for feature in config.BASE_FEATURES if feature not in model_df.columns]
+            if missing_model_features:
+                print(
+                    f"[stage] artifact model_df is missing features {missing_model_features}; "
+                    "falling back to pitcher_games/raw cache"
+                )
+                continue
             MODEL_DF_CACHE.parent.mkdir(parents=True, exist_ok=True)
             model_df.to_pickle(MODEL_DF_CACHE)
             metadata["used_artifact_model_df"] = True
@@ -114,6 +124,15 @@ def load_or_build_model_df() -> tuple[pd.DataFrame, dict]:
     if PITCHER_GAMES_CACHE.exists():
         print(f"[stage] loading cached pitcher_games from {PITCHER_GAMES_CACHE}")
         pitcher_games = pd.read_pickle(PITCHER_GAMES_CACHE)
+        missing_pitcher_game_features = [
+            feature for feature in config.BASE_FEATURES if feature not in pitcher_games.columns
+        ]
+        if missing_pitcher_game_features:
+            print(
+                f"[stage] cached pitcher_games is missing features {missing_pitcher_game_features}; "
+                "refreshing derived features"
+            )
+            pitcher_games = feature_engineering.add_rate_features(pitcher_games)
     else:
         pitcher_games = None
         for artifact_pitcher_games in (LATEST_PITCHER_GAMES, PREVIOUS_PITCHER_GAMES):

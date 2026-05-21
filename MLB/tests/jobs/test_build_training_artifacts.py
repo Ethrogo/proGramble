@@ -175,6 +175,7 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
 
     assert metadata["artifact_version"] == 1
     assert metadata["model_version"] == training_job.MODEL_VERSION_LABEL
+    assert metadata["target_formulation"] == "single_stage_direct_count_regression"
     assert "regression" in evaluation
     assert "bucketed_error" in evaluation
     assert "uncertainty" in evaluation
@@ -328,10 +329,11 @@ def test_train_pitcher_k_model_filters_to_starter_like_appearances(monkeypatch):
                 "pitches_last3": 92.0,
                 "pitches_last10": 94.0,
                 "whiff_per_pitch_last3": 0.14,
+                "pitches_trend_last3_vs_last10": -2.0,
                 "avg_velo_last3": 97.1,
                 "avg_spin_last3": 2450.0,
-                "k_per_pitch_last10": 0.08,
                 "k_rate_last10": 0.28,
+                "pitches_per_batter_last10": 3.76,
                 "opp_strikeouts_per_game_last10": 9.0,
                 "opp_k_rate_last10": 0.25,
             },
@@ -346,10 +348,11 @@ def test_train_pitcher_k_model_filters_to_starter_like_appearances(monkeypatch):
                 "pitches_last3": 19.0,
                 "pitches_last10": 19.0,
                 "whiff_per_pitch_last3": 0.08,
+                "pitches_trend_last3_vs_last10": 0.0,
                 "avg_velo_last3": 96.0,
                 "avg_spin_last3": 2430.0,
-                "k_per_pitch_last10": 0.04,
                 "k_rate_last10": 0.20,
+                "pitches_per_batter_last10": 3.8,
                 "opp_strikeouts_per_game_last10": 8.4,
                 "opp_k_rate_last10": 0.23,
             },
@@ -405,10 +408,11 @@ def test_train_pitcher_k_model_raises_when_starter_filtering_leaves_empty_held_o
                 "pitches_last3": 92.0,
                 "pitches_last10": 94.0,
                 "whiff_per_pitch_last3": 0.14,
+                "pitches_trend_last3_vs_last10": -2.0,
                 "avg_velo_last3": 97.1,
                 "avg_spin_last3": 2450.0,
-                "k_per_pitch_last10": 0.08,
                 "k_rate_last10": 0.28,
+                "pitches_per_batter_last10": 3.76,
                 "opp_strikeouts_per_game_last10": 9.0,
                 "opp_k_rate_last10": 0.25,
                 "strikeouts_stddev_last10": 1.1,
@@ -426,10 +430,11 @@ def test_train_pitcher_k_model_raises_when_starter_filtering_leaves_empty_held_o
                 "pitches_last3": 19.0,
                 "pitches_last10": 19.0,
                 "whiff_per_pitch_last3": 0.08,
+                "pitches_trend_last3_vs_last10": 0.0,
                 "avg_velo_last3": 96.0,
                 "avg_spin_last3": 2430.0,
-                "k_per_pitch_last10": 0.04,
                 "k_rate_last10": 0.20,
+                "pitches_per_batter_last10": 3.8,
                 "opp_strikeouts_per_game_last10": 8.4,
                 "opp_k_rate_last10": 0.23,
                 "strikeouts_stddev_last10": 0.5,

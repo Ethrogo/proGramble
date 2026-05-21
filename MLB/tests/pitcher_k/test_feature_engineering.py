@@ -205,7 +205,12 @@ def test_add_rate_features_creates_required_rate_columns():
 
     enriched = add_rate_features(pitcher_games)
 
-    assert {"k_per_pitch_last10", "k_rate_last10"}.issubset(enriched.columns)
+    assert {
+        "k_per_pitch_last10",
+        "k_rate_last10",
+        "pitches_per_batter_last10",
+        "pitches_trend_last3_vs_last10",
+    }.issubset(enriched.columns)
 
 
 def test_build_team_context_returns_latest_prior_team_context():
