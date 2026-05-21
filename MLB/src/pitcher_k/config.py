@@ -29,3 +29,7 @@ XGB_PARAMS = {
     "seed": 42,
     "eval_metric": "mae",
 }
+
+XGB_NUM_BOOST_ROUND = 200
+XGB_EARLY_STOPPING_ROUNDS = 25
+TRAIN_VALIDATION_FRACTION = 0.15

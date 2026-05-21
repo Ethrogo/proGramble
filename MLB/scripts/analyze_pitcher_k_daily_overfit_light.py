@@ -193,7 +193,7 @@ def compute_current_overfit_metrics(model_df: pd.DataFrame) -> dict:
     model = xgb.train(
         params=config.XGB_PARAMS,
         dtrain=dtrain,
-        num_boost_round=200,
+        num_boost_round=config.XGB_NUM_BOOST_ROUND,
         evals=[(dtrain, "train"), (dtest, "test")],
         verbose_eval=False,
         evals_result=evals_result,

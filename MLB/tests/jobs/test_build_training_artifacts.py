@@ -133,6 +133,16 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
         "model": FakePredictModel(),
         "dtrain": "train",
         "dtest": "test",
+        "validation_df": pd.DataFrame(
+            [
+                {"game_date": "2025-07-31", "strikeouts": 6, "strikeouts_stddev_last10": 1.4},
+            ]
+        ),
+        "X_validation": pd.DataFrame(
+            [
+                {"pitches_last3": 95.0},
+            ]
+        ),
         "X_train": pd.DataFrame(
             [
                 {"pitches_last3": 90.0},
@@ -147,6 +157,11 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
         ),
         "y_train": pd.Series([5.0, 6.0], dtype="float64"),
         "y_test": pd.Series([5.0, 8.0], dtype="float64"),
+        "candidate_num_boost_round": 200,
+        "selected_num_boost_round": 105,
+        "early_stopping_rounds": 25,
+        "validation_fraction": 0.15,
+        "best_validation_mae": 1.73,
     }
 
     metadata = training_job.build_training_metadata(
@@ -169,6 +184,11 @@ def test_build_training_metadata_includes_richer_evaluation_sections():
     assert metadata["uncertainty_model"]["interval_multiplier"] > 0
     assert metadata["uncertainty_model"]["calibration_rows"] > 0
     assert "documented_interpretation" in metadata["uncertainty_model"]
+    assert metadata["model_params"]["candidate_num_boost_round"] == 200
+    assert metadata["model_params"]["selected_num_boost_round"] == 105
+    assert metadata["training_window"]["validation_rows"] == 1
+    assert metadata["model_selection"]["method"] == "time_ordered_validation_early_stopping"
+    assert metadata["model_selection"]["best_validation_mae"] == 1.73
 
 
 def test_build_evaluation_summary_documents_modes_and_limitations():

@@ -25,6 +25,9 @@ from pitcher_k.config import (
     RAW_STATCAST_END,
     TARGET_COL,
     TRAIN_SPLIT_DATE,
+    TRAIN_VALIDATION_FRACTION,
+    XGB_EARLY_STOPPING_ROUNDS,
+    XGB_NUM_BOOST_ROUND,
     XGB_PARAMS,
 )
 from pitcher_k.data_loader import load_statcast_data
@@ -254,6 +257,12 @@ def build_training_metadata(
         train_output["y_train"],
         train_output["model"].predict(train_output["dtrain"]),
     )
+    validation_df = train_output.get("validation_df")
+    validation_rows = (
+        int(len(train_output["X_validation"]))
+        if train_output.get("X_validation") is not None
+        else 0
+    )
     return {
         "artifact_version": 1,
         "model_version": MODEL_VERSION_LABEL,
@@ -261,7 +270,19 @@ def build_training_metadata(
         "features": BASE_FEATURES,
         "model_params": {
             "xgb_params": XGB_PARAMS,
-            "num_boost_round": 200,
+            "candidate_num_boost_round": int(
+                train_output.get("candidate_num_boost_round", XGB_NUM_BOOST_ROUND)
+            ),
+            "selected_num_boost_round": int(
+                train_output.get("selected_num_boost_round", XGB_NUM_BOOST_ROUND)
+            ),
+            "early_stopping_rounds": train_output.get(
+                "early_stopping_rounds",
+                XGB_EARLY_STOPPING_ROUNDS,
+            ),
+            "validation_fraction": float(
+                train_output.get("validation_fraction", TRAIN_VALIDATION_FRACTION)
+            ),
         },
         "training_window": {
             "raw_statcast_start": RAW_STATCAST_START,
@@ -270,8 +291,16 @@ def build_training_metadata(
             "model_df_rows": int(len(model_df)),
             "train_rows": int(len(train_df)),
             "test_rows": int(len(test_df)),
+            "validation_rows": validation_rows,
             "train_game_date_range": _date_range(train_df),
+            "validation_game_date_range": _date_range(validation_df)
+            if validation_df is not None
+            else {"start": None, "end": None},
             "test_game_date_range": _date_range(test_df),
+        },
+        "model_selection": {
+            "method": "time_ordered_validation_early_stopping",
+            "best_validation_mae": train_output.get("best_validation_mae"),
         },
         "evaluation_metrics": _evaluation_metrics(
             train_output,
