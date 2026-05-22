@@ -7,53 +7,53 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 41,
-    "wins": 22,
-    "losses": 19,
+    "picks": 45,
+    "wins": 23,
+    "losses": 22,
     "pushes": 0,
-    "decisions": 41,
-    "units_risked": 41.0,
-    "units_profit": -1.2722367012562565,
-    "win_rate": 0.5365853658536586,
-    "roi": -0.03103016344527455,
-    "skipped_rows": 7
+    "decisions": 45,
+    "units_risked": 45.0,
+    "units_profit": -3.769724138442186,
+    "win_rate": 0.5111111111111111,
+    "roi": -0.08377164752093746,
+    "skipped_rows": 6
   },
   "by_book": [
     {
       "book": "FanDuel",
-      "picks": 13,
+      "picks": 14,
       "wins": 8,
-      "losses": 5,
+      "losses": 6,
       "pushes": 0,
-      "decisions": 13,
-      "units_risked": 13.0,
-      "units_profit": 0.8183375982361427,
-      "win_rate": 0.6153846153846154,
-      "roi": 0.06294904601816483
+      "decisions": 14,
+      "units_risked": 14.0,
+      "units_profit": -0.18166240176385728,
+      "win_rate": 0.5714285714285714,
+      "roi": -0.01297588584027552
     },
     {
       "book": "BetMGM",
-      "picks": 9,
+      "picks": 11,
       "wins": 5,
-      "losses": 4,
+      "losses": 6,
       "pushes": 0,
-      "decisions": 9,
-      "units_risked": 9.0,
-      "units_profit": 0.39229249011857703,
-      "win_rate": 0.5555555555555556,
-      "roi": 0.04358805445761967
+      "decisions": 11,
+      "units_risked": 11.0,
+      "units_profit": -1.6077075098814229,
+      "win_rate": 0.45454545454545453,
+      "roi": -0.14615522817103843
     },
     {
       "book": "DraftKings",
-      "picks": 19,
-      "wins": 9,
+      "picks": 20,
+      "wins": 10,
       "losses": 10,
       "pushes": 0,
-      "decisions": 19,
-      "units_risked": 19.0,
-      "units_profit": -2.4828667896109753,
-      "win_rate": 0.47368421052631576,
-      "roi": -0.13067719945320921
+      "decisions": 20,
+      "units_risked": 20.0,
+      "units_profit": -1.980354226796905,
+      "win_rate": 0.5,
+      "roi": -0.09901771133984524
     }
   ],
   "reproducibility": {
