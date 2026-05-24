@@ -7,53 +7,53 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 48,
-    "wins": 26,
-    "losses": 22,
+    "picks": 51,
+    "wins": 28,
+    "losses": 23,
     "pushes": 0,
-    "decisions": 48,
-    "units_risked": 48.0,
-    "units_profit": -1.4763810299377873,
-    "win_rate": 0.5416666666666666,
-    "roi": -0.030757938123703903,
-    "skipped_rows": 6
+    "decisions": 51,
+    "units_risked": 51.0,
+    "units_profit": -0.9987884774372461,
+    "win_rate": 0.5490196078431373,
+    "roi": -0.01958408779288718,
+    "skipped_rows": 7
   },
   "by_book": [
     {
       "book": "FanDuel",
-      "picks": 15,
-      "wins": 9,
+      "picks": 16,
+      "wins": 10,
       "losses": 6,
       "pushes": 0,
-      "decisions": 15,
-      "units_risked": 15.0,
-      "units_profit": 0.38651941641796095,
-      "win_rate": 0.6,
-      "roi": 0.02576796109453073
+      "decisions": 16,
+      "units_risked": 16.0,
+      "units_profit": 1.1929710293211868,
+      "win_rate": 0.625,
+      "roi": 0.07456068933257418
     },
     {
       "book": "DraftKings",
-      "picks": 21,
-      "wins": 11,
+      "picks": 22,
+      "wins": 12,
       "losses": 10,
       "pushes": 0,
-      "decisions": 21,
-      "units_risked": 21.0,
-      "units_profit": -0.9003542267969049,
-      "win_rate": 0.5238095238095238,
-      "roi": -0.04287401079985261
+      "decisions": 22,
+      "units_risked": 22.0,
+      "units_profit": -0.22921328719958944,
+      "win_rate": 0.5454545454545454,
+      "roi": -0.01041878578179952
     },
     {
       "book": "BetMGM",
-      "picks": 12,
+      "picks": 13,
       "wins": 6,
-      "losses": 6,
+      "losses": 7,
       "pushes": 0,
-      "decisions": 12,
-      "units_risked": 12.0,
-      "units_profit": -0.9625462195588422,
-      "win_rate": 0.5,
-      "roi": -0.08021218496323686
+      "decisions": 13,
+      "units_risked": 13.0,
+      "units_profit": -1.9625462195588423,
+      "win_rate": 0.46153846153846156,
+      "roi": -0.15096509381221865
     }
   ],
   "reproducibility": {
