@@ -19,6 +19,15 @@ RAW_HISTORICAL_LINES_REQUIRED_COLUMNS = [
     "price",
 ]
 
+OFFICIAL_PICKS_HISTORY_REQUIRED_COLUMNS = [
+    "game_date",
+    "player_name",
+    "book",
+    "pick_side",
+    "line",
+    "price",
+]
+
 HISTORICAL_LINES_COLUMNS = [
     "game_date",
     "sport",
@@ -53,6 +62,8 @@ HISTORICAL_LINES_COLUMNS = [
 
 DEFAULT_SELECTION_RULE = "latest_pregame_snapshot_per_game_player_book_side"
 DEFAULT_SOURCE = "native_raw_historical_lines"
+OFFICIAL_PICKS_HISTORY_SELECTION_RULE = "official_pick_recorded_line_per_game_player_book_side"
+OFFICIAL_PICKS_HISTORY_SOURCE = "official_picks_history_selected_lines"
 
 
 def empty_historical_lines_df() -> pd.DataFrame:
@@ -230,3 +241,129 @@ def build_historical_lines_artifact_df(
         selection_rule=selection_rule,
     )
     return curated
+
+
+def normalize_official_picks_history_to_historical_lines(
+    history_df: pd.DataFrame,
+    *,
+    market_key: str = PITCHER_K_PROP_MARKET,
+    selection_rule: str = OFFICIAL_PICKS_HISTORY_SELECTION_RULE,
+    default_source: str = OFFICIAL_PICKS_HISTORY_SOURCE,
+) -> pd.DataFrame:
+    """
+    Build a historical_lines-compatible artifact from official pick records.
+
+    This is intentionally a narrower artifact than native line snapshots: it
+    captures only the lines that were actually posted as official picks.
+    """
+    if history_df.empty:
+        return empty_historical_lines_df()
+
+    require_columns(
+        history_df,
+        OFFICIAL_PICKS_HISTORY_REQUIRED_COLUMNS,
+        "official_picks_history_df",
+    )
+
+    df = history_df.copy()
+    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df["player_name"] = df["player_name"].fillna("").astype(str).str.strip()
+    df["player_name_norm"] = _optional_series(df, "player_name_norm", "").astype(str).str.strip()
+    fallback_player_name_norm = _optional_series(df, "participant_name_norm", "").astype(str).str.strip()
+    df.loc[df["player_name_norm"] == "", "player_name_norm"] = fallback_player_name_norm
+    df.loc[df["player_name_norm"] == "", "player_name_norm"] = df.loc[
+        df["player_name_norm"] == "",
+        "player_name",
+    ].apply(normalize_player_name)
+    df["bookmaker"] = _optional_series(df, "bookmaker", "").astype(str).str.strip()
+    fallback_book = _optional_series(df, "book", "").astype(str).str.strip()
+    df.loc[df["bookmaker"] == "", "bookmaker"] = fallback_book
+    df["bookmaker_key"] = _optional_series(df, "bookmaker_key", "").astype(str).str.strip()
+    df["side"] = _optional_series(df, "side", "").astype(str).str.strip()
+    fallback_side = _optional_series(df, "pick_side", "").astype(str).str.strip()
+    df.loc[df["side"] == "", "side"] = fallback_side
+    df["line"] = pd.to_numeric(df["line"], errors="coerce")
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df["sport"] = _optional_series(df, "sport", "MLB").astype(str).str.strip()
+    df.loc[df["sport"] == "", "sport"] = "MLB"
+    df["market_key"] = _optional_series(df, "market_key", market_key).astype(str).str.strip()
+    df.loc[df["market_key"] == "", "market_key"] = market_key
+    df["market_family"] = _optional_series(df, "market_family", "player_prop").astype(str).str.strip()
+    df.loc[df["market_family"] == "", "market_family"] = "player_prop"
+    df["event_id"] = _optional_series(df, "event_id", "").replace("", pd.NA)
+    df["commence_time"] = pd.to_datetime(
+        _optional_series(df, "commence_time", None),
+        errors="coerce",
+        utc=True,
+    )
+    df["pulled_at"] = pd.to_datetime(
+        _optional_series(df, "pulled_at", None),
+        errors="coerce",
+        utc=True,
+    )
+    df["snapshot_type"] = _optional_series(df, "snapshot_type", "official_pick_record").fillna(
+        "official_pick_record"
+    )
+    df["selection_rule"] = selection_rule
+    df["source"] = _optional_series(df, "source", default_source).fillna(default_source)
+    df["is_closing_line"] = False
+    df["snapshot_rank"] = pd.to_numeric(
+        _optional_series(df, "snapshot_rank", 1),
+        errors="coerce",
+    ).fillna(1)
+
+    df = df[df["market_key"] == market_key].copy()
+    if df.empty:
+        return empty_historical_lines_df()
+
+    required_mask = (
+        df["game_date"].notna()
+        & (df["game_date"].astype(str).str.strip() != "")
+        & (df["player_name"] != "")
+        & (df["bookmaker"] != "")
+        & (df["side"] != "")
+        & df["line"].notna()
+        & df["price"].notna()
+    )
+    df = df[required_mask].copy()
+    if df.empty:
+        return empty_historical_lines_df()
+
+    df = ensure_participant_identity(
+        df,
+        display_name_col="player_name",
+        normalized_name_col="participant_name_norm" if "participant_name_norm" in df.columns else None,
+        source_id_col="participant_source_id" if "participant_source_id" in df.columns else None,
+        source_id_type="mlbam_player",
+    )
+    df = ensure_market_identity(df, sport="MLB", market_key=market_key)
+
+    df["_has_offer_key"] = df["market_offer_key"].fillna("").astype(str).str.strip() != ""
+    df["_has_event_id"] = df["event_id"].fillna("").astype(str).str.strip() != ""
+    df["_source_row_order"] = range(len(df))
+    df = df.sort_values(
+        by=["_has_offer_key", "_has_event_id", "_source_row_order"],
+        ascending=[False, False, False],
+    )
+    df = df.drop_duplicates(
+        subset=["game_date", "player_name_norm", "bookmaker", "side"],
+        keep="first",
+    ).copy()
+    df = df.drop(columns=["_has_offer_key", "_has_event_id", "_source_row_order"])
+
+    curated = df[HISTORICAL_LINES_COLUMNS].copy().reset_index(drop=True)
+    validate_historical_lines_contract(curated)
+    return curated
+
+
+def build_historical_lines_artifact_from_official_picks_history_df(
+    history_df: pd.DataFrame,
+    *,
+    market_key: str = PITCHER_K_PROP_MARKET,
+    selection_rule: str = OFFICIAL_PICKS_HISTORY_SELECTION_RULE,
+) -> pd.DataFrame:
+    return normalize_official_picks_history_to_historical_lines(
+        history_df,
+        market_key=market_key,
+        selection_rule=selection_rule,
+    )
