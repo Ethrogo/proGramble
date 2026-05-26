@@ -35,6 +35,7 @@ from common.identity import (
 )
 from common.workflows import ModelingWorkflowSpec
 from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
+from pitcher_k import shadow as pitcher_k_shadow
 from pitcher_bb.workflow import MLB_PITCHER_WALK_WORKFLOW
 from pitcher_k.data_loader import load_statcast_data
 from pitcher_k.feature_engineering import build_pitcher_game_table
@@ -61,6 +62,11 @@ OFFICIAL_PICKS_ALL_TIME_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_sum
 OFFICIAL_PICKS_CURRENT_REGIME_SUMMARY_PATH = TRACKING_DIR / "official_picks_profit_summary_current_regime.json"
 OFFICIAL_PICKS_SKIPPED_PATH = TRACKING_DIR / "official_picks_profit_skipped.csv"
 OFFICIAL_PICKS_CONCENTRATION_AUDIT_PATH = TRACKING_DIR / "official_picks_concentration_audit.json"
+PITCHER_K_SHADOW_TRACKING_PATH = TRACKING_DIR / "pitcher_k_shadow_predictions.csv"
+PITCHER_K_SHADOW_OVERLAP_PATH = TRACKING_DIR / "pitcher_k_shadow_overlap.csv"
+PITCHER_K_SHADOW_SUMMARY_PATH = TRACKING_DIR / "pitcher_k_shadow_summary.json"
+PITCHER_K_SHADOW_REGRESSION_PLOT_PATH = TRACKING_DIR / "pitcher_k_shadow_regression.png"
+PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH = TRACKING_DIR / "pitcher_k_shadow_workflow.png"
 CURRENT_REGIME_START_DATE = "2026-05-07"
 LEGACY_WORKFLOW_MODEL_VERSION = "workflow_unversioned"
 LEGACY_MANUAL_MODEL_VERSION = "manual_unversioned"
@@ -175,6 +181,18 @@ def ensure_output_dirs() -> None:
 
 def empty_official_picks_history_df() -> pd.DataFrame:
     return pd.DataFrame(columns=OFFICIAL_PICKS_HISTORY_COLUMNS)
+
+
+def empty_pitcher_k_shadow_tracking_df() -> pd.DataFrame:
+    return pitcher_k_shadow.empty_shadow_tracking_df()
+
+
+def load_pitcher_k_shadow_tracking() -> pd.DataFrame:
+    if not PITCHER_K_SHADOW_TRACKING_PATH.exists():
+        return empty_pitcher_k_shadow_tracking_df()
+
+    shadow_df = pd.read_csv(PITCHER_K_SHADOW_TRACKING_PATH, keep_default_na=False)
+    return pitcher_k_shadow.coerce_shadow_tracking_df(shadow_df)
 
 
 def empty_joined_odds_df() -> pd.DataFrame:
@@ -363,6 +381,116 @@ def _annotate_workflow_provenance(
     annotated["policy_version"] = workflow.pick_ranking_policy.version
     annotated["tracking_regime"] = _infer_tracking_regime("run_daily_card", game_date)
     return annotated
+
+
+def _upsert_pitcher_k_shadow_rows(
+    existing_df: pd.DataFrame,
+    new_rows: pd.DataFrame,
+) -> pd.DataFrame:
+    existing = pitcher_k_shadow.coerce_shadow_tracking_df(existing_df)
+    incoming = pitcher_k_shadow.coerce_shadow_tracking_df(new_rows)
+    if incoming.empty:
+        return existing
+    if existing.empty:
+        return incoming
+
+    existing_by_key = existing.set_index("shadow_row_key", drop=False)
+    merged_rows: list[dict[str, object]] = []
+    for _, incoming_row in incoming.iterrows():
+        new_record = incoming_row.to_dict()
+        row_key = str(new_record["shadow_row_key"])
+        if row_key in existing_by_key.index:
+            existing_record = existing_by_key.loc[row_key].to_dict()
+            for field in ["actual_value", "result", "profit_units", "graded_at"]:
+                new_value = new_record.get(field)
+                existing_value = existing_record.get(field)
+                if (
+                    (pd.isna(new_value) or str(new_value).strip() == "")
+                    and not pd.isna(existing_value)
+                    and str(existing_value).strip() != ""
+                ):
+                    new_record[field] = existing_value
+        merged_rows.append(new_record)
+
+    merged_df = pd.DataFrame(merged_rows, columns=pitcher_k_shadow.SHADOW_TRACKING_COLUMNS)
+    untouched_existing = existing[~existing["shadow_row_key"].isin(merged_df["shadow_row_key"])]
+    combined = pd.concat([untouched_existing, merged_df], ignore_index=True)
+    return pitcher_k_shadow.coerce_shadow_tracking_df(combined)
+
+
+def persist_pitcher_k_shadow_predictions(
+    *,
+    starters_df: pd.DataFrame,
+    pitcher_games: pd.DataFrame,
+    joined_df: pd.DataFrame,
+    picks_df: pd.DataFrame,
+    workflow: ModelingWorkflowSpec,
+    metadata: dict | None,
+    build_picks_fn: BuildPicksFn,
+) -> Path:
+    ensure_output_dirs()
+    existing_df = load_pitcher_k_shadow_tracking()
+    if workflow.prop_type != "pitcher_k" or joined_df.empty:
+        if not PITCHER_K_SHADOW_TRACKING_PATH.exists():
+            existing_df.to_csv(PITCHER_K_SHADOW_TRACKING_PATH, index=False)
+        return PITCHER_K_SHADOW_TRACKING_PATH
+
+    workflow_game_date = pd.to_datetime(starters_df["game_date"], errors="coerce").min()
+    tracking_regime = _infer_tracking_regime("run_daily_card", workflow_game_date)
+    champion_rows = pitcher_k_shadow.build_shadow_candidate_rows(
+        joined_df,
+        picks_df,
+        model_name=pitcher_k_shadow.CHAMPION_MODEL_NAME,
+        model_role=pitcher_k_shadow.CHAMPION_MODEL_ROLE,
+        model_version=_resolve_model_version(workflow, metadata),
+        policy_version=workflow.pick_ranking_policy.version,
+        tracking_regime=tracking_regime,
+        game_date=workflow_game_date,
+    )
+
+    today_features = workflow.feature_builder(starters_df, pitcher_games)
+    challenger_preds, challenger_meta = pitcher_k_shadow.build_ridge_shadow_predictions(
+        today_features,
+        pitcher_games,
+    )
+    challenger_joined_df = pitcher_k_shadow.apply_prediction_frame_to_joined_rows(
+        joined_df,
+        challenger_preds,
+        prediction_column=workflow.prop_fields.shared_prediction,
+        prop_prediction_column=workflow.prop_fields.prediction,
+    )
+    challenger_joined_df = _tag_workflow_frame(challenger_joined_df, workflow)
+    challenger_joined_df = _annotate_workflow_provenance(
+        challenger_joined_df,
+        workflow=workflow,
+        metadata=metadata,
+        game_date=workflow_game_date,
+    )
+    challenger_picks_df = build_picks_fn(challenger_joined_df)
+    challenger_picks_df = _tag_workflow_frame(challenger_picks_df, workflow)
+    challenger_picks_df = _annotate_workflow_provenance(
+        challenger_picks_df,
+        workflow=workflow,
+        metadata=metadata,
+        game_date=workflow_game_date,
+    )
+    challenger_rows = pitcher_k_shadow.build_shadow_candidate_rows(
+        challenger_joined_df,
+        challenger_picks_df,
+        model_name=str(challenger_meta["model_name"]),
+        model_role=str(challenger_meta["model_role"]),
+        model_version=str(challenger_meta["model_version"]),
+        policy_version=workflow.pick_ranking_policy.version,
+        tracking_regime=tracking_regime,
+        game_date=workflow_game_date,
+    )
+
+    merged_df = _upsert_pitcher_k_shadow_rows(
+        existing_df,
+        pd.concat([champion_rows, challenger_rows], ignore_index=True),
+    )
+    merged_df.to_csv(PITCHER_K_SHADOW_TRACKING_PATH, index=False)
+    return PITCHER_K_SHADOW_TRACKING_PATH
 
 
 def _parse_american_odds(odds: float | int | str | None) -> float | None:
@@ -596,6 +724,178 @@ def grade_official_picks_from_statcast(
         "game_date": target_date,
         "updated_rows": updated_rows,
         "history_df": updated_history_df,
+    }
+
+
+def apply_statcast_results_to_pitcher_k_shadow_tracking(
+    shadow_df: pd.DataFrame,
+    pitcher_results_df: pd.DataFrame,
+    *,
+    game_date: str,
+) -> pd.DataFrame:
+    working = pitcher_k_shadow.coerce_shadow_tracking_df(shadow_df)
+    if working.empty:
+        return working
+
+    working = ensure_participant_identity(
+        working,
+        display_name_col="player_name",
+        normalized_name_col=PARTICIPANT_NAME_NORM_COLUMN,
+        source_id_col=PARTICIPANT_SOURCE_ID_COLUMN,
+        source_id_type="mlbam_player",
+    )
+
+    if pitcher_results_df.empty:
+        return working
+
+    pitcher_results = pitcher_results_df.copy()
+    pitcher_results = ensure_participant_identity(
+        pitcher_results,
+        display_name_col="player_name",
+        source_id_col="pitcher" if "pitcher" in pitcher_results.columns else PARTICIPANT_SOURCE_ID_COLUMN,
+        source_id_type="mlbam_player",
+    )
+    for stat_column in ["strikeouts", "walks"]:
+        if stat_column not in pitcher_results.columns:
+            pitcher_results[stat_column] = pd.NA
+
+    result_lookup = pitcher_results.drop_duplicates(
+        subset=["game_date", PARTICIPANT_JOIN_KEY_COLUMN],
+        keep="last",
+    )[["game_date", PARTICIPANT_JOIN_KEY_COLUMN, "strikeouts", "walks"]].copy()
+
+    pending_mask = (
+        working["game_date"].astype(str).eq(game_date)
+        & working.apply(_supports_statcast_history_row, axis=1)
+        & (
+            working["actual_value"].astype(str).str.strip().eq("")
+            | (
+                working["would_pick"].fillna(False)
+                & working["result"].astype(str).str.strip().eq("")
+            )
+        )
+    )
+    if not pending_mask.any():
+        return working
+
+    pending = working.loc[pending_mask].copy()
+    pending["shadow_row_index"] = pending.index
+    pending = pending.merge(
+        result_lookup,
+        on=["game_date", PARTICIPANT_JOIN_KEY_COLUMN],
+        how="left",
+    )
+    pending["statcast_result_column"] = pending.apply(_statcast_result_column_for_row, axis=1)
+    pending["actual_stat_value"] = pending.apply(
+        lambda row: row.get(str(row["statcast_result_column"]), pd.NA)
+        if row["statcast_result_column"]
+        else pd.NA,
+        axis=1,
+    )
+    resolved_mask = pd.to_numeric(pending["actual_stat_value"], errors="coerce").notna()
+    if not resolved_mask.any():
+        return working
+
+    pending.loc[resolved_mask, "actual_value"] = pending.loc[resolved_mask, "actual_stat_value"].apply(
+        _format_stat_value
+    )
+    actionable_mask = resolved_mask & pending["would_pick"].fillna(False)
+    pending.loc[actionable_mask, "result"] = pending.loc[actionable_mask].apply(
+        lambda row: _grade_pick_result_from_actual(
+            actual=float(row["actual_stat_value"]),
+            line=float(row["line"]),
+            pick_side=str(row["side"]),
+        ),
+        axis=1,
+    )
+    pending.loc[actionable_mask, "profit_units"] = pending.loc[actionable_mask].apply(
+        lambda row: _profit_units_for_result(
+            _resolve_history_row_odds(row),
+            _normalize_pick_result(row["result"]),
+        ),
+        axis=1,
+    )
+    graded_at = pd.Timestamp.now(tz="America/New_York").isoformat()
+    pending.loc[resolved_mask, "graded_at"] = graded_at
+
+    working.loc[pending["shadow_row_index"], pitcher_k_shadow.SHADOW_TRACKING_COLUMNS] = pending[
+        pitcher_k_shadow.SHADOW_TRACKING_COLUMNS
+    ].values
+    return pitcher_k_shadow.coerce_shadow_tracking_df(working)
+
+
+def grade_pitcher_k_shadow_predictions_from_statcast(
+    *,
+    game_date: str | None = None,
+) -> dict[str, object]:
+    target_date = game_date or _yesterday_game_date()
+    shadow_df = load_pitcher_k_shadow_tracking()
+    if shadow_df.empty:
+        return {"game_date": target_date, "updated_rows": 0, "shadow_df": shadow_df}
+
+    pending_mask = (
+        shadow_df["game_date"].astype(str).eq(target_date)
+        & shadow_df.apply(_supports_statcast_history_row, axis=1)
+        & (
+            shadow_df["actual_value"].astype(str).str.strip().eq("")
+            | (
+                shadow_df["would_pick"].fillna(False)
+                & shadow_df["result"].astype(str).str.strip().eq("")
+            )
+        )
+    )
+    if not pending_mask.any():
+        return {"game_date": target_date, "updated_rows": 0, "shadow_df": shadow_df}
+
+    pitcher_results_df = load_pitcher_results_from_statcast(target_date)
+    updated_shadow_df = apply_statcast_results_to_pitcher_k_shadow_tracking(
+        shadow_df,
+        pitcher_results_df,
+        game_date=target_date,
+    )
+    before = shadow_df["actual_value"].astype(str).str.strip()
+    after = updated_shadow_df["actual_value"].astype(str).str.strip()
+    updated_rows = int(((before == "") & (after != "")).sum())
+    updated_shadow_df.to_csv(PITCHER_K_SHADOW_TRACKING_PATH, index=False)
+    return {
+        "game_date": target_date,
+        "updated_rows": updated_rows,
+        "shadow_df": updated_shadow_df,
+    }
+
+
+def persist_pitcher_k_shadow_comparison_report() -> dict[str, object]:
+    shadow_df = load_pitcher_k_shadow_tracking()
+    report = pitcher_k_shadow.build_shadow_comparison_report(shadow_df)
+    overlap_df = report["overlap_df"]
+    overlap_df.to_csv(PITCHER_K_SHADOW_OVERLAP_PATH, index=False)
+
+    regression_written = False
+    workflow_written = False
+    if report.get("available"):
+        regression_written = pitcher_k_shadow.write_shadow_regression_plot(
+            report["daily_regression_df"],
+            PITCHER_K_SHADOW_REGRESSION_PLOT_PATH,
+        )
+        workflow_written = pitcher_k_shadow.write_shadow_workflow_plot(
+            report["daily_workflow_df"],
+            PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH,
+        )
+
+    summary = dict(report["summary"])
+    summary["outputs"] = {
+        "tracking_csv": str(PITCHER_K_SHADOW_TRACKING_PATH),
+        "overlap_csv": str(PITCHER_K_SHADOW_OVERLAP_PATH),
+        "summary_json": str(PITCHER_K_SHADOW_SUMMARY_PATH),
+        "regression_plot": str(PITCHER_K_SHADOW_REGRESSION_PLOT_PATH) if regression_written else None,
+        "workflow_plot": str(PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH) if workflow_written else None,
+    }
+    PITCHER_K_SHADOW_SUMMARY_PATH.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return {
+        "summary": summary,
+        "overlap_df": overlap_df,
+        "regression_plot_written": regression_written,
+        "workflow_plot_written": workflow_written,
     }
 
 
@@ -1958,6 +2258,14 @@ def save_outputs(
             f"{_yesterday_game_date()}: {exc.__class__.__name__}: {exc}"
         )
         persist_official_picks_profit_reports()
+    try:
+        grade_pitcher_k_shadow_predictions_from_statcast()
+        persist_pitcher_k_shadow_comparison_report()
+    except Exception as exc:
+        print(
+            "WARNING: Failed to update pitcher_k shadow tracking for "
+            f"{_yesterday_game_date()}: {exc.__class__.__name__}: {exc}"
+        )
     save_run_status(status=run_status, message=run_message)
 
 
@@ -2197,6 +2505,23 @@ def run_workflow_daily_card(
             metadata=metadata,
             game_date=workflow_game_date,
         )
+
+    if workflow.prop_type == "pitcher_k":
+        try:
+            persist_pitcher_k_shadow_predictions(
+                starters_df=starters_df,
+                pitcher_games=history_df,
+                joined_df=joined_df,
+                picks_df=picks_df,
+                workflow=workflow,
+                metadata=metadata,
+                build_picks_fn=build_picks_fn,
+            )
+        except Exception as exc:
+            print(
+                "WARNING: Failed to persist pitcher_k shadow predictions for "
+                f"{workflow_game_date}: {exc.__class__.__name__}: {exc}"
+            )
 
     return today_preds, joined_df, picks_df, post_df, run_status, run_message
 
