@@ -1,0 +1,15 @@
+{
+  "analysis_type": "pitcher_k_shadow_comparison",
+  "available": false,
+  "required_models": [
+    "xgboost_champion",
+    "ridge_challenger"
+  ],
+  "outputs": {
+    "tracking_csv": "/home/runner/work/proGramble/proGramble/MLB/data/tracking/pitcher_k_shadow_predictions.csv",
+    "overlap_csv": "/home/runner/work/proGramble/proGramble/MLB/data/tracking/pitcher_k_shadow_overlap.csv",
+    "summary_json": "/home/runner/work/proGramble/proGramble/MLB/data/tracking/pitcher_k_shadow_summary.json",
+    "regression_plot": null,
+    "workflow_plot": null
+  }
+}
