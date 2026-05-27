@@ -23,13 +23,21 @@ BASE_FEATURES = [
 ]
 
 TARGET_COL = "walks"
+TARGET_FORMULATION = "single_stage_direct_count_regression"
 
 XGB_PARAMS = {
     "objective": "reg:squarederror",
-    "max_depth": 4,
+    "max_depth": 3,
     "eta": 0.05,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
+    "min_child_weight": 8,
+    "reg_lambda": 5.0,
+    "reg_alpha": 0.5,
     "seed": 42,
     "eval_metric": "mae",
 }
+
+XGB_NUM_BOOST_ROUND = 200
+XGB_EARLY_STOPPING_ROUNDS = 25
+TRAIN_VALIDATION_FRACTION = 0.15

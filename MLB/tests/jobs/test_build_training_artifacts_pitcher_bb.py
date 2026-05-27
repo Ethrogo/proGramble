@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from jobs import build_training_artifacts_pitcher_bb as training_job
+from odds.historical_lines import empty_historical_lines_df
 
 
 class FakeModel:
@@ -25,7 +26,7 @@ def test_save_artifacts_to_dir_writes_pitcher_bb_metadata(tmp_path):
     output_dir = tmp_path / "artifacts"
     pitcher_games = pd.DataFrame([{"game_date": "2026-04-19", "pitcher": 1, "walks": 2}])
     model_df = pd.DataFrame([{"game_date": "2026-04-19", "walks": 2}])
-    historical_lines_df = pd.DataFrame()
+    historical_lines_df = empty_historical_lines_df()
     metadata = {
         "target": "walks",
         "features": ["walks_last3"],
@@ -82,10 +83,21 @@ def test_build_training_metadata_uses_walk_target_and_features():
         "model": FakePredictModel(),
         "dtrain": "train",
         "dtest": "test",
+        "validation_df": pd.DataFrame(
+            [
+                {"game_date": "2025-07-31", "walks": 3, "walks_stddev_last10": 0.7},
+            ]
+        ),
+        "X_validation": pd.DataFrame([{"walks_last3": 1.8}]),
         "X_train": pd.DataFrame([{"walks_last3": 1.5}, {"walks_last3": 2.0}]),
         "X_test": pd.DataFrame([{"walks_last3": 2.2}, {"walks_last3": 2.7}]),
         "y_train": pd.Series([2.0, 3.0], dtype="float64"),
         "y_test": pd.Series([2.0, 4.0], dtype="float64"),
+        "candidate_num_boost_round": 200,
+        "selected_num_boost_round": 104,
+        "early_stopping_rounds": 25,
+        "validation_fraction": 0.15,
+        "best_validation_mae": 0.71,
     }
 
     metadata = training_job.build_training_metadata(
@@ -99,10 +111,16 @@ def test_build_training_metadata_uses_walk_target_and_features():
     assert metadata["artifact_version"] == 1
     assert metadata["model_version"] == training_job.MODEL_VERSION_LABEL
     assert metadata["target"] == "walks"
+    assert metadata["target_formulation"] == "single_stage_direct_count_regression"
     assert "walks_last3" not in metadata["features"] or isinstance(metadata["features"], list)
     assert metadata["uncertainty_model"]["base_stddev_column"] == "walks_stddev_last10"
     assert metadata["evaluation_metrics"]["bucketed_error"]["bucket_by"] == "predicted_walks"
     assert metadata["evaluation_metrics"]["workflow_backtest"]["available"] is False
+    assert metadata["model_params"]["candidate_num_boost_round"] == 200
+    assert metadata["model_params"]["selected_num_boost_round"] == 104
+    assert metadata["training_window"]["validation_rows"] == 1
+    assert metadata["model_selection"]["method"] == "time_ordered_validation_early_stopping"
+    assert metadata["model_selection"]["best_validation_mae"] == 0.71
 
 
 def test_build_evaluation_summary_marks_backtest_and_tracking_status_for_pitcher_bb():
@@ -123,8 +141,8 @@ def test_build_evaluation_summary_marks_backtest_and_tracking_status_for_pitcher
             "uncertainty": {"rows": 30, "empirical_coverage": 0.77},
             "workflow_backtest": {
                 "available": False,
-                "reason": "pitcher_walks_historical_backtest_not_yet_wired",
-                "reproducible_path": None,
+                "reason": "historical_market_lines_not_provided",
+                "reproducible_path": "odds.backtest.run_historical_workflow_backtest",
             },
             "sample_sizes": {"train_rows": 200, "test_rows": 30},
         },
@@ -145,8 +163,82 @@ def test_build_evaluation_summary_marks_backtest_and_tracking_status_for_pitcher
     sections = {section["name"]: section for section in summary["sections"]}
     assert sections["holdout_regression"]["mode"] == "fixed_holdout"
     assert sections["workflow_backtest"]["available"] is False
-    assert "pitcher_walks_historical_backtest_not_yet_wired" in sections["workflow_backtest"]["limitations"]
+    assert "historical_market_lines_not_provided" in sections["workflow_backtest"]["limitations"]
     assert sections["tracked_performance"]["included_in_reproducible_artifact"] is False
+
+
+def test_build_training_metadata_uses_native_historical_lines_for_real_backtest():
+    model_df = pd.DataFrame(
+        [
+            {"game_date": "2025-07-30", "walks": 2},
+            {"game_date": "2025-08-02", "walks": 1},
+        ]
+    )
+    train_df = pd.DataFrame([{"game_date": "2025-07-30", "walks": 2, "walks_stddev_last10": 0.6}])
+    test_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2025-08-02",
+                "player_name": "Tarik Skubal",
+                "walks": 1,
+                "walks_stddev_last10": 0.5,
+            }
+        ]
+    )
+
+    class FakeSingleTestPredictModel:
+        def predict(self, dmatrix):
+            if dmatrix == "train":
+                return pd.Series([1.9], dtype="float64")
+            if dmatrix == "test":
+                return pd.Series([2.2], dtype="float64")
+            raise AssertionError(f"Unexpected dmatrix: {dmatrix}")
+
+    train_output = {
+        "model": FakeSingleTestPredictModel(),
+        "dtrain": "train",
+        "dtest": "test",
+        "X_train": pd.DataFrame([{"walks_last3": 1.5}]),
+        "X_test": pd.DataFrame([{"walks_last3": 2.0}]),
+        "y_train": pd.Series([2.0], dtype="float64"),
+        "y_test": pd.Series([1.0], dtype="float64"),
+    }
+    historical_lines_df = pd.DataFrame(
+        [
+            {
+                "game_date": "2025-08-02",
+                "player_name": "Tarik Skubal",
+                "player_name_norm": "tarik skubal",
+                "market_key": "pitcher_walks",
+                "bookmaker": "FanDuel",
+                "bookmaker_key": "fanduel",
+                "side": "Under",
+                "line": 2.5,
+                "price": -105,
+                "event_id": "evt_1",
+                "commence_time": "2025-08-02T23:10:00Z",
+                "selection_rule": "latest_pregame_snapshot_per_game_player_book_side",
+                "source": "fixture",
+                "pulled_at": "2025-08-02T22:50:00Z",
+                "snapshot_type": "selected",
+                "is_closing_line": True,
+                "snapshot_rank": 1,
+            }
+        ]
+    )
+
+    metadata = training_job.build_training_metadata(
+        model_df=model_df,
+        train_df=train_df,
+        test_df=test_df,
+        train_output=train_output,
+        historical_lines_df=historical_lines_df,
+    )
+
+    workflow_backtest = metadata["evaluation_metrics"]["workflow_backtest"]
+    assert workflow_backtest["available"] is True
+    assert workflow_backtest["overall"][0]["picks"] == 1
+    assert workflow_backtest["by_book"][0]["book"] == "FanDuel"
 
 
 def test_train_pitcher_bb_model_filters_to_starter_like_appearances(monkeypatch):
