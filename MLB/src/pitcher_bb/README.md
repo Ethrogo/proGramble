@@ -1,18 +1,19 @@
-# Pitcher Walks Scaffold
+# Pitcher Walks
 
-This package defines the initial market and model configuration scaffold for MLB pitcher walks props.
+This package supports the current MLB pitcher walks workflow end to end.
 
-Current support level:
+Currently wired:
 
-- `pitcher_walks` market key is reserved in code via `PITCHER_BB_PROP_MARKET`.
-- `TARGET_COL` is defined as `walks`.
-- `BASE_FEATURES` is intentionally conservative and limited to shared pitcher workload/context columns that already exist in the current feature pipeline.
+- `pitcher_walks` market key via `PITCHER_BB_PROP_MARKET`
+- walk-specific feature engineering and tomorrow-feature generation
+- XGBoost training artifacts with chronological validation-based early stopping
+- reproducible holdout evaluation metadata, interval calibration, and historical-lines workflow backtests
+- daily-card prediction, odds joining, pick creation, and outcome grading
 
-Not wired yet:
+Still missing relative to the more mature `pitcher_k` governance path:
 
-- walk-specific feature engineering
-- pitcher-walks training workflow and artifacts
-- pitcher-walks daily-card workflow
-- grading logic for pitcher-walk outcomes
+- shadow challenger tracking and forward champion-vs-challenger reporting
+- promotion policy and rollback guardrails
+- a walk-specific pick-ranking policy instead of the shared strikeout policy
 
-This keeps the module truthful to the current repo shape while giving the project a stable place to grow the pitcher-walk workflow next.
+The current design keeps the model operational while leaving space for the next round of walk-specific evaluation and governance work.
