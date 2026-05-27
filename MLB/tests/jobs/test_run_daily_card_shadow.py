@@ -322,6 +322,10 @@ def test_grade_pitcher_k_shadow_predictions_and_persist_report(monkeypatch):
     assert loaded["result"].tolist() == ["W", "W"]
     assert report["summary"]["available"] is True
     assert summary["available"] is True
+    assert summary["promotion_review"]["review_status"] == "insufficient_evidence"
+    assert summary["promotion_review"]["recommended_action"] == "hold"
+    assert summary["model_registry"]["champion"]["model_name"] == "xgboost_champion"
+    assert summary["model_registry"]["challenger"]["model_name"] == "ridge_challenger"
     assert daily_card.PITCHER_K_SHADOW_OVERLAP_PATH.exists()
     assert daily_card.PITCHER_K_SHADOW_REGRESSION_PLOT_PATH.exists()
     assert daily_card.PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH.exists()

@@ -866,7 +866,22 @@ def grade_pitcher_k_shadow_predictions_from_statcast(
 
 def persist_pitcher_k_shadow_comparison_report() -> dict[str, object]:
     shadow_df = load_pitcher_k_shadow_tracking()
-    report = pitcher_k_shadow.build_shadow_comparison_report(shadow_df)
+    review_context = None
+    if PITCHER_K_SHADOW_SUMMARY_PATH.exists():
+        try:
+            existing_summary = json.loads(PITCHER_K_SHADOW_SUMMARY_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            existing_summary = {}
+        review_context = (
+            existing_summary.get("promotion_review", {}).get("review_context")
+            if isinstance(existing_summary, dict)
+            else None
+        )
+
+    report = pitcher_k_shadow.build_shadow_comparison_report(
+        shadow_df,
+        review_context=review_context,
+    )
     overlap_df = report["overlap_df"]
     overlap_df.to_csv(PITCHER_K_SHADOW_OVERLAP_PATH, index=False)
 

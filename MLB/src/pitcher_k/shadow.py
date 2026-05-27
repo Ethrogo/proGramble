@@ -28,6 +28,11 @@ from pitcher_k.evaluate import (
 )
 from pitcher_k.feature_engineering import filter_starter_like_appearances
 from pitcher_k.feature_model import build_model_df
+from pitcher_k.promotion_policy import (
+    CHAMPION_STATUS_STABLE,
+    DEFAULT_SHADOW_PROMOTION_POLICY,
+    build_shadow_promotion_review,
+)
 from pitcher_k.train import validation_time_split
 
 
@@ -783,20 +788,59 @@ def build_shadow_comparison_report(
     shadow_df: pd.DataFrame,
     *,
     required_models: tuple[str, ...] = (CHAMPION_MODEL_NAME, CHALLENGER_MODEL_NAME),
+    review_context: dict | None = None,
 ) -> dict[str, object]:
     overlap_df = build_shadow_overlap_df(shadow_df, required_models=required_models)
     if overlap_df.empty:
+        base_summary = {
+            "analysis_type": "pitcher_k_shadow_comparison",
+            "available": False,
+            "required_models": list(required_models),
+            "model_registry": {
+                "champion": {
+                    "model_name": required_models[0],
+                    "model_role": CHAMPION_MODEL_ROLE,
+                    "model_versions": [],
+                    "review_status": "insufficient_evidence",
+                },
+                "challenger": {
+                    "model_name": required_models[1],
+                    "model_role": CHALLENGER_MODEL_ROLE,
+                    "model_versions": [],
+                    "review_status": "insufficient_evidence",
+                },
+            },
+            "models": {
+                required_models[0]: {},
+                required_models[1]: {},
+            },
+            "overlap_sample": {
+                "candidate_rows": 0,
+                "prediction_rows": 0,
+                "workflow_rows": 0,
+                "unique_dates": 0,
+            },
+            "agreement_slices": [],
+        }
+        base_summary["promotion_review"] = build_shadow_promotion_review(
+            base_summary,
+            champion_name=required_models[0],
+            challenger_name=required_models[1],
+            policy=DEFAULT_SHADOW_PROMOTION_POLICY,
+            review_context=review_context
+            or {
+                "champion_name": required_models[0],
+                "challenger_name": required_models[1],
+                "champion_status": CHAMPION_STATUS_STABLE,
+            },
+        )
         return {
             "available": False,
             "reason": "no_graded_overlapping_shadow_rows",
             "overlap_df": empty_shadow_tracking_df(),
             "daily_regression_df": pd.DataFrame(),
             "daily_workflow_df": pd.DataFrame(),
-            "summary": {
-                "analysis_type": "pitcher_k_shadow_comparison",
-                "available": False,
-                "required_models": list(required_models),
-            },
+            "summary": base_summary,
         }
 
     prediction_df = _prediction_level_df(overlap_df)
@@ -845,10 +889,41 @@ def build_shadow_comparison_report(
     daily_regression_df = _build_daily_regression_summary(prediction_df)
     daily_workflow_df = _build_daily_workflow_summary(picked_df)
 
+    champion_versions = sorted(
+        set(
+            overlap_df.loc[overlap_df["model_name"] == required_models[0], "model_version"]
+            .fillna("")
+            .astype(str)
+        )
+        - {""}
+    )
+    challenger_versions = sorted(
+        set(
+            overlap_df.loc[overlap_df["model_name"] == required_models[1], "model_version"]
+            .fillna("")
+            .astype(str)
+        )
+        - {""}
+    )
+
     summary = {
         "analysis_type": "pitcher_k_shadow_comparison",
         "available": True,
         "required_models": list(required_models),
+        "model_registry": {
+            "champion": {
+                "model_name": required_models[0],
+                "model_role": CHAMPION_MODEL_ROLE,
+                "model_versions": champion_versions,
+                "review_status": "incumbent",
+            },
+            "challenger": {
+                "model_name": required_models[1],
+                "model_role": CHALLENGER_MODEL_ROLE,
+                "model_versions": challenger_versions,
+                "review_status": "shadow_only",
+            },
+        },
         "date_range": {
             "start_date": str(prediction_df["game_date"].min()),
             "end_date": str(prediction_df["game_date"].max()),
@@ -884,6 +959,23 @@ def build_shadow_comparison_report(
             value_columns=["roi_per_pick", "profit_units"],
         ),
     }
+    promotion_review = build_shadow_promotion_review(
+        summary,
+        champion_name=required_models[0],
+        challenger_name=required_models[1],
+        policy=DEFAULT_SHADOW_PROMOTION_POLICY,
+        review_context=review_context
+        or {
+            "champion_name": required_models[0],
+            "challenger_name": required_models[1],
+            "champion_status": CHAMPION_STATUS_STABLE,
+        },
+    )
+    summary["promotion_review"] = promotion_review
+    summary["model_registry"]["champion"]["review_status"] = (
+        "under_review" if promotion_review["eligible_for_review"] else "insufficient_evidence"
+    )
+    summary["model_registry"]["challenger"]["review_status"] = promotion_review["review_status"]
     return {
         "available": True,
         "reason": None,
