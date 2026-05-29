@@ -31,7 +31,7 @@ Use the following stack and boundaries for the website platform:
 - primary database: `PostgreSQL`
 - cache: `Redis`
 - auth: public site with admin-only authenticated routes in the first phase
-- hosting: prefer `Render` for the MVP unless an AWS-first hosting requirement is imposed
+- hosting: prefer `AWS` as the primary hosting platform
 - background jobs: scheduled or manually triggered Spring Boot jobs
 - architecture style: modular monolith, not microservices
 
@@ -128,23 +128,32 @@ This keeps auth small in the MVP while preserving a clear path to user accounts 
 
 ## Hosting choice
 
-Preferred MVP hosting choice: `Render`.
+Preferred hosting choice: `AWS`.
+
+Recommended AWS topology:
+
+- frontend: `AWS Amplify Hosting`
+- backend API: `Amazon ECS on Fargate`
+- database: `Amazon RDS for PostgreSQL`
+- cache: `Amazon ElastiCache for Redis`
+- auth for admin routes: `Amazon Cognito`
+- logs and operational visibility: `Amazon CloudWatch`
 
 Reasons:
 
-- simplest end-to-end hosting path for a modern frontend plus Spring Boot backend
-- acceptable CI/CD, domain, environment variable, and log support for an MVP
-- lower operational friction than a split-host setup
+- better long-term fit for a multi-service sports platform
+- natural fit for Spring Boot, scheduled jobs, managed database, managed cache, and operational monitoring
+- stronger alignment with future production requirements than a simpler all-in-one host
+- clean path to staging and production environments with controlled IAM, networking, and managed infrastructure
 
-Alternative if frontend/backend are split:
+Operational tradeoff:
 
-- `Vercel` for frontend
-- separate Spring Boot host for backend
+- AWS adds more setup and infrastructure overhead than Render for an MVP
+- that overhead is acceptable because the preferred direction is long-term platform control on AWS
 
-Alternative if AWS-first is required:
+Fallback simpler alternative:
 
-- `AWS Amplify` for frontend
-- separate AWS backend host
+- `Render` remains an acceptable fallback if delivery speed becomes more important than AWS alignment
 
 `AWS App Runner` is not the preferred backend anchor for this decision.
 
@@ -263,7 +272,7 @@ Negative:
 
 The following decisions remain open and should become separate MADRs:
 
-- choose hosting topology and environments
+- define AWS environment topology for development, staging, and production
 - define API auth/session strategy
 - define database schema for core multi-sport entities
 - define how tracking artifacts are ingested into website-facing read models
