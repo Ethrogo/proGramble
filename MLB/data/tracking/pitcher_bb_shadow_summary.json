@@ -1,0 +1,145 @@
+{
+  "analysis_type": "pitcher_bb_shadow_comparison",
+  "available": false,
+  "required_models": [
+    "xgboost_champion",
+    "ridge_challenger"
+  ],
+  "model_registry": {
+    "champion": {
+      "model_name": "xgboost_champion",
+      "model_role": "champion",
+      "model_versions": [],
+      "review_status": "insufficient_evidence"
+    },
+    "challenger": {
+      "model_name": "ridge_challenger",
+      "model_role": "challenger",
+      "model_versions": [],
+      "review_status": "insufficient_evidence"
+    }
+  },
+  "models": {
+    "xgboost_champion": {},
+    "ridge_challenger": {}
+  },
+  "overlap_sample": {
+    "candidate_rows": 0,
+    "prediction_rows": 0,
+    "workflow_rows": 0,
+    "unique_dates": 0
+  },
+  "agreement_slices": [],
+  "promotion_review": {
+    "policy_version": "pitcher_bb_shadow_promotion_policy_v1",
+    "manual_approval_required": true,
+    "review_status": "insufficient_evidence",
+    "recommended_action": "hold",
+    "eligible_for_review": false,
+    "review_context": {
+      "champion_name": "xgboost_champion",
+      "challenger_name": "ridge_challenger",
+      "champion_status": "stable_champion",
+      "manual_approval_required": true
+    },
+    "policy_thresholds": {
+      "version": "pitcher_bb_shadow_promotion_policy_v1",
+      "minimum_overlapping_days": 21,
+      "minimum_overlapping_pick_count": 30,
+      "minimum_disagreement_rows": 10,
+      "minimum_metric_advantages_for_promotion": 2,
+      "minimum_regression_advantages_for_promotion": 1,
+      "minimum_workflow_advantages_for_promotion": 1,
+      "mae_tie_margin": 0.02,
+      "rmse_tie_margin": 0.03,
+      "calibration_gap_tie_margin": 0.01,
+      "roi_per_pick_tie_margin": 0.02,
+      "profit_units_tie_margin": 1.0,
+      "disagreement_roi_tie_margin": 0.03,
+      "pick_count_tie_margin": 5,
+      "manual_approval_required": true
+    },
+    "evidence": {
+      "overlapping_days": 0,
+      "minimum_overlapping_days": 21,
+      "champion_pick_count": 0,
+      "challenger_pick_count": 0,
+      "minimum_overlapping_pick_count": 30,
+      "disagreement_rows": 0,
+      "minimum_disagreement_rows": 10
+    },
+    "metric_comparison": {
+      "mae": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      },
+      "rmse": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      },
+      "calibration_gap": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      },
+      "roi_per_pick": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      },
+      "profit_units": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      },
+      "pick_count": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      },
+      "disagreement_roi_per_pick": {
+        "champion": null,
+        "challenger": null,
+        "winner": "unknown",
+        "delta_challenger_minus_champion": null,
+        "material_difference": false
+      }
+    },
+    "advantage_counts": {
+      "challenger_total_advantages": 0,
+      "champion_total_advantages": 0,
+      "ties": 0,
+      "challenger_regression_advantages": 0,
+      "challenger_workflow_advantages": 0,
+      "champion_workflow_advantages": 0
+    },
+    "conflicting_signals": [],
+    "rationale": [
+      "Needs at least 21 overlapping forward days; only has 0.",
+      "Needs at least 30 overlapping workflow picks per model; has 0 for champion and 0 for challenger.",
+      "Needs at least 10 disagreement-slice rows; only has 0.",
+      "Manual approval is always required before any production promotion."
+    ]
+  },
+  "outputs": {
+    "tracking_csv": "/home/runner/work/proGramble/proGramble/MLB/data/tracking/pitcher_bb_shadow_predictions.csv",
+    "overlap_csv": "/home/runner/work/proGramble/proGramble/MLB/data/tracking/pitcher_bb_shadow_overlap.csv",
+    "summary_json": "/home/runner/work/proGramble/proGramble/MLB/data/tracking/pitcher_bb_shadow_summary.json",
+    "regression_plot": null,
+    "workflow_plot": null
+  }
+}
