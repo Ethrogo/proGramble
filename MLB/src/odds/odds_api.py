@@ -132,8 +132,8 @@ def fetch_all_player_props(
 
     events = fetch_mlb_events(
         sport=sport,
-        bookmakers=bookmakers,
-        use_configured_bookmakers=use_configured_bookmakers,
+        bookmakers=None,
+        use_configured_bookmakers=False,
     )
     prop_events: list[dict] = []
     failed_event_ids: list[str] = []
@@ -152,7 +152,7 @@ def fetch_all_player_props(
                 use_configured_bookmakers=use_configured_bookmakers,
             )
 
-            if prop_data and prop_data.get("bookmakers"):
+            if prop_data:
                 prop_events.append(prop_data)
 
         except requests.HTTPError:

@@ -250,7 +250,7 @@ def test_run_edge_pipeline_handles_pitcher_walks_market_with_shared_odds_shape(m
     assert best.iloc[0]["player_name_proj"] == "Tarik Skubal"
 
 
-def test_run_edge_pipeline_retries_without_bookmaker_filter_when_filtered_fetch_has_no_rows(monkeypatch):
+def test_run_edge_pipeline_retries_only_missing_projected_event_without_bookmaker_filter(monkeypatch):
     projections = pd.DataFrame(
         [
             {
@@ -258,47 +258,60 @@ def test_run_edge_pipeline_retries_without_bookmaker_filter_when_filtered_fetch_
                 "predicted_walks": 2.2,
                 "predicted_value": 2.2,
                 "player_name_norm": "tarik skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "home_team": "DET",
+                "away_team": "CLE",
             }
         ]
     )
 
-    calls: list[bool] = []
+    retry_calls: list[dict[str, object]] = []
 
     def fake_fetch_all_player_props(market, **kwargs):
         assert market == PITCHER_BB_PROP_MARKET
-        use_configured = kwargs.get("use_configured_bookmakers", True)
-        calls.append(use_configured)
-        if use_configured:
-            return []
         return [
             {
                 "id": "game_2",
                 "commence_time": "2026-04-18T19:10:00Z",
                 "home_team": "Detroit Tigers",
                 "away_team": "Cleveland Guardians",
-                "bookmakers": [
-                    {
-                        "key": "fanduel",
-                        "last_update": "2026-04-18T14:00:00Z",
-                        "markets": [
-                            {
-                                "key": PITCHER_BB_PROP_MARKET,
-                                "outcomes": [
-                                    {
-                                        "name": "Over",
-                                        "description": "Tarik Skubal",
-                                        "point": 1.5,
-                                        "price": -102,
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ],
+                "bookmakers": [],
             }
         ]
 
     monkeypatch.setattr(run_edges, "fetch_all_player_props", fake_fetch_all_player_props)
+    monkeypatch.setattr(
+        run_edges,
+        "fetch_event_player_props",
+        lambda event_id, market, **kwargs: retry_calls.append(
+            {"event_id": event_id, "kwargs": kwargs}
+        ) or {
+            "id": event_id,
+            "commence_time": "2026-04-18T19:10:00Z",
+            "home_team": "Detroit Tigers",
+            "away_team": "Cleveland Guardians",
+            "bookmakers": [
+                {
+                    "key": "fanduel",
+                    "last_update": "2026-04-18T14:00:00Z",
+                    "markets": [
+                        {
+                            "key": PITCHER_BB_PROP_MARKET,
+                            "outcomes": [
+                                {
+                                    "name": "Over",
+                                    "description": "Tarik Skubal",
+                                    "point": 1.5,
+                                    "price": -102,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    )
 
     joined, best, diagnostics = run_edges.run_edge_pipeline(
         projections,
@@ -308,8 +321,12 @@ def test_run_edge_pipeline_retries_without_bookmaker_filter_when_filtered_fetch_
         odds_join_key="player_name_norm",
     )
 
-    assert calls == [True, False]
     assert len(joined) == 1
     assert len(best) == 1
-    assert diagnostics["fetch_scope"] == "all_region_books"
+    assert len(retry_calls) == 1
+    assert retry_calls[0]["event_id"] == "game_2"
+    assert retry_calls[0]["kwargs"]["use_configured_bookmakers"] is False
+    assert retry_calls[0]["kwargs"]["bookmakers"] is None
+    assert diagnostics["fetch_scope"] == "targeted_all_region_books"
     assert diagnostics["bookmaker_filter_applied"] is False
+    assert diagnostics["targeted_retry_event_ids"] == ["game_2"]

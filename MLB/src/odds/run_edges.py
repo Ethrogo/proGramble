@@ -3,9 +3,43 @@ from __future__ import annotations
 import pandas as pd
 from common.identity import PARTICIPANT_JOIN_KEY_COLUMN
 
-from .odds_api import fetch_all_player_props
+from .compare import join_projections_to_odds, best_over_edges, prepare_projection_df
+from .odds_api import fetch_all_player_props, fetch_event_player_props
 from .normalize import odds_json_to_dataframe
-from .compare import join_projections_to_odds, best_over_edges
+
+
+MLB_TEAM_NAME_TO_ABBR = {
+    "Arizona Diamondbacks": "ARI",
+    "Atlanta Braves": "ATL",
+    "Baltimore Orioles": "BAL",
+    "Boston Red Sox": "BOS",
+    "Chicago Cubs": "CHC",
+    "Chicago White Sox": "CHW",
+    "Cincinnati Reds": "CIN",
+    "Cleveland Guardians": "CLE",
+    "Colorado Rockies": "COL",
+    "Detroit Tigers": "DET",
+    "Houston Astros": "HOU",
+    "Kansas City Royals": "KCR",
+    "Los Angeles Angels": "LAA",
+    "Los Angeles Dodgers": "LAD",
+    "Miami Marlins": "MIA",
+    "Milwaukee Brewers": "MIL",
+    "Minnesota Twins": "MIN",
+    "New York Mets": "NYM",
+    "New York Yankees": "NYY",
+    "Athletics": "ATH",
+    "Philadelphia Phillies": "PHI",
+    "Pittsburgh Pirates": "PIT",
+    "San Diego Padres": "SDP",
+    "San Francisco Giants": "SFG",
+    "Seattle Mariners": "SEA",
+    "St. Louis Cardinals": "STL",
+    "Tampa Bay Rays": "TBR",
+    "Texas Rangers": "TEX",
+    "Toronto Blue Jays": "TOR",
+    "Washington Nationals": "WSN",
+}
 
 
 def _build_edge_pipeline_diagnostics(
@@ -27,6 +61,59 @@ def _build_edge_pipeline_diagnostics(
     }
 
 
+def _event_team_codes(event: dict) -> tuple[str, str]:
+    home = str(event.get("home_team", "") or "").strip()
+    away = str(event.get("away_team", "") or "").strip()
+    return MLB_TEAM_NAME_TO_ABBR.get(home, home.upper()), MLB_TEAM_NAME_TO_ABBR.get(away, away.upper())
+
+
+def _missing_projection_event_ids(
+    projections: pd.DataFrame,
+    joined_df: pd.DataFrame,
+    raw_events: list[dict],
+    *,
+    projection_join_key: str,
+    sport: str,
+    market: str,
+    participant_key: str,
+    prediction_column: str,
+) -> list[str]:
+    if not raw_events:
+        return []
+
+    prepared = prepare_projection_df(
+        projections,
+        participant_key=participant_key,
+        prediction_column=prediction_column,
+        projection_join_key=projection_join_key,
+        sport=sport,
+        market_key=market,
+    )
+    joined_keys = set(joined_df.get(projection_join_key, pd.Series(dtype="object")).astype(str))
+    missing = prepared[~prepared[projection_join_key].astype(str).isin(joined_keys)].copy()
+    if missing.empty:
+        return []
+
+    event_ids: list[str] = []
+    for _, row in missing.iterrows():
+        home_team = str(row.get("home_team", "") or "").strip().upper()
+        away_team = str(row.get("away_team", "") or "").strip().upper()
+        team = str(row.get("team", "") or "").strip().upper()
+        opponent = str(row.get("opponent", "") or "").strip().upper()
+        for event in raw_events:
+            event_id = str(event.get("id", "") or "").strip()
+            if not event_id:
+                continue
+            event_home, event_away = _event_team_codes(event)
+            if home_team and away_team and event_home == home_team and event_away == away_team:
+                event_ids.append(event_id)
+                break
+            if team and opponent and {event_home, event_away} == {team, opponent}:
+                event_ids.append(event_id)
+                break
+    return list(dict.fromkeys(event_ids))
+
+
 def run_edge_pipeline(
     projections: pd.DataFrame,
     market: str,
@@ -42,35 +129,6 @@ def run_edge_pipeline(
     raw_events = fetch_all_player_props(market=market)
     odds_df = odds_json_to_dataframe(raw_events)
 
-    if odds_df.empty:
-        retry_events = fetch_all_player_props(
-            market=market,
-            use_configured_bookmakers=False,
-        )
-        retry_odds_df = odds_json_to_dataframe(retry_events)
-        if retry_odds_df.empty:
-            diagnostics = _build_edge_pipeline_diagnostics(
-                fetch_scope="all_region_books",
-                raw_events=retry_events,
-                odds_df=retry_odds_df,
-                joined_df=pd.DataFrame(),
-                best_edges_df=pd.DataFrame(),
-                bookmaker_filter_applied=False,
-            )
-            diagnostics["initial_fetch"] = _build_edge_pipeline_diagnostics(
-                fetch_scope="configured_books",
-                raw_events=raw_events,
-                odds_df=odds_df,
-                joined_df=pd.DataFrame(),
-                best_edges_df=pd.DataFrame(),
-                bookmaker_filter_applied=True,
-            )
-            return pd.DataFrame(), pd.DataFrame(), diagnostics
-        raw_events = retry_events
-        odds_df = retry_odds_df
-        fetch_scope = "all_region_books"
-        bookmaker_filter_applied = False
-
     joined = join_projections_to_odds(
         projections,
         odds_df,
@@ -82,6 +140,50 @@ def run_edge_pipeline(
         market_key=market,
     )
 
+    retry_event_ids = _missing_projection_event_ids(
+        projections,
+        joined,
+        raw_events,
+        projection_join_key=projection_join_key,
+        sport=sport,
+        market=market,
+        participant_key=participant_key,
+        prediction_column=prediction_column,
+    )
+    if retry_event_ids:
+        retry_events: list[dict] = []
+        for event_id in retry_event_ids:
+            retry_event = fetch_event_player_props(
+                event_id=event_id,
+                market=market,
+                sport=sport,
+                bookmakers=None,
+                use_configured_bookmakers=False,
+            )
+            if retry_event:
+                retry_events.append(retry_event)
+
+        retry_odds_df = odds_json_to_dataframe(retry_events)
+        if not retry_odds_df.empty:
+            odds_df = pd.concat([odds_df, retry_odds_df], ignore_index=True)
+            if "event_id" in odds_df.columns and "bookmaker_key" in odds_df.columns and "market_key" in odds_df.columns and "player_name_norm" in odds_df.columns and "side" in odds_df.columns and "line" in odds_df.columns:
+                odds_df = odds_df.drop_duplicates(
+                    subset=["event_id", "bookmaker_key", "market_key", "player_name_norm", "side", "line"],
+                    keep="last",
+                ).reset_index(drop=True)
+            joined = join_projections_to_odds(
+                projections,
+                odds_df,
+                participant_key=participant_key,
+                prediction_column=prediction_column,
+                projection_join_key=projection_join_key,
+                odds_join_key=odds_join_key,
+                sport=sport,
+                market_key=market,
+            )
+            fetch_scope = "targeted_all_region_books"
+            bookmaker_filter_applied = False
+
     if joined.empty:
         diagnostics = _build_edge_pipeline_diagnostics(
             fetch_scope=fetch_scope,
@@ -91,6 +193,7 @@ def run_edge_pipeline(
             best_edges_df=pd.DataFrame(),
             bookmaker_filter_applied=bookmaker_filter_applied,
         )
+        diagnostics["targeted_retry_event_ids"] = retry_event_ids
         return joined, pd.DataFrame(), diagnostics
 
     group_key = PARTICIPANT_JOIN_KEY_COLUMN if PARTICIPANT_JOIN_KEY_COLUMN in joined.columns else f"{participant_key}_proj"
@@ -103,4 +206,5 @@ def run_edge_pipeline(
         best_edges_df=best_edges,
         bookmaker_filter_applied=bookmaker_filter_applied,
     )
+    diagnostics["targeted_retry_event_ids"] = retry_event_ids
     return joined, best_edges, diagnostics

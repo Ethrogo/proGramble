@@ -85,7 +85,8 @@ def test_fetch_all_player_props_skips_event_without_id(monkeypatch):
 
     assert len(result) == 1
     assert result[0]["id"] == "event_1"
-    assert event_calls["kwargs"]["bookmakers"] == odds_api.BOOKMAKERS
+    assert event_calls["kwargs"]["bookmakers"] is None
+    assert event_calls["kwargs"]["use_configured_bookmakers"] is False
 
 
 def test_fetch_all_player_props_skips_http_422_like_error(monkeypatch):
@@ -139,8 +140,8 @@ def test_fetch_all_player_props_only_keeps_events_with_bookmakers(monkeypatch):
 
     result = odds_api.fetch_all_player_props(market=PITCHER_K_PROP_MARKET)
 
-    assert len(result) == 1
-    assert result[0]["id"] == "event_3"
+    assert len(result) == 3
+    assert [event["id"] for event in result] == ["event_1", "event_2", "event_3"]
 
 
 def test_fetch_all_player_props_passes_custom_bookmakers_to_event_discovery(monkeypatch):
@@ -166,7 +167,8 @@ def test_fetch_all_player_props_passes_custom_bookmakers_to_event_discovery(monk
     )
 
     assert len(result) == 1
-    assert event_calls["kwargs"]["bookmakers"] == ["draftkings", "williamhill_us"]
+    assert event_calls["kwargs"]["bookmakers"] is None
+    assert event_calls["kwargs"]["use_configured_bookmakers"] is False
 
 
 def test_fetch_all_player_props_without_configured_bookmakers_removes_bookmaker_filter(monkeypatch):
