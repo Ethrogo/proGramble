@@ -36,6 +36,7 @@ from common.identity import (
 from common.workflows import ModelingWorkflowSpec
 from pitcher_k.workflow import MLB_PITCHER_STRIKEOUT_WORKFLOW
 from pitcher_k import shadow as pitcher_k_shadow
+from pitcher_bb import shadow as pitcher_bb_shadow
 from pitcher_bb.workflow import MLB_PITCHER_WALK_WORKFLOW
 from pitcher_k.data_loader import load_statcast_data
 from pitcher_k.feature_engineering import build_pitcher_game_table
@@ -67,6 +68,11 @@ PITCHER_K_SHADOW_OVERLAP_PATH = TRACKING_DIR / "pitcher_k_shadow_overlap.csv"
 PITCHER_K_SHADOW_SUMMARY_PATH = TRACKING_DIR / "pitcher_k_shadow_summary.json"
 PITCHER_K_SHADOW_REGRESSION_PLOT_PATH = TRACKING_DIR / "pitcher_k_shadow_regression.png"
 PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH = TRACKING_DIR / "pitcher_k_shadow_workflow.png"
+PITCHER_BB_SHADOW_TRACKING_PATH = TRACKING_DIR / "pitcher_bb_shadow_predictions.csv"
+PITCHER_BB_SHADOW_OVERLAP_PATH = TRACKING_DIR / "pitcher_bb_shadow_overlap.csv"
+PITCHER_BB_SHADOW_SUMMARY_PATH = TRACKING_DIR / "pitcher_bb_shadow_summary.json"
+PITCHER_BB_SHADOW_REGRESSION_PLOT_PATH = TRACKING_DIR / "pitcher_bb_shadow_regression.png"
+PITCHER_BB_SHADOW_WORKFLOW_PLOT_PATH = TRACKING_DIR / "pitcher_bb_shadow_workflow.png"
 CURRENT_REGIME_START_DATE = "2026-05-07"
 LEGACY_WORKFLOW_MODEL_VERSION = "workflow_unversioned"
 LEGACY_MANUAL_MODEL_VERSION = "manual_unversioned"
@@ -193,6 +199,18 @@ def load_pitcher_k_shadow_tracking() -> pd.DataFrame:
 
     shadow_df = pd.read_csv(PITCHER_K_SHADOW_TRACKING_PATH, keep_default_na=False)
     return pitcher_k_shadow.coerce_shadow_tracking_df(shadow_df)
+
+
+def empty_pitcher_bb_shadow_tracking_df() -> pd.DataFrame:
+    return pitcher_bb_shadow.empty_shadow_tracking_df()
+
+
+def load_pitcher_bb_shadow_tracking() -> pd.DataFrame:
+    if not PITCHER_BB_SHADOW_TRACKING_PATH.exists():
+        return empty_pitcher_bb_shadow_tracking_df()
+
+    shadow_df = pd.read_csv(PITCHER_BB_SHADOW_TRACKING_PATH, keep_default_na=False)
+    return pitcher_bb_shadow.coerce_shadow_tracking_df(shadow_df)
 
 
 def empty_joined_odds_df() -> pd.DataFrame:
@@ -383,12 +401,14 @@ def _annotate_workflow_provenance(
     return annotated
 
 
-def _upsert_pitcher_k_shadow_rows(
+def _upsert_shadow_rows(
     existing_df: pd.DataFrame,
     new_rows: pd.DataFrame,
+    *,
+    shadow_module,
 ) -> pd.DataFrame:
-    existing = pitcher_k_shadow.coerce_shadow_tracking_df(existing_df)
-    incoming = pitcher_k_shadow.coerce_shadow_tracking_df(new_rows)
+    existing = shadow_module.coerce_shadow_tracking_df(existing_df)
+    incoming = shadow_module.coerce_shadow_tracking_df(new_rows)
     if incoming.empty:
         return existing
     if existing.empty:
@@ -412,10 +432,21 @@ def _upsert_pitcher_k_shadow_rows(
                     new_record[field] = existing_value
         merged_rows.append(new_record)
 
-    merged_df = pd.DataFrame(merged_rows, columns=pitcher_k_shadow.SHADOW_TRACKING_COLUMNS)
+    merged_df = pd.DataFrame(merged_rows, columns=shadow_module.SHADOW_TRACKING_COLUMNS)
     untouched_existing = existing[~existing["shadow_row_key"].isin(merged_df["shadow_row_key"])]
     combined = pd.concat([untouched_existing, merged_df], ignore_index=True)
-    return pitcher_k_shadow.coerce_shadow_tracking_df(combined)
+    return shadow_module.coerce_shadow_tracking_df(combined)
+
+
+def _upsert_pitcher_k_shadow_rows(
+    existing_df: pd.DataFrame,
+    new_rows: pd.DataFrame,
+) -> pd.DataFrame:
+    return _upsert_shadow_rows(
+        existing_df,
+        new_rows,
+        shadow_module=pitcher_k_shadow,
+    )
 
 
 def persist_pitcher_k_shadow_predictions(
@@ -428,20 +459,74 @@ def persist_pitcher_k_shadow_predictions(
     metadata: dict | None,
     build_picks_fn: BuildPicksFn,
 ) -> Path:
+    return _persist_shadow_predictions(
+        starters_df=starters_df,
+        pitcher_games=pitcher_games,
+        joined_df=joined_df,
+        picks_df=picks_df,
+        workflow=workflow,
+        metadata=metadata,
+        build_picks_fn=build_picks_fn,
+        load_shadow_tracking_fn=load_pitcher_k_shadow_tracking,
+        shadow_module=pitcher_k_shadow,
+        tracking_path=PITCHER_K_SHADOW_TRACKING_PATH,
+        target_prop_type="pitcher_k",
+    )
+
+
+def persist_pitcher_bb_shadow_predictions(
+    *,
+    starters_df: pd.DataFrame,
+    pitcher_games: pd.DataFrame,
+    joined_df: pd.DataFrame,
+    picks_df: pd.DataFrame,
+    workflow: ModelingWorkflowSpec,
+    metadata: dict | None,
+    build_picks_fn: BuildPicksFn,
+) -> Path:
+    return _persist_shadow_predictions(
+        starters_df=starters_df,
+        pitcher_games=pitcher_games,
+        joined_df=joined_df,
+        picks_df=picks_df,
+        workflow=workflow,
+        metadata=metadata,
+        build_picks_fn=build_picks_fn,
+        load_shadow_tracking_fn=load_pitcher_bb_shadow_tracking,
+        shadow_module=pitcher_bb_shadow,
+        tracking_path=PITCHER_BB_SHADOW_TRACKING_PATH,
+        target_prop_type="pitcher_bb",
+    )
+
+
+def _persist_shadow_predictions(
+    *,
+    starters_df: pd.DataFrame,
+    pitcher_games: pd.DataFrame,
+    joined_df: pd.DataFrame,
+    picks_df: pd.DataFrame,
+    workflow: ModelingWorkflowSpec,
+    metadata: dict | None,
+    build_picks_fn: BuildPicksFn,
+    load_shadow_tracking_fn: Callable[[], pd.DataFrame],
+    shadow_module,
+    tracking_path: Path,
+    target_prop_type: str,
+) -> Path:
     ensure_output_dirs()
-    existing_df = load_pitcher_k_shadow_tracking()
-    if workflow.prop_type != "pitcher_k" or joined_df.empty:
-        if not PITCHER_K_SHADOW_TRACKING_PATH.exists():
-            existing_df.to_csv(PITCHER_K_SHADOW_TRACKING_PATH, index=False)
-        return PITCHER_K_SHADOW_TRACKING_PATH
+    existing_df = load_shadow_tracking_fn()
+    if workflow.prop_type != target_prop_type or joined_df.empty:
+        if not tracking_path.exists():
+            existing_df.to_csv(tracking_path, index=False)
+        return tracking_path
 
     workflow_game_date = pd.to_datetime(starters_df["game_date"], errors="coerce").min()
     tracking_regime = _infer_tracking_regime("run_daily_card", workflow_game_date)
-    champion_rows = pitcher_k_shadow.build_shadow_candidate_rows(
+    champion_rows = shadow_module.build_shadow_candidate_rows(
         joined_df,
         picks_df,
-        model_name=pitcher_k_shadow.CHAMPION_MODEL_NAME,
-        model_role=pitcher_k_shadow.CHAMPION_MODEL_ROLE,
+        model_name=shadow_module.CHAMPION_MODEL_NAME,
+        model_role=shadow_module.CHAMPION_MODEL_ROLE,
         model_version=_resolve_model_version(workflow, metadata),
         policy_version=workflow.pick_ranking_policy.version,
         tracking_regime=tracking_regime,
@@ -449,11 +534,11 @@ def persist_pitcher_k_shadow_predictions(
     )
 
     today_features = workflow.feature_builder(starters_df, pitcher_games)
-    challenger_preds, challenger_meta = pitcher_k_shadow.build_ridge_shadow_predictions(
+    challenger_preds, challenger_meta = shadow_module.build_ridge_shadow_predictions(
         today_features,
         pitcher_games,
     )
-    challenger_joined_df = pitcher_k_shadow.apply_prediction_frame_to_joined_rows(
+    challenger_joined_df = shadow_module.apply_prediction_frame_to_joined_rows(
         joined_df,
         challenger_preds,
         prediction_column=workflow.prop_fields.shared_prediction,
@@ -474,7 +559,7 @@ def persist_pitcher_k_shadow_predictions(
         metadata=metadata,
         game_date=workflow_game_date,
     )
-    challenger_rows = pitcher_k_shadow.build_shadow_candidate_rows(
+    challenger_rows = shadow_module.build_shadow_candidate_rows(
         challenger_joined_df,
         challenger_picks_df,
         model_name=str(challenger_meta["model_name"]),
@@ -485,12 +570,13 @@ def persist_pitcher_k_shadow_predictions(
         game_date=workflow_game_date,
     )
 
-    merged_df = _upsert_pitcher_k_shadow_rows(
+    merged_df = _upsert_shadow_rows(
         existing_df,
         pd.concat([champion_rows, challenger_rows], ignore_index=True),
+        shadow_module=shadow_module,
     )
-    merged_df.to_csv(PITCHER_K_SHADOW_TRACKING_PATH, index=False)
-    return PITCHER_K_SHADOW_TRACKING_PATH
+    merged_df.to_csv(tracking_path, index=False)
+    return tracking_path
 
 
 def _parse_american_odds(odds: float | int | str | None) -> float | None:
@@ -733,7 +819,36 @@ def apply_statcast_results_to_pitcher_k_shadow_tracking(
     *,
     game_date: str,
 ) -> pd.DataFrame:
-    working = pitcher_k_shadow.coerce_shadow_tracking_df(shadow_df)
+    return _apply_statcast_results_to_shadow_tracking(
+        shadow_df,
+        pitcher_results_df,
+        game_date=game_date,
+        shadow_module=pitcher_k_shadow,
+    )
+
+
+def apply_statcast_results_to_pitcher_bb_shadow_tracking(
+    shadow_df: pd.DataFrame,
+    pitcher_results_df: pd.DataFrame,
+    *,
+    game_date: str,
+) -> pd.DataFrame:
+    return _apply_statcast_results_to_shadow_tracking(
+        shadow_df,
+        pitcher_results_df,
+        game_date=game_date,
+        shadow_module=pitcher_bb_shadow,
+    )
+
+
+def _apply_statcast_results_to_shadow_tracking(
+    shadow_df: pd.DataFrame,
+    pitcher_results_df: pd.DataFrame,
+    *,
+    game_date: str,
+    shadow_module,
+) -> pd.DataFrame:
+    working = shadow_module.coerce_shadow_tracking_df(shadow_df)
     if working.empty:
         return working
 
@@ -818,18 +933,45 @@ def apply_statcast_results_to_pitcher_k_shadow_tracking(
     graded_at = pd.Timestamp.now(tz="America/New_York").isoformat()
     pending.loc[resolved_mask, "graded_at"] = graded_at
 
-    working.loc[pending["shadow_row_index"], pitcher_k_shadow.SHADOW_TRACKING_COLUMNS] = pending[
-        pitcher_k_shadow.SHADOW_TRACKING_COLUMNS
+    working.loc[pending["shadow_row_index"], shadow_module.SHADOW_TRACKING_COLUMNS] = pending[
+        shadow_module.SHADOW_TRACKING_COLUMNS
     ].values
-    return pitcher_k_shadow.coerce_shadow_tracking_df(working)
+    return shadow_module.coerce_shadow_tracking_df(working)
 
 
 def grade_pitcher_k_shadow_predictions_from_statcast(
     *,
     game_date: str | None = None,
 ) -> dict[str, object]:
+    return _grade_shadow_predictions_from_statcast(
+        game_date=game_date,
+        load_shadow_tracking_fn=load_pitcher_k_shadow_tracking,
+        apply_results_fn=apply_statcast_results_to_pitcher_k_shadow_tracking,
+        tracking_path=PITCHER_K_SHADOW_TRACKING_PATH,
+    )
+
+
+def grade_pitcher_bb_shadow_predictions_from_statcast(
+    *,
+    game_date: str | None = None,
+) -> dict[str, object]:
+    return _grade_shadow_predictions_from_statcast(
+        game_date=game_date,
+        load_shadow_tracking_fn=load_pitcher_bb_shadow_tracking,
+        apply_results_fn=apply_statcast_results_to_pitcher_bb_shadow_tracking,
+        tracking_path=PITCHER_BB_SHADOW_TRACKING_PATH,
+    )
+
+
+def _grade_shadow_predictions_from_statcast(
+    *,
+    game_date: str | None,
+    load_shadow_tracking_fn: Callable[[], pd.DataFrame],
+    apply_results_fn: Callable[..., pd.DataFrame],
+    tracking_path: Path,
+) -> dict[str, object]:
     target_date = game_date or _yesterday_game_date()
-    shadow_df = load_pitcher_k_shadow_tracking()
+    shadow_df = load_shadow_tracking_fn()
     if shadow_df.empty:
         return {"game_date": target_date, "updated_rows": 0, "shadow_df": shadow_df}
 
@@ -848,7 +990,7 @@ def grade_pitcher_k_shadow_predictions_from_statcast(
         return {"game_date": target_date, "updated_rows": 0, "shadow_df": shadow_df}
 
     pitcher_results_df = load_pitcher_results_from_statcast(target_date)
-    updated_shadow_df = apply_statcast_results_to_pitcher_k_shadow_tracking(
+    updated_shadow_df = apply_results_fn(
         shadow_df,
         pitcher_results_df,
         game_date=target_date,
@@ -856,7 +998,7 @@ def grade_pitcher_k_shadow_predictions_from_statcast(
     before = shadow_df["actual_value"].astype(str).str.strip()
     after = updated_shadow_df["actual_value"].astype(str).str.strip()
     updated_rows = int(((before == "") & (after != "")).sum())
-    updated_shadow_df.to_csv(PITCHER_K_SHADOW_TRACKING_PATH, index=False)
+    updated_shadow_df.to_csv(tracking_path, index=False)
     return {
         "game_date": target_date,
         "updated_rows": updated_rows,
@@ -865,11 +1007,44 @@ def grade_pitcher_k_shadow_predictions_from_statcast(
 
 
 def persist_pitcher_k_shadow_comparison_report() -> dict[str, object]:
-    shadow_df = load_pitcher_k_shadow_tracking()
+    return _persist_shadow_comparison_report(
+        load_shadow_tracking_fn=load_pitcher_k_shadow_tracking,
+        shadow_module=pitcher_k_shadow,
+        tracking_path=PITCHER_K_SHADOW_TRACKING_PATH,
+        overlap_path=PITCHER_K_SHADOW_OVERLAP_PATH,
+        summary_path=PITCHER_K_SHADOW_SUMMARY_PATH,
+        regression_plot_path=PITCHER_K_SHADOW_REGRESSION_PLOT_PATH,
+        workflow_plot_path=PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH,
+    )
+
+
+def persist_pitcher_bb_shadow_comparison_report() -> dict[str, object]:
+    return _persist_shadow_comparison_report(
+        load_shadow_tracking_fn=load_pitcher_bb_shadow_tracking,
+        shadow_module=pitcher_bb_shadow,
+        tracking_path=PITCHER_BB_SHADOW_TRACKING_PATH,
+        overlap_path=PITCHER_BB_SHADOW_OVERLAP_PATH,
+        summary_path=PITCHER_BB_SHADOW_SUMMARY_PATH,
+        regression_plot_path=PITCHER_BB_SHADOW_REGRESSION_PLOT_PATH,
+        workflow_plot_path=PITCHER_BB_SHADOW_WORKFLOW_PLOT_PATH,
+    )
+
+
+def _persist_shadow_comparison_report(
+    *,
+    load_shadow_tracking_fn: Callable[[], pd.DataFrame],
+    shadow_module,
+    tracking_path: Path,
+    overlap_path: Path,
+    summary_path: Path,
+    regression_plot_path: Path,
+    workflow_plot_path: Path,
+) -> dict[str, object]:
+    shadow_df = load_shadow_tracking_fn()
     review_context = None
-    if PITCHER_K_SHADOW_SUMMARY_PATH.exists():
+    if summary_path.exists():
         try:
-            existing_summary = json.loads(PITCHER_K_SHADOW_SUMMARY_PATH.read_text(encoding="utf-8"))
+            existing_summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             existing_summary = {}
         review_context = (
@@ -878,34 +1053,34 @@ def persist_pitcher_k_shadow_comparison_report() -> dict[str, object]:
             else None
         )
 
-    report = pitcher_k_shadow.build_shadow_comparison_report(
+    report = shadow_module.build_shadow_comparison_report(
         shadow_df,
         review_context=review_context,
     )
     overlap_df = report["overlap_df"]
-    overlap_df.to_csv(PITCHER_K_SHADOW_OVERLAP_PATH, index=False)
+    overlap_df.to_csv(overlap_path, index=False)
 
     regression_written = False
     workflow_written = False
     if report.get("available"):
-        regression_written = pitcher_k_shadow.write_shadow_regression_plot(
+        regression_written = shadow_module.write_shadow_regression_plot(
             report["daily_regression_df"],
-            PITCHER_K_SHADOW_REGRESSION_PLOT_PATH,
+            regression_plot_path,
         )
-        workflow_written = pitcher_k_shadow.write_shadow_workflow_plot(
+        workflow_written = shadow_module.write_shadow_workflow_plot(
             report["daily_workflow_df"],
-            PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH,
+            workflow_plot_path,
         )
 
     summary = dict(report["summary"])
     summary["outputs"] = {
-        "tracking_csv": str(PITCHER_K_SHADOW_TRACKING_PATH),
-        "overlap_csv": str(PITCHER_K_SHADOW_OVERLAP_PATH),
-        "summary_json": str(PITCHER_K_SHADOW_SUMMARY_PATH),
-        "regression_plot": str(PITCHER_K_SHADOW_REGRESSION_PLOT_PATH) if regression_written else None,
-        "workflow_plot": str(PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH) if workflow_written else None,
+        "tracking_csv": str(tracking_path),
+        "overlap_csv": str(overlap_path),
+        "summary_json": str(summary_path),
+        "regression_plot": str(regression_plot_path) if regression_written else None,
+        "workflow_plot": str(workflow_plot_path) if workflow_written else None,
     }
-    PITCHER_K_SHADOW_SUMMARY_PATH.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return {
         "summary": summary,
         "overlap_df": overlap_df,
@@ -2281,6 +2456,14 @@ def save_outputs(
             "WARNING: Failed to update pitcher_k shadow tracking for "
             f"{_yesterday_game_date()}: {exc.__class__.__name__}: {exc}"
         )
+    try:
+        grade_pitcher_bb_shadow_predictions_from_statcast()
+        persist_pitcher_bb_shadow_comparison_report()
+    except Exception as exc:
+        print(
+            "WARNING: Failed to update pitcher_bb shadow tracking for "
+            f"{_yesterday_game_date()}: {exc.__class__.__name__}: {exc}"
+        )
     save_run_status(status=run_status, message=run_message)
 
 
@@ -2535,6 +2718,22 @@ def run_workflow_daily_card(
         except Exception as exc:
             print(
                 "WARNING: Failed to persist pitcher_k shadow predictions for "
+                f"{workflow_game_date}: {exc.__class__.__name__}: {exc}"
+            )
+    elif workflow.prop_type == "pitcher_bb":
+        try:
+            persist_pitcher_bb_shadow_predictions(
+                starters_df=starters_df,
+                pitcher_games=history_df,
+                joined_df=joined_df,
+                picks_df=picks_df,
+                workflow=workflow,
+                metadata=metadata,
+                build_picks_fn=build_picks_fn,
+            )
+        except Exception as exc:
+            print(
+                "WARNING: Failed to persist pitcher_bb shadow predictions for "
                 f"{workflow_game_date}: {exc.__class__.__name__}: {exc}"
             )
 

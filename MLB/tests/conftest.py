@@ -120,4 +120,29 @@ def isolate_tracking_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         "PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH",
         tracking_dir / "pitcher_k_shadow_workflow.png",
     )
+    monkeypatch.setattr(
+        daily_card,
+        "PITCHER_BB_SHADOW_TRACKING_PATH",
+        tracking_dir / "pitcher_bb_shadow_predictions.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "PITCHER_BB_SHADOW_OVERLAP_PATH",
+        tracking_dir / "pitcher_bb_shadow_overlap.csv",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "PITCHER_BB_SHADOW_SUMMARY_PATH",
+        tracking_dir / "pitcher_bb_shadow_summary.json",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "PITCHER_BB_SHADOW_REGRESSION_PLOT_PATH",
+        tracking_dir / "pitcher_bb_shadow_regression.png",
+    )
+    monkeypatch.setattr(
+        daily_card,
+        "PITCHER_BB_SHADOW_WORKFLOW_PLOT_PATH",
+        tracking_dir / "pitcher_bb_shadow_workflow.png",
+    )
     return tracking_dir

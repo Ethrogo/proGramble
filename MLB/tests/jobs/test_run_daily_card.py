@@ -33,6 +33,11 @@ def test_tracking_artifact_paths_are_isolated_from_committed_repo_files(tmp_path
     assert committed_tracking_dir not in daily_card.PITCHER_K_SHADOW_SUMMARY_PATH.parents
     assert committed_tracking_dir not in daily_card.PITCHER_K_SHADOW_REGRESSION_PLOT_PATH.parents
     assert committed_tracking_dir not in daily_card.PITCHER_K_SHADOW_WORKFLOW_PLOT_PATH.parents
+    assert committed_tracking_dir not in daily_card.PITCHER_BB_SHADOW_TRACKING_PATH.parents
+    assert committed_tracking_dir not in daily_card.PITCHER_BB_SHADOW_OVERLAP_PATH.parents
+    assert committed_tracking_dir not in daily_card.PITCHER_BB_SHADOW_SUMMARY_PATH.parents
+    assert committed_tracking_dir not in daily_card.PITCHER_BB_SHADOW_REGRESSION_PLOT_PATH.parents
+    assert committed_tracking_dir not in daily_card.PITCHER_BB_SHADOW_WORKFLOW_PLOT_PATH.parents
 
 
 def test_run_daily_card_writes_outputs_with_mocked_dependencies(monkeypatch, tmp_path):
