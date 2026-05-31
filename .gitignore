@@ -147,6 +147,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.local-jdks/
 MLB/data/artifacts/_staging/
 MLB/data/artifacts/latest/
 MLB/tmp/

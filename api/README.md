@@ -1,0 +1,34 @@
+# ProGramble API
+
+Spring Boot backend scaffold for the website stack.
+
+## Local prerequisites
+
+- A repo-local Java 21 JDK is expected under `.local-jdks/`
+- Maven is not required globally; use the included wrapper
+
+## Local commands
+
+From `api/`:
+
+```powershell
+.\mvn-local.ps1 test
+.\mvn-local.ps1 spring-boot:run
+```
+
+The wrapper script sets `JAVA_HOME` to the newest local `jdk-21*` directory under `..\.local-jdks` before invoking `mvnw.cmd`.
+
+## Current stack
+
+- Java 21
+- Spring Boot 3.5.0
+- Spring Web
+- Spring Boot Actuator
+- Spring Validation
+
+## Next implementation targets
+
+- add `/api/v1` controllers for sports, slates, events, and yesterday results
+- add Postgres integration
+- add Redis-backed caching where justified
+- add admin refresh endpoints behind auth
