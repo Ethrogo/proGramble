@@ -279,6 +279,12 @@ img {
   margin-top: 2rem;
 }
 
+.section-heading {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
 .section-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
@@ -324,6 +330,34 @@ img {
   margin-top: 0.55rem;
 }
 
+.feature-stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.feature-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.feature-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.feature-row strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.feature-row p {
+  margin: 0;
+}
+
 .page-header {
   display: grid;
   gap: 1rem;
@@ -364,6 +398,10 @@ img {
   .hero-grid,
   .split-layout {
     grid-template-columns: 1fr;
+  }
+
+  .feature-row {
+    flex-direction: column;
   }
 
   .site-header-inner,

@@ -32,6 +32,24 @@ The wrapper script sets `JAVA_HOME` to the newest local `jdk-21*` directory unde
 - `GET /actuator/health`
 - `GET /actuator/info`
 
+## Initial schema
+
+The first relational schema draft lives at `src/main/resources/db/migration/V1__initial_schema.sql`.
+
+Core tables included:
+
+- `sports`
+- `competitions`
+- `teams`
+- `players`
+- `events`
+- `event_participants`
+- `sportsbooks`
+- `markets`
+- `offers`
+
+The schema stays sport-agnostic by modeling event participants generically, so both team sports and individual sports can use the same `events` and `offers` model.
+
 ## Environment variables
 
 - `SERVER_PORT`
