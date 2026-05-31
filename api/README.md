@@ -26,6 +26,19 @@ The wrapper script sets `JAVA_HOME` to the newest local `jdk-21*` directory unde
 - Spring Boot Actuator
 - Spring Validation
 
+## Base endpoints
+
+- `GET /api/v1`
+- `GET /actuator/health`
+- `GET /actuator/info`
+
+## Environment variables
+
+- `SERVER_PORT`
+- `PROGRAMBLE_ENV`
+- `PROGRAMBLE_API_BASE_PATH`
+- `CONSOLE_LOG_STRUCTURED_FORMAT`
+
 ## Next implementation targets
 
 - add `/api/v1` controllers for sports, slates, events, and yesterday results
