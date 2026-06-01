@@ -18,6 +18,27 @@ From `api/`:
 
 The wrapper script sets `JAVA_HOME` to the newest local `jdk-21*` directory under `..\.local-jdks` before invoking `mvnw.cmd`.
 
+## Docker
+
+Build the API image from `api/`:
+
+```powershell
+docker build -t programble-api:local .
+```
+
+Run the container locally:
+
+```powershell
+docker run --rm -p 8080:8080 programble-api:local
+```
+
+Verify the expected endpoints:
+
+```powershell
+curl http://127.0.0.1:8080/actuator/health
+curl http://127.0.0.1:8080/api/v1
+```
+
 ## Current stack
 
 - Java 21

@@ -1,0 +1,7 @@
+.git
+.gitignore
+target/
+.mvn/wrapper/apache-maven-*
+HELP.md
+README.md
+mvn-local.ps1
