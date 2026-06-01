@@ -1,14 +1,14 @@
 :root {
-  --bg: #f3efe5;
-  --panel: rgba(255, 252, 245, 0.82);
-  --panel-strong: #fffaf0;
-  --ink: #1a2230;
-  --muted: #5a6472;
-  --line: rgba(26, 34, 48, 0.14);
-  --accent: #b5441d;
-  --accent-strong: #8e3414;
-  --accent-soft: rgba(181, 68, 29, 0.12);
-  --shadow: 0 28px 60px rgba(26, 34, 48, 0.12);
+  --bg: #eef2ea;
+  --panel: rgba(249, 251, 247, 0.86);
+  --panel-strong: #fcfdfb;
+  --ink: #1d2b27;
+  --muted: #5b6f68;
+  --line: rgba(38, 63, 55, 0.12);
+  --accent: #3d6b5e;
+  --accent-strong: #2c5148;
+  --accent-soft: rgba(61, 107, 94, 0.12);
+  --shadow: 0 24px 56px rgba(33, 50, 45, 0.09);
   --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   --body-font: "Aptos", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", sans-serif;
 }
@@ -25,11 +25,12 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at top left, rgba(181, 68, 29, 0.18), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(24, 112, 82, 0.12), transparent 24%),
-    linear-gradient(180deg, #f8f3ea 0%, var(--bg) 100%);
+    radial-gradient(circle at top left, rgba(110, 151, 138, 0.22), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(206, 219, 201, 0.45), transparent 24%),
+    linear-gradient(180deg, #f7faf5 0%, var(--bg) 100%);
   color: var(--ink);
   font-family: var(--body-font);
+  line-height: 1.55;
 }
 
 a {
@@ -49,11 +50,12 @@ img {
 }
 
 .topband {
-  padding: 0.75rem 1.25rem;
+  padding: 0.7rem 1.25rem;
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  background: rgba(252, 253, 250, 0.65);
 }
 
 .site-header {
@@ -61,7 +63,7 @@ img {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(16px);
-  background: rgba(248, 243, 234, 0.88);
+  background: rgba(245, 249, 243, 0.88);
   border-bottom: 1px solid var(--line);
 }
 
@@ -96,6 +98,7 @@ img {
 .brand-copy {
   font-size: 0.9rem;
   color: var(--muted);
+  max-width: 28rem;
 }
 
 .site-nav {
@@ -128,7 +131,7 @@ img {
 .nav-link.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff8f2;
+  color: #f8fcf8;
 }
 
 .page-wrap {
@@ -142,8 +145,8 @@ img {
   border: 1px solid rgba(255, 255, 255, 0.48);
   border-radius: 28px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.66), rgba(255, 248, 236, 0.92)),
-    linear-gradient(90deg, rgba(181, 68, 29, 0.08), rgba(24, 112, 82, 0.08));
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(245, 249, 243, 0.95)),
+    linear-gradient(90deg, rgba(61, 107, 94, 0.06), rgba(166, 187, 177, 0.08));
   box-shadow: var(--shadow);
 }
 
@@ -154,7 +157,7 @@ img {
   width: 22rem;
   height: 22rem;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(181, 68, 29, 0.2), transparent 62%);
+  background: radial-gradient(circle, rgba(129, 165, 153, 0.32), transparent 62%);
 }
 
 .hero-grid {
@@ -208,7 +211,7 @@ img {
   border: 1px solid var(--line);
   border-radius: 22px;
   background: var(--panel);
-  box-shadow: 0 16px 32px rgba(26, 34, 48, 0.06);
+  box-shadow: 0 14px 30px rgba(33, 50, 45, 0.05);
 }
 
 .hero-side {
@@ -247,7 +250,7 @@ img {
   gap: 0.3rem;
   padding: 0.95rem 1rem;
   border-radius: 16px;
-  background: var(--panel-strong);
+  background: linear-gradient(180deg, var(--panel-strong), rgba(239, 245, 240, 0.95));
 }
 
 .stat-chip strong {
@@ -267,7 +270,7 @@ img {
 
 .button.primary {
   background: var(--accent);
-  color: #fff9f2;
+  color: #f8fcf8;
 }
 
 .button.secondary {
@@ -293,6 +296,10 @@ img {
   padding: 1.25rem;
 }
 
+.card h3 {
+  margin-bottom: 0.7rem;
+}
+
 .card p,
 .card li,
 .info-list p,
@@ -313,7 +320,7 @@ img {
   align-items: center;
   padding: 0.45rem 0.7rem;
   border-radius: 999px;
-  background: var(--panel-strong);
+  background: rgba(252, 253, 251, 0.95);
   border: 1px solid var(--line);
   font-size: 0.82rem;
   color: var(--muted);
@@ -376,7 +383,7 @@ img {
 
 .site-footer {
   border-top: 1px solid var(--line);
-  background: rgba(255, 249, 240, 0.8);
+  background: rgba(248, 251, 247, 0.84);
 }
 
 .site-footer-inner {
@@ -392,6 +399,11 @@ img {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+.mini-link {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 @media (max-width: 900px) {

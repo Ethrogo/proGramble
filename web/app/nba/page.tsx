@@ -22,7 +22,7 @@ export default function NbaPage() {
         stats={[
           { label: "Primary UX axis", value: "Slate first" },
           { label: "Key dependency", value: "Lineup freshness" },
-          { label: "API shape", value: "Events • Players • Offers" }
+          { label: "API shape", value: "Events | Players | Offers" }
         ]}
       />
 

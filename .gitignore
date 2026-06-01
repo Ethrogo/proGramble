@@ -142,6 +142,9 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.next/
+node_modules/
+.local-node/
 env/
 venv/
 ENV/
