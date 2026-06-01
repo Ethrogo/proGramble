@@ -1,5 +1,10 @@
 # proGramble
 
+## Status
+
+[![Website CI](https://github.com/Ethrogo/proGramble/actions/workflows/website-ci.yml/badge.svg)](https://github.com/Ethrogo/proGramble/actions/workflows/website-ci.yml)
+[![Daily MLB Training + Card](https://github.com/Ethrogo/proGramble/actions/workflows/daily-mlb-card.yml/badge.svg)](https://github.com/Ethrogo/proGramble/actions/workflows/daily-mlb-card.yml)
+
 proGramble is a sports modeling workflow repo focused on turning raw game data and live market data into model-driven daily prop cards.
 
 Today the implemented system is centered on one production workflow under `MLB/`:
