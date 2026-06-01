@@ -144,13 +144,17 @@ celerybeat.pid
 .venv
 .next/
 node_modules/
+web/node_modules_broken_*/
 .local-node/
+.local-node-repair/
+.local-node/**/*.zip
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
 .local-jdks/
+.local-jdks/**/*.zip
 MLB/data/artifacts/_staging/
 MLB/data/artifacts/latest/
 MLB/tmp/
