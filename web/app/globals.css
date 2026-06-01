@@ -282,6 +282,10 @@ img {
   margin-top: 2rem;
 }
 
+.page-block:first-of-type {
+  margin-top: 1.5rem;
+}
+
 .section-heading {
   display: grid;
   gap: 0.6rem;
@@ -306,6 +310,11 @@ img {
 .info-list li {
   color: var(--muted);
   line-height: 1.65;
+}
+
+.card > :last-child,
+.info-list > :last-child {
+  margin-bottom: 0;
 }
 
 .pill-row {
