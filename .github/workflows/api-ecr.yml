@@ -1,0 +1,106 @@
+name: API ECR Push
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+    paths:
+      - "api/**"
+      - ".github/workflows/api-ecr.yml"
+      - ".github/workflows/website-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+jobs:
+  build-and-push:
+    name: Build and Push API Image
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate required AWS configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION}" || { echo "Missing repository variable: AWS_REGION"; exit 1; }
+          test -n "${ECR_REPOSITORY}" || { echo "Missing repository variable: ECR_REPOSITORY"; exit 1; }
+          test -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" || { echo "Missing repository secret: AWS_ROLE_TO_ASSUME"; exit 1; }
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify backend package
+        run: ./mvnw -B package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: image-meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch_name="${GITHUB_REF_NAME}"
+          branch_slug="$(echo "${branch_name}" | tr '[:upper:]' '[:lower:]' | tr '/_' '-' | tr -cd 'a-z0-9-.')"
+          short_sha="${GITHUB_SHA::7}"
+          image_uri="${{ steps.login-ecr.outputs.registry }}/${ECR_REPOSITORY}"
+
+          tags="${image_uri}:${branch_slug},${image_uri}:${branch_slug}-${short_sha}"
+          if [ "${branch_slug}" = "main" ]; then
+            tags="${tags},${image_uri}:latest"
+          fi
+
+          echo "branch_slug=${branch_slug}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
+          echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
+          echo "tags=${tags}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: api
+          file: api/Dockerfile
+          push: true
+          tags: ${{ steps.image-meta.outputs.tags }}
+
+      - name: Summarize published image tags
+        shell: bash
+        run: |
+          {
+            echo "## API image published"
+            echo
+            echo "- ECR repository: \`${ECR_REPOSITORY}\`"
+            echo "- Branch tag: \`${{ steps.image-meta.outputs.branch_slug }}\`"
+            echo "- Commit tag: \`${{ steps.image-meta.outputs.branch_slug }}-${{ steps.image-meta.outputs.short_sha }}\`"
+            if [ "${{ steps.image-meta.outputs.branch_slug }}" = "main" ]; then
+              echo "- Additional tag: \`latest\`"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

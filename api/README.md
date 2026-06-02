@@ -102,6 +102,27 @@ Health and readiness surface:
 
 The container and future ECS service should treat `/actuator/health` as the default health endpoint.
 
+## ECR publishing contract
+
+The GitHub Actions workflow `.github/workflows/api-ecr.yml` builds and pushes the backend image to Amazon ECR.
+
+Required GitHub repository configuration:
+
+- repository variable: `AWS_REGION`
+- repository variable: `ECR_REPOSITORY`
+- repository secret: `AWS_ROLE_TO_ASSUME`
+
+Image tagging policy:
+
+- `${branch}`
+- `${branch}-${short_sha}`
+- `latest` on `main` only
+
+For example, a push on `staging` publishes tags like:
+
+- `staging`
+- `staging-a1b2c3d`
+
 ## Next implementation targets
 
 - add `/api/v1` controllers for sports, slates, events, and yesterday results
