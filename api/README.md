@@ -76,7 +76,31 @@ The schema stays sport-agnostic by modeling event participants generically, so b
 - `SERVER_PORT`
 - `PROGRAMBLE_ENV`
 - `PROGRAMBLE_API_BASE_PATH`
+- `PROGRAMBLE_DB_URL`
+- `PROGRAMBLE_DB_USERNAME`
+- `PROGRAMBLE_DB_PASSWORD`
 - `CONSOLE_LOG_STRUCTURED_FORMAT`
+
+## Staging runtime contract
+
+The `staging` profile is defined in `src/main/resources/application-staging.properties`.
+
+Expected staging runtime settings:
+
+- `SPRING_PROFILES_ACTIVE=staging`
+- `SERVER_PORT`
+- `PROGRAMBLE_ENV=staging`
+- `PROGRAMBLE_API_BASE_PATH=/api/v1`
+- `PROGRAMBLE_DB_URL`
+- `PROGRAMBLE_DB_USERNAME`
+- `PROGRAMBLE_DB_PASSWORD`
+
+Health and readiness surface:
+
+- `GET /actuator/health`
+- `GET /actuator/info`
+
+The container and future ECS service should treat `/actuator/health` as the default health endpoint.
 
 ## Next implementation targets
 
