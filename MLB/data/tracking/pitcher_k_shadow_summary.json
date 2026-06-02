@@ -25,62 +25,62 @@
   },
   "date_range": {
     "start_date": "2026-05-26",
-    "end_date": "2026-05-31"
+    "end_date": "2026-06-01"
   },
   "overlap_sample": {
-    "candidate_rows": 1548,
-    "prediction_rows": 262,
-    "workflow_rows": 179,
-    "unique_dates": 6
+    "candidate_rows": 1692,
+    "prediction_rows": 286,
+    "workflow_rows": 197,
+    "unique_dates": 7
   },
   "models": {
     "ridge_challenger": {
-      "prediction_rows": 131,
-      "mae": 1.905222629080507,
-      "rmse": 2.336370548571417,
+      "prediction_rows": 143,
+      "mae": 1.9014024497186017,
+      "rmse": 2.320776329943475,
       "calibration_nominal_coverage": 0.8,
-      "calibration_empirical_coverage": 0.7862595419847328,
-      "calibration_gap": 0.013740458015267243,
-      "pick_count": 91,
-      "wins": 54,
-      "losses": 37,
-      "profit_units": 7.0812331966318265,
-      "win_rate": 0.5934065934065934,
-      "roi_per_pick": 0.07781574941353656
+      "calibration_empirical_coverage": 0.7832167832167832,
+      "calibration_gap": 0.016783216783216814,
+      "pick_count": 100,
+      "wins": 56,
+      "losses": 44,
+      "profit_units": 1.7067866438171526,
+      "win_rate": 0.56,
+      "roi_per_pick": 0.017067866438171528
     },
     "xgboost_champion": {
-      "prediction_rows": 131,
-      "mae": 1.9136244231507977,
-      "rmse": 2.3401891997440223,
+      "prediction_rows": 143,
+      "mae": 1.9111371473832564,
+      "rmse": 2.3266526370806155,
       "calibration_nominal_coverage": 0.8,
-      "calibration_empirical_coverage": 0.7786259541984732,
-      "calibration_gap": 0.021374045801526798,
-      "pick_count": 88,
-      "wins": 52,
-      "losses": 36,
-      "profit_units": 6.725738888393731,
-      "win_rate": 0.5909090909090909,
-      "roi_per_pick": 0.07642885100447422
+      "calibration_empirical_coverage": 0.7692307692307693,
+      "calibration_gap": 0.03076923076923077,
+      "pick_count": 97,
+      "wins": 54,
+      "losses": 43,
+      "profit_units": 1.3512923355790567,
+      "win_rate": 0.5567010309278351,
+      "roi_per_pick": 0.013930848820402646
     }
   },
   "agreement_slices": [
     {
       "comparison_slice": "agreement",
-      "rows": 82,
-      "xgboost_champion_picks": 82,
-      "xgboost_champion_wins": 48,
-      "xgboost_champion_losses": 34,
-      "xgboost_champion_profit_units": 5.133013578086122,
-      "xgboost_champion_roi_per_pick": 0.06259772656202588,
-      "ridge_challenger_picks": 82,
-      "ridge_challenger_wins": 48,
-      "ridge_challenger_losses": 34,
-      "ridge_challenger_profit_units": 5.133013578086122,
-      "ridge_challenger_roi_per_pick": 0.06259772656202588
+      "rows": 91,
+      "xgboost_champion_picks": 91,
+      "xgboost_champion_wins": 50,
+      "xgboost_champion_losses": 41,
+      "xgboost_champion_profit_units": -0.24143297472855474,
+      "xgboost_champion_roi_per_pick": -0.0026531096124017004,
+      "ridge_challenger_picks": 91,
+      "ridge_challenger_wins": 50,
+      "ridge_challenger_losses": 41,
+      "ridge_challenger_profit_units": -0.24143297472855474,
+      "ridge_challenger_roi_per_pick": -0.0026531096124017004
     },
     {
       "comparison_slice": "disagreement",
-      "rows": 49,
+      "rows": 52,
       "xgboost_champion_picks": 6,
       "xgboost_champion_wins": 4,
       "xgboost_champion_losses": 2,
@@ -99,33 +99,33 @@
       "groups": [
         {
           "book": "BetMGM",
-          "picks": 30,
-          "wins": 21,
-          "losses": 9,
+          "picks": 32,
+          "wins": 22,
+          "losses": 10,
           "pushes": 0,
-          "profit_units": 7.769266798484045,
-          "win_rate": 0.7,
-          "roi_per_pick": 0.2589755599494682
+          "profit_units": 7.414428088806625,
+          "win_rate": 0.6875,
+          "roi_per_pick": 0.23170087777520704
         },
         {
           "book": "DraftKings",
-          "picks": 30,
+          "picks": 34,
           "wins": 20,
-          "losses": 10,
+          "losses": 14,
           "pushes": 0,
-          "profit_units": 6.88587671306009,
-          "win_rate": 0.6666666666666666,
-          "roi_per_pick": 0.22952922376866966
+          "profit_units": 2.8858767130600897,
+          "win_rate": 0.5882352941176471,
+          "roi_per_pick": 0.08487872685470853
         },
         {
           "book": "FanDuel",
-          "picks": 31,
-          "wins": 13,
-          "losses": 18,
+          "picks": 34,
+          "wins": 14,
+          "losses": 20,
           "pushes": 0,
-          "profit_units": -7.5739103149123075,
-          "win_rate": 0.41935483870967744,
-          "roi_per_pick": -0.24431968757781636
+          "profit_units": -8.593518158049562,
+          "win_rate": 0.4117647058823529,
+          "roi_per_pick": -0.25275053406028125
         }
       ]
     },
@@ -134,33 +134,33 @@
       "groups": [
         {
           "book": "BetMGM",
-          "picks": 26,
-          "wins": 18,
-          "losses": 8,
+          "picks": 28,
+          "wins": 19,
+          "losses": 9,
           "pushes": 0,
-          "profit_units": 6.276324957716117,
-          "win_rate": 0.6923076923076923,
-          "roi_per_pick": 0.2413971137583122
+          "profit_units": 5.921486248038698,
+          "win_rate": 0.6785714285714286,
+          "roi_per_pick": 0.21148165171566777
         },
         {
           "book": "DraftKings",
-          "picks": 34,
+          "picks": 38,
           "wins": 22,
-          "losses": 12,
+          "losses": 16,
           "pushes": 0,
-          "profit_units": 7.048863461276196,
-          "win_rate": 0.6470588235294118,
-          "roi_per_pick": 0.20731951356694694
+          "profit_units": 3.0488634612761953,
+          "win_rate": 0.5789473684210527,
+          "roi_per_pick": 0.0802332489809525
         },
         {
           "book": "FanDuel",
-          "picks": 28,
-          "wins": 12,
-          "losses": 16,
+          "picks": 31,
+          "wins": 13,
+          "losses": 18,
           "pushes": 0,
-          "profit_units": -6.599449530598582,
-          "win_rate": 0.42857142857142855,
-          "roi_per_pick": -0.2356946260928065
+          "profit_units": -7.619057373735837,
+          "win_rate": 0.41935483870967744,
+          "roi_per_pick": -0.24577604431405925
         }
       ]
     }
@@ -171,23 +171,23 @@
       "groups": [
         {
           "line_band": "4.5-5.5",
-          "picks": 20,
-          "wins": 12,
-          "losses": 8,
+          "picks": 24,
+          "wins": 13,
+          "losses": 11,
           "pushes": 0,
-          "profit_units": 2.4927140435036037,
-          "win_rate": 0.6,
-          "roi_per_pick": 0.12463570217518019
+          "profit_units": 0.47310620036634865,
+          "win_rate": 0.5416666666666666,
+          "roi_per_pick": 0.01971275834859786
         },
         {
           "line_band": "5.5-6.5",
-          "picks": 15,
+          "picks": 16,
           "wins": 12,
-          "losses": 3,
+          "losses": 4,
           "pushes": 0,
-          "profit_units": 5.741246337177969,
-          "win_rate": 0.8,
-          "roi_per_pick": 0.3827497558118646
+          "profit_units": 4.741246337177969,
+          "win_rate": 0.75,
+          "roi_per_pick": 0.2963278960736231
         },
         {
           "line_band": "6.5-7.5",
@@ -211,13 +211,13 @@
         },
         {
           "line_band": "<=4.5",
-          "picks": 53,
-          "wins": 28,
-          "losses": 25,
+          "picks": 57,
+          "wins": 29,
+          "losses": 28,
           "pushes": 0,
-          "profit_units": -1.9219579532805149,
-          "win_rate": 0.5283018867924528,
-          "roi_per_pick": -0.03626335760906632
+          "profit_units": -4.276796662957934,
+          "win_rate": 0.5087719298245614,
+          "roi_per_pick": -0.07503152040277077
         }
       ]
     },
@@ -226,23 +226,23 @@
       "groups": [
         {
           "line_band": "4.5-5.5",
-          "picks": 20,
-          "wins": 12,
-          "losses": 8,
+          "picks": 24,
+          "wins": 13,
+          "losses": 11,
           "pushes": 0,
-          "profit_units": 2.763148826112299,
-          "win_rate": 0.6,
-          "roi_per_pick": 0.13815744130561497
+          "profit_units": 0.7435409829750443,
+          "win_rate": 0.5416666666666666,
+          "roi_per_pick": 0.030980874290626848
         },
         {
           "line_band": "5.5-6.5",
-          "picks": 15,
+          "picks": 16,
           "wins": 12,
-          "losses": 3,
+          "losses": 4,
           "pushes": 0,
-          "profit_units": 5.741246337177969,
-          "win_rate": 0.8,
-          "roi_per_pick": 0.3827497558118646
+          "profit_units": 4.741246337177969,
+          "win_rate": 0.75,
+          "roi_per_pick": 0.2963278960736231
         },
         {
           "line_band": "6.5-7.5",
@@ -266,13 +266,13 @@
         },
         {
           "line_band": "<=4.5",
-          "picks": 50,
-          "wins": 26,
-          "losses": 24,
+          "picks": 54,
+          "wins": 27,
+          "losses": 27,
           "pushes": 0,
-          "profit_units": -2.5478870441273065,
-          "win_rate": 0.52,
-          "roi_per_pick": -0.05095774088254613
+          "profit_units": -4.9027257538047255,
+          "win_rate": 0.5,
+          "roi_per_pick": -0.09079121766305047
         }
       ]
     }
@@ -281,61 +281,61 @@
     "7": {
       "ridge_challenger": {
         "window_days": 7,
-        "window_start": "2026-05-25",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_mae": 1.8648329510714456,
-        "mean_rmse": 2.2798997921112294,
-        "mean_calibration_gap": 0.027014374514374533
+        "window_start": "2026-05-26",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_mae": 1.8640995044923538,
+        "mean_rmse": 2.2603671959421514,
+        "mean_calibration_gap": 0.03029803529803532
       },
       "xgboost_champion": {
         "window_days": 7,
-        "window_start": "2026-05-25",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_mae": 1.8845051168131104,
-        "mean_rmse": 2.2936194554169265,
-        "mean_calibration_gap": 0.03395881895881897
+        "window_start": "2026-05-26",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_mae": 1.8844307268285132,
+        "mean_rmse": 2.2764454572912505,
+        "mean_calibration_gap": 0.048155178155178176
       }
     },
     "14": {
       "ridge_challenger": {
         "window_days": 14,
-        "window_start": "2026-05-18",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_mae": 1.8648329510714456,
-        "mean_rmse": 2.2798997921112294,
-        "mean_calibration_gap": 0.027014374514374533
+        "window_start": "2026-05-19",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_mae": 1.8640995044923538,
+        "mean_rmse": 2.2603671959421514,
+        "mean_calibration_gap": 0.03029803529803532
       },
       "xgboost_champion": {
         "window_days": 14,
-        "window_start": "2026-05-18",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_mae": 1.8845051168131104,
-        "mean_rmse": 2.2936194554169265,
-        "mean_calibration_gap": 0.03395881895881897
+        "window_start": "2026-05-19",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_mae": 1.8844307268285132,
+        "mean_rmse": 2.2764454572912505,
+        "mean_calibration_gap": 0.048155178155178176
       }
     },
     "30": {
       "ridge_challenger": {
         "window_days": 30,
-        "window_start": "2026-05-02",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_mae": 1.8648329510714456,
-        "mean_rmse": 2.2798997921112294,
-        "mean_calibration_gap": 0.027014374514374533
+        "window_start": "2026-05-03",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_mae": 1.8640995044923538,
+        "mean_rmse": 2.2603671959421514,
+        "mean_calibration_gap": 0.03029803529803532
       },
       "xgboost_champion": {
         "window_days": 30,
-        "window_start": "2026-05-02",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_mae": 1.8845051168131104,
-        "mean_rmse": 2.2936194554169265,
-        "mean_calibration_gap": 0.03395881895881897
+        "window_start": "2026-05-03",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_mae": 1.8844307268285132,
+        "mean_rmse": 2.2764454572912505,
+        "mean_calibration_gap": 0.048155178155178176
       }
     }
   },
@@ -343,61 +343,61 @@
     "7": {
       "ridge_challenger": {
         "window_days": 7,
-        "window_start": "2026-05-25",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_roi_per_pick": 0.07717450641504393,
-        "mean_profit_units": 1.1802055327719712,
-        "total_picks": 91
+        "window_start": "2026-05-26",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_roi_per_pick": -0.019159098514322244,
+        "mean_profit_units": 0.24382666340245038,
+        "total_picks": 100
       },
       "xgboost_champion": {
         "window_days": 7,
-        "window_start": "2026-05-25",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_roi_per_pick": 0.06603716062013397,
-        "mean_profit_units": 1.1209564813989552,
-        "total_picks": 88
+        "window_start": "2026-05-26",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_roi_per_pick": -0.028705394909959363,
+        "mean_profit_units": 0.1930417622255797,
+        "total_picks": 97
       }
     },
     "14": {
       "ridge_challenger": {
         "window_days": 14,
-        "window_start": "2026-05-18",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_roi_per_pick": 0.07717450641504393,
-        "mean_profit_units": 1.1802055327719712,
-        "total_picks": 91
+        "window_start": "2026-05-19",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_roi_per_pick": -0.019159098514322244,
+        "mean_profit_units": 0.24382666340245038,
+        "total_picks": 100
       },
       "xgboost_champion": {
         "window_days": 14,
-        "window_start": "2026-05-18",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_roi_per_pick": 0.06603716062013397,
-        "mean_profit_units": 1.1209564813989552,
-        "total_picks": 88
+        "window_start": "2026-05-19",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_roi_per_pick": -0.028705394909959363,
+        "mean_profit_units": 0.1930417622255797,
+        "total_picks": 97
       }
     },
     "30": {
       "ridge_challenger": {
         "window_days": 30,
-        "window_start": "2026-05-02",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_roi_per_pick": 0.07717450641504393,
-        "mean_profit_units": 1.1802055327719712,
-        "total_picks": 91
+        "window_start": "2026-05-03",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_roi_per_pick": -0.019159098514322244,
+        "mean_profit_units": 0.24382666340245038,
+        "total_picks": 100
       },
       "xgboost_champion": {
         "window_days": 30,
-        "window_start": "2026-05-02",
-        "window_end": "2026-05-31",
-        "days_with_data": 6,
-        "mean_roi_per_pick": 0.06603716062013397,
-        "mean_profit_units": 1.1209564813989552,
-        "total_picks": 88
+        "window_start": "2026-05-03",
+        "window_end": "2026-06-01",
+        "days_with_data": 7,
+        "mean_roi_per_pick": -0.028705394909959363,
+        "mean_profit_units": 0.1930417622255797,
+        "total_picks": 97
       }
     }
   },
@@ -431,53 +431,53 @@
       "manual_approval_required": true
     },
     "evidence": {
-      "overlapping_days": 6,
+      "overlapping_days": 7,
       "minimum_overlapping_days": 21,
-      "champion_pick_count": 88,
-      "challenger_pick_count": 91,
+      "champion_pick_count": 97,
+      "challenger_pick_count": 100,
       "minimum_overlapping_pick_count": 30,
-      "disagreement_rows": 49,
+      "disagreement_rows": 52,
       "minimum_disagreement_rows": 10
     },
     "metric_comparison": {
       "mae": {
-        "champion": 1.9136244231507977,
-        "challenger": 1.905222629080507,
+        "champion": 1.9111371473832564,
+        "challenger": 1.9014024497186017,
         "winner": "tie",
-        "delta_challenger_minus_champion": -0.008401794070290736,
+        "delta_challenger_minus_champion": -0.009734697664654623,
         "material_difference": false
       },
       "rmse": {
-        "champion": 2.3401891997440223,
-        "challenger": 2.336370548571417,
+        "champion": 2.3266526370806155,
+        "challenger": 2.320776329943475,
         "winner": "tie",
-        "delta_challenger_minus_champion": -0.0038186511726054917,
+        "delta_challenger_minus_champion": -0.00587630713714038,
         "material_difference": false
       },
       "calibration_gap": {
-        "champion": 0.021374045801526798,
-        "challenger": 0.013740458015267243,
-        "winner": "tie",
-        "delta_challenger_minus_champion": -0.007633587786259555,
-        "material_difference": false
+        "champion": 0.03076923076923077,
+        "challenger": 0.016783216783216814,
+        "winner": "challenger",
+        "delta_challenger_minus_champion": -0.013986013986013957,
+        "material_difference": true
       },
       "roi_per_pick": {
-        "champion": 0.07642885100447422,
-        "challenger": 0.07781574941353656,
+        "champion": 0.013930848820402646,
+        "challenger": 0.017067866438171528,
         "winner": "tie",
-        "delta_challenger_minus_champion": 0.001386898409062337,
+        "delta_challenger_minus_champion": 0.003137017617768882,
         "material_difference": false
       },
       "profit_units": {
-        "champion": 6.725738888393731,
-        "challenger": 7.0812331966318265,
+        "champion": 1.3512923355790567,
+        "challenger": 1.7067866438171526,
         "winner": "tie",
-        "delta_challenger_minus_champion": 0.3554943082380957,
+        "delta_challenger_minus_champion": 0.3554943082380959,
         "material_difference": false
       },
       "pick_count": {
-        "champion": 88.0,
-        "challenger": 91.0,
+        "champion": 97.0,
+        "challenger": 100.0,
         "winner": "tie",
         "delta_challenger_minus_champion": 3.0,
         "material_difference": false
@@ -491,16 +491,16 @@
       }
     },
     "advantage_counts": {
-      "challenger_total_advantages": 0,
+      "challenger_total_advantages": 1,
       "champion_total_advantages": 1,
-      "ties": 6,
-      "challenger_regression_advantages": 0,
+      "ties": 5,
+      "challenger_regression_advantages": 1,
       "challenger_workflow_advantages": 0,
       "champion_workflow_advantages": 1
     },
     "conflicting_signals": [],
     "rationale": [
-      "Needs at least 21 overlapping forward days; only has 6.",
+      "Needs at least 21 overlapping forward days; only has 7.",
       "Manual approval is always required before any production promotion."
     ]
   },
