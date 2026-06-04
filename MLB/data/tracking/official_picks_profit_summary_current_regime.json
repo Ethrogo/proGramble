@@ -7,53 +7,53 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 79,
-    "wins": 41,
-    "losses": 38,
+    "picks": 82,
+    "wins": 42,
+    "losses": 40,
     "pushes": 0,
-    "decisions": 79,
-    "units_risked": 79.0,
-    "units_profit": -5.906369329654208,
-    "win_rate": 0.5189873417721519,
-    "roi": -0.0747641687298001,
-    "skipped_rows": 6
+    "decisions": 82,
+    "units_risked": 82.0,
+    "units_profit": -7.192083615368493,
+    "win_rate": 0.5121951219512195,
+    "roi": -0.0877083367727865,
+    "skipped_rows": 3
   },
   "by_book": [
     {
       "book": "BetMGM",
-      "picks": 22,
-      "wins": 12,
-      "losses": 10,
-      "pushes": 0,
-      "decisions": 22,
-      "units_risked": 22.0,
-      "units_profit": -0.9744963661864084,
-      "win_rate": 0.5454545454545454,
-      "roi": -0.04429528937210948
-    },
-    {
-      "book": "FanDuel",
       "picks": 23,
-      "wins": 12,
-      "losses": 11,
+      "wins": 13,
+      "losses": 10,
       "pushes": 0,
       "decisions": 23,
       "units_risked": 23.0,
-      "units_profit": -1.826636813816068,
-      "win_rate": 0.5217391304347826,
-      "roi": -0.07941899190504643
+      "units_profit": -0.26021065190069415,
+      "win_rate": 0.5652173913043478,
+      "roi": -0.011313506604378007
+    },
+    {
+      "book": "FanDuel",
+      "picks": 24,
+      "wins": 12,
+      "losses": 12,
+      "pushes": 0,
+      "decisions": 24,
+      "units_risked": 24.0,
+      "units_profit": -2.826636813816068,
+      "win_rate": 0.5,
+      "roi": -0.11777653390900283
     },
     {
       "book": "DraftKings",
-      "picks": 34,
+      "picks": 35,
       "wins": 17,
-      "losses": 17,
+      "losses": 18,
       "pushes": 0,
-      "decisions": 34,
-      "units_risked": 34.0,
-      "units_profit": -3.1052361496517302,
-      "win_rate": 0.5,
-      "roi": -0.09133047498975677
+      "decisions": 35,
+      "units_risked": 35.0,
+      "units_profit": -4.105236149651731,
+      "win_rate": 0.4857142857142857,
+      "roi": -0.11729246141862087
     }
   ],
   "reproducibility": {
