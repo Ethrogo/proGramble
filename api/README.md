@@ -64,12 +64,19 @@ Core tables included:
 - `teams`
 - `players`
 - `events`
+- `competition_teams`
+- `team_players`
 - `event_participants`
 - `sportsbooks`
 - `markets`
 - `offers`
 
-The schema stays sport-agnostic by modeling event participants generically, so both team sports and individual sports can use the same `events` and `offers` model.
+The schema stays sport-agnostic by:
+
+- modeling team membership separately from competitions, so the same team can appear across leagues, cups, and seasons without duplicating team rows
+- modeling player roster assignments separately from player identity, so rostered team sports and individual sports can share the same `players` table
+- modeling event participants generically, so both team sports and individual sports can use the same `events` and `offers` model
+- allowing both sport-wide and competition-specific market definitions without hard-coding one sport's betting vocabulary into another
 
 ## Environment variables
 
