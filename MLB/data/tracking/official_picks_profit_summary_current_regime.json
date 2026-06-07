@@ -7,15 +7,15 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 82,
-    "wins": 42,
-    "losses": 40,
+    "picks": 85,
+    "wins": 44,
+    "losses": 41,
     "pushes": 0,
-    "decisions": 82,
-    "units_risked": 82.0,
-    "units_profit": -7.192083615368493,
-    "win_rate": 0.5121951219512195,
-    "roi": -0.0877083367727865,
+    "decisions": 85,
+    "units_risked": 85.0,
+    "units_profit": -6.72942413744184,
+    "win_rate": 0.5176470588235295,
+    "roi": -0.07916969573460989,
     "skipped_rows": 6
   },
   "by_book": [
@@ -45,15 +45,15 @@
     },
     {
       "book": "DraftKings",
-      "picks": 35,
-      "wins": 17,
-      "losses": 18,
+      "picks": 38,
+      "wins": 19,
+      "losses": 19,
       "pushes": 0,
-      "decisions": 35,
-      "units_risked": 35.0,
-      "units_profit": -4.105236149651731,
-      "win_rate": 0.4857142857142857,
-      "roi": -0.11729246141862087
+      "decisions": 38,
+      "units_risked": 38.0,
+      "units_profit": -3.6425766717250774,
+      "win_rate": 0.5,
+      "roi": -0.09585728083487045
     }
   ],
   "reproducibility": {
