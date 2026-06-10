@@ -1,0 +1,58 @@
+name: AWS Auth Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+jobs:
+  verify-oidc-and-ecr:
+    name: Verify OIDC and ECR Access
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate required AWS configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION}" || { echo "Missing repository variable: AWS_REGION"; exit 1; }
+          test -n "${ECR_REPOSITORY}" || { echo "Missing repository variable: ECR_REPOSITORY"; exit 1; }
+          test -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" || { echo "Missing repository secret: AWS_ROLE_TO_ASSUME"; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-aws-auth-check
+
+      - name: Verify caller identity
+        shell: bash
+        run: aws sts get-caller-identity
+
+      - name: Verify ECR repository access
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}"
+
+      - name: Summarize verification
+        shell: bash
+        run: |
+          {
+            echo "## AWS auth check passed"
+            echo
+            echo "- Region: \`${AWS_REGION}\`"
+            echo "- ECR repository: \`${ECR_REPOSITORY}\`"
+            echo "- Role: \`${{ secrets.AWS_ROLE_TO_ASSUME }}\`"
+            echo "- Verified: OIDC role assumption and ECR repository access"
+          } >> "${GITHUB_STEP_SUMMARY}"
