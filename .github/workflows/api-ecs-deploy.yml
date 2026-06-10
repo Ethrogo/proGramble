@@ -1,0 +1,112 @@
+name: API ECS Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "api/**"
+      - ".aws/api-task-definition.json"
+      - ".github/workflows/api-ecs-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECS_TASK_DEFINITION: .aws/api-task-definition.json
+  CONTAINER_NAME: api
+
+jobs:
+  deploy:
+    name: Build, Push, and Deploy API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate required AWS and ECS configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION}" || { echo "Missing repository variable: AWS_REGION"; exit 1; }
+          test -n "${ECR_REPOSITORY}" || { echo "Missing repository variable: ECR_REPOSITORY"; exit 1; }
+          test -n "${ECS_CLUSTER}" || { echo "Missing repository variable: ECS_CLUSTER"; exit 1; }
+          test -n "${ECS_SERVICE}" || { echo "Missing repository variable: ECS_SERVICE"; exit 1; }
+          test -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" || { echo "Missing repository secret: AWS_ROLE_TO_ASSUME"; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-api-ecs-deploy
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image metadata
+        id: image-meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch_name="${GITHUB_REF_NAME}"
+          branch_slug="$(echo "${branch_name}" | tr '[:upper:]' '[:lower:]' | tr '/_' '-' | tr -cd 'a-z0-9-.')"
+          short_sha="${GITHUB_SHA::7}"
+          image_uri="${{ steps.login-ecr.outputs.registry }}/${ECR_REPOSITORY}"
+          image_tag="${branch_slug}-${short_sha}"
+
+          echo "branch_slug=${branch_slug}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
+          echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
+          echo "image_tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+          echo "image=${image_uri}:${image_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: api
+          file: api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image-meta.outputs.image }}
+            ${{ steps.image-meta.outputs.image_uri }}:${{ steps.image-meta.outputs.branch_slug }}
+
+      - name: Render Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.image-meta.outputs.image }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Summarize deployment
+        shell: bash
+        run: |
+          {
+            echo "## API ECS deploy complete"
+            echo
+            echo "- Cluster: \`${ECS_CLUSTER}\`"
+            echo "- Service: \`${ECS_SERVICE}\`"
+            echo "- Image: \`${{ steps.image-meta.outputs.image }}\`"
+            echo "- Branch tag: \`${{ steps.image-meta.outputs.branch_slug }}\`"
+            echo "- Commit tag: \`${{ steps.image-meta.outputs.image_tag }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
