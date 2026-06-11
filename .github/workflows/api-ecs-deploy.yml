@@ -20,7 +20,7 @@ env:
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
   ECS_SERVICE: ${{ vars.ECS_SERVICE }}
   ECS_TASK_DEFINITION: .aws/api-task-definition.json
-  CONTAINER_NAME: api
+  CONTAINER_NAME: Main
 
 jobs:
   deploy:
