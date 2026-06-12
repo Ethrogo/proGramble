@@ -7,53 +7,53 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 146,
-    "wins": 80,
-    "losses": 65,
+    "picks": 149,
+    "wins": 81,
+    "losses": 67,
     "pushes": 1,
-    "decisions": 145,
-    "units_risked": 145.0,
-    "units_profit": -0.8538358322747621,
-    "win_rate": 0.5517241379310345,
-    "roi": -0.005888522981205256,
-    "skipped_rows": 6
+    "decisions": 148,
+    "units_risked": 148.0,
+    "units_profit": -1.9609786894176198,
+    "win_rate": 0.5472972972972973,
+    "roi": -0.013249856009578512,
+    "skipped_rows": 3
   },
   "by_book": [
     {
-      "book": "BetMGM",
-      "picks": 47,
-      "wins": 28,
-      "losses": 19,
-      "pushes": 0,
-      "decisions": 47,
-      "units_risked": 47.0,
-      "units_profit": 3.256379209850458,
-      "win_rate": 0.5957446808510638,
-      "roi": 0.06928466403937145
-    },
-    {
       "book": "DraftKings",
-      "picks": 61,
-      "wins": 34,
+      "picks": 62,
+      "wins": 35,
       "losses": 26,
       "pushes": 1,
-      "decisions": 60,
-      "units_risked": 60.0,
-      "units_profit": 2.589089167422712,
-      "win_rate": 0.5666666666666667,
-      "roi": 0.04315148612371187
+      "decisions": 61,
+      "units_risked": 61.0,
+      "units_profit": 3.481946310279855,
+      "win_rate": 0.5737704918032787,
+      "roi": 0.05708108705376811
+    },
+    {
+      "book": "BetMGM",
+      "picks": 48,
+      "wins": 28,
+      "losses": 20,
+      "pushes": 0,
+      "decisions": 48,
+      "units_risked": 48.0,
+      "units_profit": 2.256379209850458,
+      "win_rate": 0.5833333333333334,
+      "roi": 0.04700790020521787
     },
     {
       "book": "FanDuel",
-      "picks": 38,
+      "picks": 39,
       "wins": 18,
-      "losses": 20,
+      "losses": 21,
       "pushes": 0,
-      "decisions": 38,
-      "units_risked": 38.0,
-      "units_profit": -6.699304209547932,
-      "win_rate": 0.47368421052631576,
-      "roi": -0.1762974791986298
+      "decisions": 39,
+      "units_risked": 39.0,
+      "units_profit": -7.699304209547932,
+      "win_rate": 0.46153846153846156,
+      "roi": -0.19741805665507517
     }
   ],
   "reproducibility": {
