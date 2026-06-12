@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from odds.create_picks import build_daily_picks, filter_postable_picks
+from odds.policy import DEFAULT_MLB_PITCHER_WALKS_POLICY
 
 
 def test_build_daily_picks_selects_best_over_market():
@@ -511,3 +512,51 @@ def test_build_daily_picks_supports_pitcher_walks_value_and_risk_fields():
     assert picks.loc[0, "value_score"] == pytest.approx(0.3 * (1 - (105 / 205)))
     assert picks.loc[0, "confidence_tier"] == "thin"
     assert picks.loc[0, "risk_tier"] == "medium"
+
+
+def test_build_daily_picks_pitcher_walks_policy_prefers_higher_expected_return_over_larger_raw_edge():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "prop_type": "pitcher_bb",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "std_dev": 0.2,
+                "bookmaker": "DraftKings",
+                "side": "Under",
+                "line": 2.5,
+                "price": -220,
+            },
+            {
+                "player_name_proj": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "prop_type": "pitcher_bb",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "std_dev": 0.2,
+                "bookmaker": "FanDuel",
+                "side": "Under",
+                "line": 2.0,
+                "price": 190,
+            },
+        ]
+    )
+
+    picks = build_daily_picks(
+        joined_df,
+        policy=DEFAULT_MLB_PITCHER_WALKS_POLICY,
+        prediction_column="predicted_value",
+    )
+
+    assert len(picks) == 1
+    assert picks.loc[0, "book"] == "FanDuel"
+    assert picks.loc[0, "pick_side"] == "under"
+    assert picks.loc[0, "expected_return"] > 0
+    assert picks.loc[0, "selection_expected_return"] == pytest.approx(picks.loc[0, "expected_return"])
+    assert picks.loc[0, "pick_type"] in {"official", "lean"}

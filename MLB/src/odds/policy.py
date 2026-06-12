@@ -33,6 +33,11 @@ class PickRankingPolicy:
         ("medium", 0.50),
     )
     risk_default_tier: str = "high"
+    market_selection_metric_column: str | None = None
+    side_choice_metric_column: str = "edge"
+    pick_type_metric_column: str = "edge"
+    confidence_metric_column: str = "value_score"
+    ranking_metric_column: str = "adjusted_value_score"
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
 
     def classify_pick_type(self, edge: float) -> str:
@@ -62,10 +67,13 @@ class PickRankingPolicy:
         if side_df.empty:
             return pd.Series(dtype="object")
 
-        side_df = side_df.sort_values(
-            by=list(rule.sort_by),
-            ascending=list(rule.ascending),
-        )
+        sort_by = list(rule.sort_by)
+        ascending = list(rule.ascending)
+        if self.market_selection_metric_column and self.market_selection_metric_column in side_df.columns:
+            sort_by = [self.market_selection_metric_column, *sort_by]
+            ascending = [False, *ascending]
+
+        side_df = side_df.sort_values(by=sort_by, ascending=ascending)
         return side_df.iloc[0]
 
     def choose_pick_side(
@@ -84,19 +92,22 @@ class PickRankingPolicy:
         if not best_under.empty:
             under_edge = float(best_under["line"]) - predicted
 
-        if over_edge is None and under_edge is None:
+        over_metric = self._resolve_side_choice_metric(best_over, fallback=over_edge)
+        under_metric = self._resolve_side_choice_metric(best_under, fallback=under_edge)
+
+        if over_metric is None and under_metric is None:
             return pd.Series(dtype="object")
 
-        if over_edge is None:
+        if over_metric is None:
             return self._finalize_choice(best_under, edge=under_edge, pick_side="under")
 
-        if under_edge is None:
+        if under_metric is None:
             return self._finalize_choice(best_over, edge=over_edge, pick_side="over")
 
-        if over_edge > under_edge:
+        if over_metric > under_metric:
             return self._finalize_choice(best_over, edge=over_edge, pick_side="over")
 
-        if under_edge > over_edge:
+        if under_metric > over_metric:
             return self._finalize_choice(best_under, edge=under_edge, pick_side="under")
 
         if self.edge_tie_preference == "under":
@@ -111,7 +122,9 @@ class PickRankingPolicy:
         }
         picks = picks_df.copy()
         picks["pick_type_order"] = picks["pick_type"].map(order_lookup).fillna(99)
-        ranking_column = "adjusted_value_score" if "adjusted_value_score" in picks.columns else "value_score"
+        ranking_column = self.ranking_metric_column
+        if ranking_column not in picks.columns:
+            ranking_column = "adjusted_value_score" if "adjusted_value_score" in picks.columns else "value_score"
         return (
             picks.sort_values(
                 by=["pick_type_order", ranking_column],
@@ -145,6 +158,18 @@ class PickRankingPolicy:
             if rule.side == side:
                 return rule
         raise ValueError(f"No market ranking rule configured for side '{side}'.")
+
+    def _resolve_side_choice_metric(
+        self,
+        row: pd.Series,
+        *,
+        fallback: float | None,
+    ) -> float | None:
+        if row.empty:
+            return fallback
+        if self.side_choice_metric_column in row and pd.notna(row[self.side_choice_metric_column]):
+            return float(row[self.side_choice_metric_column])
+        return fallback
 
     @staticmethod
     def _finalize_choice(row: pd.Series, *, edge: float, pick_side: str) -> pd.Series:
@@ -186,5 +211,45 @@ DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY = PickRankingPolicy(
     postable_limits=PostablePickLimits(
         max_official=4,
         max_leans=2,
+    ),
+)
+
+DEFAULT_MLB_PITCHER_WALKS_POLICY = PickRankingPolicy(
+    version="mlb_pitcher_walks_ev_policy_v1",
+    official_edge_threshold=0.08,
+    lean_edge_threshold=0.02,
+    confidence_tier_thresholds=(
+        ("high", 0.08),
+        ("medium", 0.04),
+        ("low", 0.02),
+    ),
+    confidence_default_tier="thin",
+    risk_tier_thresholds=(
+        ("low", 0.58),
+        ("medium", 0.50),
+    ),
+    risk_default_tier="high",
+    market_ranking_rules=(
+        MarketRankingRule(
+            side="over",
+            sort_by=("line", "price_sort_key"),
+            ascending=(True, False),
+        ),
+        MarketRankingRule(
+            side="under",
+            sort_by=("line", "price_sort_key"),
+            ascending=(False, False),
+        ),
+    ),
+    edge_tie_preference="over",
+    pick_type_order=("official", "lean", "pass"),
+    market_selection_metric_column="selection_expected_return",
+    side_choice_metric_column="selection_expected_return",
+    pick_type_metric_column="expected_return",
+    confidence_metric_column="expected_return",
+    ranking_metric_column="adjusted_expected_return",
+    postable_limits=PostablePickLimits(
+        max_official=3,
+        max_leans=1,
     ),
 )

@@ -7,7 +7,7 @@ import xgboost as xgb
 
 from common.contracts import validate_pitcher_games_contract
 from common.workflows import ModelingWorkflowSpec, PropFieldSpec, ProjectionOddsJoinKeys, WorkflowArtifactSpec
-from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PostablePickLimits
+from odds.policy import DEFAULT_MLB_PITCHER_WALKS_POLICY, PostablePickLimits
 from pitcher_bb.config import PITCHER_BB_PROP_MARKET
 from pitcher_bb.feature_tomorrow import build_tomorrow_features
 from pitcher_bb.predict import predict_on_dataframe
@@ -96,7 +96,7 @@ MLB_PITCHER_WALK_WORKFLOW = ModelingWorkflowSpec(
         projection="player_name_norm",
         odds="player_name_norm",
     ),
-    pick_ranking_policy=DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
+    pick_ranking_policy=DEFAULT_MLB_PITCHER_WALKS_POLICY,
     prediction_columns=(
         "player_name",
         "predicted_walks",

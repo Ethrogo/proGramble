@@ -1,6 +1,7 @@
 import pandas as pd
 
 from odds.policy import (
+    DEFAULT_MLB_PITCHER_WALKS_POLICY,
     DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
     MarketRankingRule,
     PickRankingPolicy,
@@ -88,3 +89,17 @@ def test_policy_can_change_edge_tie_break_preference_and_postable_caps():
     assert chosen["edge"] == 0.5
     assert limits.max_official == 2
     assert limits.max_leans == 1
+
+
+def test_default_pitcher_walks_policy_uses_expected_return_metrics():
+    policy = DEFAULT_MLB_PITCHER_WALKS_POLICY
+
+    assert policy.version == "mlb_pitcher_walks_ev_policy_v1"
+    assert policy.market_selection_metric_column == "selection_expected_return"
+    assert policy.side_choice_metric_column == "selection_expected_return"
+    assert policy.pick_type_metric_column == "expected_return"
+    assert policy.confidence_metric_column == "expected_return"
+    assert policy.ranking_metric_column == "adjusted_expected_return"
+    assert policy.classify_pick_type(0.08) == "official"
+    assert policy.classify_pick_type(0.02) == "lean"
+    assert policy.classify_pick_type(0.01) == "pass"
