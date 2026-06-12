@@ -335,6 +335,49 @@ img {
   color: var(--muted);
 }
 
+.pill-mono {
+  font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+  font-size: 0.76rem;
+}
+
+.status-pill.connected {
+  background: rgba(65, 122, 91, 0.14);
+  border-color: rgba(65, 122, 91, 0.28);
+  color: #29513a;
+}
+
+.status-pill.degraded,
+.status-pill.misconfigured {
+  background: rgba(150, 91, 61, 0.14);
+  border-color: rgba(150, 91, 61, 0.28);
+  color: #7c4025;
+}
+
+.status-pill.checking {
+  background: rgba(61, 107, 94, 0.12);
+  border-color: rgba(61, 107, 94, 0.2);
+  color: var(--accent-strong);
+}
+
+.status-copy {
+  margin: 0;
+}
+
+.status-details {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.status-row {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.status-row strong {
+  font-size: 0.95rem;
+}
+
 .feature-list,
 .simple-list {
   margin: 0;
