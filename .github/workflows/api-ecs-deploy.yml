@@ -19,6 +19,7 @@ env:
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
   ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  API_SMOKE_TEST_URL: ${{ vars.API_SMOKE_TEST_URL }}
   ECS_TASK_DEFINITION: .aws/api-task-definition.json
   CONTAINER_NAME: Main
 
@@ -39,6 +40,7 @@ jobs:
           test -n "${ECR_REPOSITORY}" || { echo "Missing repository variable: ECR_REPOSITORY"; exit 1; }
           test -n "${ECS_CLUSTER}" || { echo "Missing repository variable: ECS_CLUSTER"; exit 1; }
           test -n "${ECS_SERVICE}" || { echo "Missing repository variable: ECS_SERVICE"; exit 1; }
+          test -n "${API_SMOKE_TEST_URL}" || { echo "Missing repository variable: API_SMOKE_TEST_URL"; exit 1; }
           test -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" || { echo "Missing repository secret: AWS_ROLE_TO_ASSUME"; exit 1; }
 
       - name: Configure AWS credentials
@@ -98,6 +100,38 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
+      - name: Smoke test deployed API
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${API_SMOKE_TEST_URL%/}"
+          health_url="${base_url}/actuator/health"
+          api_root_url="${base_url}/api/v1"
+
+          echo "Checking ${health_url}"
+          health_response="$(curl --fail --silent --show-error \
+            --retry 6 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            "${health_url}")"
+          echo "${health_response}"
+          echo "${health_response}" | grep -q '"status":"UP"' || {
+            echo "Health endpoint did not report UP"
+            exit 1
+          }
+
+          echo "Checking ${api_root_url}"
+          api_root_response="$(curl --fail --silent --show-error \
+            --retry 6 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            "${api_root_url}")"
+          echo "${api_root_response}"
+          echo "${api_root_response}" | grep -q '"service":"programble-api"' || {
+            echo "API root response did not include the expected service marker"
+            exit 1
+          }
+
       - name: Summarize deployment
         shell: bash
         run: |
@@ -109,4 +143,5 @@ jobs:
             echo "- Image: \`${{ steps.image-meta.outputs.image }}\`"
             echo "- Branch tag: \`${{ steps.image-meta.outputs.branch_slug }}\`"
             echo "- Commit tag: \`${{ steps.image-meta.outputs.image_tag }}\`"
+            echo "- Smoke test URL: \`${API_SMOKE_TEST_URL%/}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
