@@ -88,30 +88,20 @@ The schema stays sport-agnostic by:
 - `PROGRAMBLE_DB_PASSWORD`
 - `CONSOLE_LOG_STRUCTURED_FORMAT`
 
-## Staging runtime contract
+## AWS deploy contract
 
-The `staging` profile is defined in `src/main/resources/application-staging.properties`.
+The current ECS deployment contract is documented in [docs/api-ecs-deploy.md](../docs/api-ecs-deploy.md).
 
-Expected staging runtime settings:
+The checked-in task definition used by GitHub Actions is `.aws/api-task-definition.json`.
 
-- `SPRING_PROFILES_ACTIVE=staging`
-- `SERVER_PORT`
-- `PROGRAMBLE_ENV=staging`
-- `PROGRAMBLE_API_BASE_PATH=/api/v1`
-- `PROGRAMBLE_DB_URL`
-- `PROGRAMBLE_DB_USERNAME`
-- `PROGRAMBLE_DB_PASSWORD`
-
-Health and readiness surface:
+The default API health surface for container and ECS deployments is:
 
 - `GET /actuator/health`
 - `GET /actuator/info`
 
-The container and future ECS service should treat `/actuator/health` as the default health endpoint.
-
 ## ECR publishing contract
 
-The GitHub Actions workflow `.github/workflows/api-ecr.yml` builds and pushes the backend image to Amazon ECR.
+The GitHub Actions workflows `.github/workflows/api-ecr.yml` and `.github/workflows/api-ecs-deploy.yml` both build and push the backend image to Amazon ECR.
 
 Required GitHub repository configuration:
 
