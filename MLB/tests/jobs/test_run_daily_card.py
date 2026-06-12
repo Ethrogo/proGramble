@@ -7,6 +7,7 @@ import requests
 from jobs import run_daily_card as daily_card
 from common.workflows import ModelingWorkflowSpec, PropFieldSpec, ProjectionOddsJoinKeys, WorkflowArtifactSpec
 from odds.policy import (
+    DEFAULT_MLB_PITCHER_WALKS_POLICY,
     DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
     PostablePickLimits,
 )
@@ -940,6 +941,10 @@ def test_resolve_daily_card_workflows_includes_pitcher_walks_only_when_ready(mon
         daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW,
         daily_card.MLB_PITCHER_WALK_WORKFLOW,
     ]
+
+
+def test_pitcher_walk_workflow_uses_walks_specific_policy():
+    assert MLB_PITCHER_WALK_WORKFLOW.pick_ranking_policy is DEFAULT_MLB_PITCHER_WALKS_POLICY
 
 
 def test_build_no_edges_message_distinguishes_empty_odds_from_join_miss():

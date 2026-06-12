@@ -11,7 +11,11 @@ from common.contracts import (
 )
 from common.identity import PARTICIPANT_JOIN_KEY_COLUMN
 from odds.policy import DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY, PickRankingPolicy
-from odds.value import american_to_implied_probability
+from odds.value import (
+    american_to_implied_probability,
+    american_to_profit_per_unit,
+    normal_cdf,
+)
 
 
 def _resolve_prediction_column(
@@ -127,6 +131,58 @@ def _choose_best_market_for_player(
     )
 
 
+def _selection_edge(row: pd.Series) -> float | None:
+    side = str(row.get("side_norm", "") or "").strip().lower()
+    predicted = pd.to_numeric(pd.Series([row.get("predicted_value")]), errors="coerce").iloc[0]
+    line = pd.to_numeric(pd.Series([row.get("line")]), errors="coerce").iloc[0]
+
+    if pd.isna(predicted) or pd.isna(line):
+        return None
+    if side == "over":
+        return float(predicted - line)
+    if side == "under":
+        return float(line - predicted)
+    return None
+
+
+def _selection_win_probability(row: pd.Series) -> float | None:
+    side = str(row.get("side_norm", "") or "").strip().lower()
+    predicted = pd.to_numeric(pd.Series([row.get("predicted_value")]), errors="coerce").iloc[0]
+    line = pd.to_numeric(pd.Series([row.get("line")]), errors="coerce").iloc[0]
+    std_dev = pd.to_numeric(pd.Series([row.get("std_dev")]), errors="coerce").iloc[0]
+
+    if pd.isna(predicted) or pd.isna(line):
+        return None
+
+    if pd.isna(std_dev) or float(std_dev) <= 0:
+        selection_edge = _selection_edge(row)
+        if selection_edge is None:
+            return None
+        if selection_edge > 0:
+            return 1.0
+        if selection_edge < 0:
+            return 0.0
+        return 0.5
+
+    push_adjustment = 0.5
+    threshold = float(line) + push_adjustment if side == "over" else float(line) - push_adjustment
+    if side == "over":
+        return float(1.0 - normal_cdf(threshold, mean=float(predicted), std_dev=float(std_dev)))
+    if side == "under":
+        return float(normal_cdf(threshold, mean=float(predicted), std_dev=float(std_dev)))
+    return None
+
+
+def _selection_expected_return(row: pd.Series) -> float | None:
+    win_probability = _selection_win_probability(row)
+    price = pd.to_numeric(pd.Series([row.get("price")]), errors="coerce").iloc[0]
+    if win_probability is None or pd.isna(price):
+        return None
+
+    profit_per_unit = american_to_profit_per_unit(float(price))
+    return float(win_probability * profit_per_unit - (1.0 - win_probability))
+
+
 def build_daily_picks(
     joined_df: pd.DataFrame,
     policy: PickRankingPolicy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY,
@@ -181,6 +237,9 @@ def build_daily_picks(
     df["side_norm"] = df["side"].apply(_normalize_side)
     df["price_sort_key"] = df["price"].apply(_american_odds_sort_key)
     df["implied_probability"] = df["price"].apply(american_to_implied_probability)
+    df["selection_edge"] = df.apply(_selection_edge, axis=1)
+    df["selection_win_probability"] = df.apply(_selection_win_probability, axis=1)
+    df["selection_expected_return"] = df.apply(_selection_expected_return, axis=1)
 
     best_rows: list[pd.Series] = []
 
@@ -197,9 +256,21 @@ def build_daily_picks(
         return pd.DataFrame()
 
     picks = pd.DataFrame(best_rows).reset_index(drop=True)
-    picks["pick_type"] = picks["edge"].apply(policy.classify_pick_type)
+    picks["expected_return"] = pd.to_numeric(
+        picks.get("selection_expected_return", pd.Series([None] * len(picks))),
+        errors="coerce",
+    )
+    pick_type_metric = pd.to_numeric(
+        picks.get(policy.pick_type_metric_column, picks["edge"]),
+        errors="coerce",
+    ).fillna(picks["edge"])
+    picks["pick_type"] = pick_type_metric.apply(policy.classify_pick_type)
     picks["value_score"] = picks["edge"].abs() * (1 - picks["implied_probability"])
-    picks["confidence_tier"] = picks["value_score"].apply(policy.classify_confidence_tier)
+    confidence_metric = pd.to_numeric(
+        picks.get(policy.confidence_metric_column, picks["value_score"]),
+        errors="coerce",
+    ).fillna(picks["value_score"])
+    picks["confidence_tier"] = confidence_metric.apply(policy.classify_confidence_tier)
     picks["risk_tier"] = picks["implied_probability"].apply(policy.classify_risk_tier)
 
     if "player_name" in picks.columns:
@@ -223,6 +294,7 @@ def build_daily_picks(
         axis=1,
     ).clip(lower=0.0, upper=0.35)
     picks["adjusted_value_score"] = picks["value_score"] * (1 - picks["archetype_risk_score"])
+    picks["adjusted_expected_return"] = picks["expected_return"] * (1 - picks["archetype_risk_score"])
 
     picks = picks.drop(columns=["player_name_proj"])
     picks = picks.rename(columns={"bookmaker": "book"})
@@ -234,12 +306,12 @@ def build_daily_picks(
     rank_seed = picks.copy()
     rank_seed["pick_type_order"] = rank_seed["pick_type"].map(order_lookup).fillna(99)
     raw_sorted = rank_seed.sort_values(
-        by=["pick_type_order", "value_score"],
+        by=["pick_type_order", policy.confidence_metric_column if policy.confidence_metric_column in rank_seed.columns else "value_score"],
         ascending=[True, False],
     ).copy()
     raw_sorted["raw_value_score_rank"] = raw_sorted.groupby("pick_type_order", sort=False).cumcount() + 1
     adjusted_sorted = rank_seed.sort_values(
-        by=["pick_type_order", "adjusted_value_score"],
+        by=["pick_type_order", policy.ranking_metric_column if policy.ranking_metric_column in rank_seed.columns else "adjusted_value_score"],
         ascending=[True, False],
     ).copy()
     adjusted_sorted["adjusted_value_score_rank"] = (
@@ -285,8 +357,13 @@ def build_daily_picks(
         "market_selection_key",
         "market_offer_key",
         "edge",
+        "selection_edge",
+        "selection_win_probability",
+        "selection_expected_return",
         "implied_probability",
+        "expected_return",
         "value_score",
+        "adjusted_expected_return",
         "adjusted_value_score",
         "archetype_risk_score",
         "line_bucket",

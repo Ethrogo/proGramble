@@ -20,7 +20,7 @@ MLB_TEAM_NAME_TO_ABBR = {
     "Colorado Rockies": "COL",
     "Detroit Tigers": "DET",
     "Houston Astros": "HOU",
-    "Kansas City Royals": "KCR",
+    "Kansas City Royals": "KC",
     "Los Angeles Angels": "LAA",
     "Los Angeles Dodgers": "LAD",
     "Miami Marlins": "MIA",
@@ -31,14 +31,29 @@ MLB_TEAM_NAME_TO_ABBR = {
     "Athletics": "ATH",
     "Philadelphia Phillies": "PHI",
     "Pittsburgh Pirates": "PIT",
-    "San Diego Padres": "SDP",
-    "San Francisco Giants": "SFG",
+    "San Diego Padres": "SD",
+    "San Francisco Giants": "SF",
     "Seattle Mariners": "SEA",
     "St. Louis Cardinals": "STL",
-    "Tampa Bay Rays": "TBR",
+    "Tampa Bay Rays": "TB",
     "Texas Rangers": "TEX",
     "Toronto Blue Jays": "TOR",
-    "Washington Nationals": "WSN",
+    "Washington Nationals": "WSH",
+}
+
+MLB_TEAM_CODE_ALIASES = {
+    "ATH": "ATH",
+    "OAK": "ATH",
+    "KC": "KC",
+    "KCR": "KC",
+    "SD": "SD",
+    "SDP": "SD",
+    "SF": "SF",
+    "SFG": "SF",
+    "TB": "TB",
+    "TBR": "TB",
+    "WSH": "WSH",
+    "WSN": "WSH",
 }
 
 
@@ -64,7 +79,12 @@ def _build_edge_pipeline_diagnostics(
 def _event_team_codes(event: dict) -> tuple[str, str]:
     home = str(event.get("home_team", "") or "").strip()
     away = str(event.get("away_team", "") or "").strip()
-    return MLB_TEAM_NAME_TO_ABBR.get(home, home.upper()), MLB_TEAM_NAME_TO_ABBR.get(away, away.upper())
+    return _normalize_team_code(home), _normalize_team_code(away)
+
+
+def _normalize_team_code(team: str) -> str:
+    normalized = MLB_TEAM_NAME_TO_ABBR.get(team, team.upper())
+    return MLB_TEAM_CODE_ALIASES.get(normalized, normalized)
 
 
 def _missing_projection_event_ids(
@@ -96,10 +116,10 @@ def _missing_projection_event_ids(
 
     event_ids: list[str] = []
     for _, row in missing.iterrows():
-        home_team = str(row.get("home_team", "") or "").strip().upper()
-        away_team = str(row.get("away_team", "") or "").strip().upper()
-        team = str(row.get("team", "") or "").strip().upper()
-        opponent = str(row.get("opponent", "") or "").strip().upper()
+        home_team = _normalize_team_code(str(row.get("home_team", "") or "").strip())
+        away_team = _normalize_team_code(str(row.get("away_team", "") or "").strip())
+        team = _normalize_team_code(str(row.get("team", "") or "").strip())
+        opponent = _normalize_team_code(str(row.get("opponent", "") or "").strip())
         for event in raw_events:
             event_id = str(event.get("id", "") or "").strip()
             if not event_id:
@@ -128,6 +148,10 @@ def run_edge_pipeline(
     bookmaker_filter_applied = True
     raw_events = fetch_all_player_props(market=market)
     odds_df = odds_json_to_dataframe(raw_events)
+    initial_fetch_snapshot = {
+        "raw_event_count": int(len(raw_events)),
+        "normalized_odds_rows": int(len(odds_df)),
+    }
 
     joined = join_projections_to_odds(
         projections,
@@ -184,6 +208,26 @@ def run_edge_pipeline(
             fetch_scope = "targeted_all_region_books"
             bookmaker_filter_applied = False
 
+    if joined.empty and market == "pitcher_walks":
+        raw_events = fetch_all_player_props(
+            market=market,
+            bookmakers=None,
+            use_configured_bookmakers=False,
+        )
+        odds_df = odds_json_to_dataframe(raw_events)
+        joined = join_projections_to_odds(
+            projections,
+            odds_df,
+            participant_key=participant_key,
+            prediction_column=prediction_column,
+            projection_join_key=projection_join_key,
+            odds_join_key=odds_join_key,
+            sport=sport,
+            market_key=market,
+        )
+        fetch_scope = "all_region_books"
+        bookmaker_filter_applied = False
+
     if joined.empty:
         diagnostics = _build_edge_pipeline_diagnostics(
             fetch_scope=fetch_scope,
@@ -194,6 +238,7 @@ def run_edge_pipeline(
             bookmaker_filter_applied=bookmaker_filter_applied,
         )
         diagnostics["targeted_retry_event_ids"] = retry_event_ids
+        diagnostics["initial_fetch"] = initial_fetch_snapshot
         return joined, pd.DataFrame(), diagnostics
 
     group_key = PARTICIPANT_JOIN_KEY_COLUMN if PARTICIPANT_JOIN_KEY_COLUMN in joined.columns else f"{participant_key}_proj"
@@ -207,4 +252,5 @@ def run_edge_pipeline(
         bookmaker_filter_applied=bookmaker_filter_applied,
     )
     diagnostics["targeted_retry_event_ids"] = retry_event_ids
+    diagnostics["initial_fetch"] = initial_fetch_snapshot
     return joined, best_edges, diagnostics
