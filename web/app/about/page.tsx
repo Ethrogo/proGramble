@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 
+import { ApiConnectivityCard } from "../../components/api-connectivity-card";
 import { PageHero } from "../../components/page-hero";
 import { SectionCard } from "../../components/section-card";
 
@@ -24,6 +25,7 @@ export default function AboutPage() {
       />
 
       <section className="page-block section-grid">
+        <ApiConnectivityCard />
         <SectionCard title="Boundaries">
           <p>
             The frontend owns routing, page composition, and SEO-friendly public pages. The backend owns normalization, provider integrations, tracked-results adapters, and admin operations.
@@ -44,8 +46,8 @@ export default function AboutPage() {
       <section className="page-block info-list">
         <h3>Next implementation steps</h3>
         <ul className="feature-list">
-          <li>Create a Spring Boot API app under `api/` for sports, events, offers, and yesterday results.</li>
           <li>Wire `/mlb` to internal endpoints that expose `pitcher_k` and `pitcher_bb` results from tracking data.</li>
+          <li>Expand the staging runtime check into sport-specific pages once real API payloads exist.</li>
           <li>Add admin auth and refresh endpoints before exposing any operational controls in the UI.</li>
         </ul>
       </section>
