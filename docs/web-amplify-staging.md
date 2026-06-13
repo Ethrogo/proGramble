@@ -25,10 +25,10 @@ The current staging API base URL points at the ECS Express service that is alrea
 
 The checked-in `amplify.yml` tells Amplify to:
 
-- run the build from the repository root
-- install dependencies with `cd web && npm ci`
-- build the app with `cd web && npm run build`
-- publish the `web/.next` output for the `web` app
+- run the build from the Amplify app root
+- install dependencies with `npm ci`
+- build the app with `npm run build`
+- publish the `.next` output for the `web` app
 
 This repo is a monorepo, so the Amplify branch configuration must use `web` as the app root.
 
