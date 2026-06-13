@@ -7,6 +7,8 @@
 
 proGramble is a sports modeling workflow repo focused on turning raw game data and live market data into model-driven daily prop cards.
 
+Current public site: `https://staging.dwmxjzzpybgso.amplifyapp.com/`
+
 Today the implemented system is centered on one production workflow under `MLB/`:
 
 - train an MLB pitcher strikeout model from Statcast data
