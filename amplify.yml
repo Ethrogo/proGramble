@@ -2,19 +2,18 @@ version: 1
 applications:
   - appRoot: web
     frontend:
-      buildPath: /
       phases:
         preBuild:
           commands:
-            - cd web && npm ci
+            - npm ci
         build:
           commands:
-            - cd web && npm run build
+            - npm run build
       artifacts:
-        baseDirectory: web/.next
+        baseDirectory: .next
         files:
           - "**/*"
       cache:
         paths:
-          - web/node_modules/**/*
-          - web/.next/cache/**/*
+          - node_modules/**/*
+          - .next/cache/**/*
