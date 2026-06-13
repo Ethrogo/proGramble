@@ -50,8 +50,12 @@ curl http://127.0.0.1:8080/api/v1
 ## Base endpoints
 
 - `GET /api/v1`
+- `GET /api/v1/sports/{sport}/events?date=YYYY-MM-DD`
+- `GET /api/v1/events/{eventId}`
 - `GET /actuator/health`
 - `GET /actuator/info`
+
+The events/slate endpoints currently serve a schema-aligned in-memory catalog that covers team-sport games, individual-sport matches, and tournament-style events while the persistence layer is still being built.
 
 ## Initial schema
 
