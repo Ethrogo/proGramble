@@ -55,7 +55,7 @@ curl http://127.0.0.1:8080/api/v1
 - `GET /actuator/health`
 - `GET /actuator/info`
 
-The events/slate endpoints currently serve a schema-aligned in-memory catalog that covers team-sport games, individual-sport matches, and tournament-style events while the persistence layer is still being built.
+The events/slate endpoints are now backed by JDBC queries over the relational schema. The local default datasource is an in-memory H2 database running in PostgreSQL compatibility mode, while staging should provide PostgreSQL through `PROGRAMBLE_DB_URL`, `PROGRAMBLE_DB_USERNAME`, and `PROGRAMBLE_DB_PASSWORD`.
 
 ## Initial schema
 

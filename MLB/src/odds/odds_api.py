@@ -136,7 +136,7 @@ def fetch_all_player_props(
         use_configured_bookmakers=False,
     )
     prop_events: list[dict] = []
-    failed_event_ids: list[str] = []
+    failed_events: list[dict[str, str]] = []
 
     for event in events:
         event_id = event.get("id")
@@ -155,8 +155,14 @@ def fetch_all_player_props(
             if prop_data:
                 prop_events.append(prop_data)
 
-        except requests.HTTPError:
-            failed_event_ids.append(str(event_id))
+        except requests.RequestException as exc:
+            failed_events.append(
+                {
+                    "event_id": str(event_id),
+                    "error_type": exc.__class__.__name__,
+                    "message": str(exc),
+                }
+            )
             continue
 
     coverage = summarize_event_bookmaker_coverage(
@@ -171,10 +177,10 @@ def fetch_all_player_props(
     )
     if coverage["missing_requested_notes"]:
         print(f"Live odds coverage notes: {coverage['missing_requested_notes']}")
-    if failed_event_ids:
+    if failed_events:
         print(
-            "WARNING: Live odds event fetches failed for event ids: "
-            f"{failed_event_ids}"
+            "WARNING: Live odds event fetches failed: "
+            f"{failed_events}"
         )
 
     return prop_events

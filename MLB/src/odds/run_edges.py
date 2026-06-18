@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import requests
 from common.identity import PARTICIPANT_JOIN_KEY_COLUMN
 
 from .compare import join_projections_to_odds, best_over_edges, prepare_projection_df
@@ -152,6 +153,7 @@ def run_edge_pipeline(
         "raw_event_count": int(len(raw_events)),
         "normalized_odds_rows": int(len(odds_df)),
     }
+    targeted_retry_failures: list[dict[str, str]] = []
 
     joined = join_projections_to_odds(
         projections,
@@ -177,13 +179,23 @@ def run_edge_pipeline(
     if retry_event_ids:
         retry_events: list[dict] = []
         for event_id in retry_event_ids:
-            retry_event = fetch_event_player_props(
-                event_id=event_id,
-                market=market,
-                sport=sport,
-                bookmakers=None,
-                use_configured_bookmakers=False,
-            )
+            try:
+                retry_event = fetch_event_player_props(
+                    event_id=event_id,
+                    market=market,
+                    sport=sport,
+                    bookmakers=None,
+                    use_configured_bookmakers=False,
+                )
+            except requests.RequestException as exc:
+                targeted_retry_failures.append(
+                    {
+                        "event_id": str(event_id),
+                        "error_type": exc.__class__.__name__,
+                        "message": str(exc),
+                    }
+                )
+                continue
             if retry_event:
                 retry_events.append(retry_event)
 
@@ -238,6 +250,8 @@ def run_edge_pipeline(
             bookmaker_filter_applied=bookmaker_filter_applied,
         )
         diagnostics["targeted_retry_event_ids"] = retry_event_ids
+        diagnostics["targeted_retry_failures"] = targeted_retry_failures
+        diagnostics["targeted_retry_success_count"] = 0
         diagnostics["initial_fetch"] = initial_fetch_snapshot
         return joined, pd.DataFrame(), diagnostics
 
@@ -252,5 +266,10 @@ def run_edge_pipeline(
         bookmaker_filter_applied=bookmaker_filter_applied,
     )
     diagnostics["targeted_retry_event_ids"] = retry_event_ids
+    diagnostics["targeted_retry_failures"] = targeted_retry_failures
+    diagnostics["targeted_retry_success_count"] = max(
+        0,
+        len(retry_event_ids) - len(targeted_retry_failures),
+    )
     diagnostics["initial_fetch"] = initial_fetch_snapshot
     return joined, best_edges, diagnostics
