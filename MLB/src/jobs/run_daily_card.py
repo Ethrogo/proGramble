@@ -2415,11 +2415,18 @@ def apply_metadata_uncertainty(
     return adjuster(today_preds, metadata)
 
 
-def save_run_status(*, status: str, message: str | None = None) -> None:
+def save_run_status(
+    *,
+    status: str,
+    message: str | None = None,
+    workflow_diagnostics: list[dict[str, object]] | None = None,
+) -> None:
     payload = {
         "status": status,
         "message": message or "",
     }
+    if workflow_diagnostics is not None:
+        payload["workflow_diagnostics"] = workflow_diagnostics
     RUN_STATUS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -2432,6 +2439,7 @@ def save_outputs(
     *,
     run_status: str = "success",
     run_message: str | None = None,
+    workflow_diagnostics: list[dict[str, object]] | None = None,
 ) -> None:
     save_today_starters_csv(starters_df)
 
@@ -2464,17 +2472,86 @@ def save_outputs(
             "WARNING: Failed to update pitcher_bb shadow tracking for "
             f"{_yesterday_game_date()}: {exc.__class__.__name__}: {exc}"
         )
-    save_run_status(status=run_status, message=run_message)
+    save_run_status(
+        status=run_status,
+        message=run_message,
+        workflow_diagnostics=workflow_diagnostics,
+    )
+
+
+def get_workflow_readiness_diagnostics(workflow: ModelingWorkflowSpec) -> dict[str, object]:
+    required_filenames = (
+        workflow.artifacts.history_filename,
+        workflow.artifacts.model_filename,
+        workflow.artifacts.metadata_filename,
+    )
+    artifact_checks: list[dict[str, object]] = []
+    missing_filenames: list[str] = []
+
+    for filename in required_filenames:
+        candidate_paths = [
+            str(candidate_dir / filename)
+            for candidate_dir in _artifact_dir_candidates(workflow)
+        ]
+        resolved_path = next((path for path in candidate_paths if Path(path).exists()), None)
+        if resolved_path is None:
+            missing_filenames.append(filename)
+        artifact_checks.append(
+            {
+                "filename": filename,
+                "resolved_path": resolved_path or "",
+                "candidate_paths": candidate_paths,
+                "exists": resolved_path is not None,
+            }
+        )
+
+    return {
+        "workflow": workflow.prop_type,
+        "market_key": workflow.market_key,
+        "ready": not missing_filenames,
+        "missing_filenames": missing_filenames,
+        "artifact_checks": artifact_checks,
+    }
 
 
 def workflow_is_ready(workflow: ModelingWorkflowSpec) -> bool:
-    try:
-        resolve_artifact_path(workflow.artifacts.history_filename, workflow)
-        resolve_artifact_path(workflow.artifacts.model_filename, workflow)
-        resolve_artifact_path(workflow.artifacts.metadata_filename, workflow)
-    except FileNotFoundError:
-        return False
-    return True
+    return bool(get_workflow_readiness_diagnostics(workflow)["ready"])
+
+
+def _build_missing_artifact_message(workflow: ModelingWorkflowSpec) -> str:
+    readiness = get_workflow_readiness_diagnostics(workflow)
+    missing = readiness["missing_filenames"]
+    artifact_checks = readiness["artifact_checks"]
+    candidate_paths: list[str] = []
+    for check in artifact_checks:
+        candidate_paths.extend(check["candidate_paths"])
+    candidate_paths = list(dict.fromkeys(candidate_paths))
+    return (
+        f"Artifacts are not ready for {workflow.prop_type}; missing {missing}. "
+        f"Checked: {candidate_paths}"
+    )
+
+
+def _build_no_predictions_message(
+    *,
+    workflow: ModelingWorkflowSpec,
+    starters_df: pd.DataFrame,
+    today_preds: pd.DataFrame,
+) -> str:
+    skipped_pitchers = int(today_preds.attrs.get("skipped_pitchers", 0) or 0)
+    starters_count = int(len(starters_df))
+    if skipped_pitchers and skipped_pitchers >= starters_count:
+        return (
+            f"No today predictions were generated for {workflow.prop_type}. "
+            f"All {starters_count} starters were skipped during feature generation, most likely "
+            "because they did not meet the minimum history requirement for the workflow."
+        )
+    if skipped_pitchers:
+        return (
+            f"No today predictions were generated for {workflow.prop_type}. "
+            f"{skipped_pitchers} starter(s) were skipped during feature generation before prediction."
+        )
+    return f"No today predictions were generated for {workflow.prop_type}."
 
 
 def _build_no_edges_message(
@@ -2544,7 +2621,7 @@ def run_workflow_daily_card(
     market: str | None = None,
     build_picks_fn: BuildPicksFn | None = None,
     filter_postable_picks_fn: FilterPostablePicksFn | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, str | None]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, str, str | None, dict[str, object]]:
     archetype_risk_lookup = load_archetype_risk_lookup()
 
     if build_picks_fn is None:
@@ -2576,9 +2653,41 @@ def run_workflow_daily_card(
                 policy=workflow.pick_ranking_policy,
             )
 
-    history_df = load_workflow_history_artifact(workflow)
-    model = load_workflow_model_artifact(workflow)
-    metadata = load_model_metadata(workflow)
+    workflow_diagnostics: dict[str, object] = {
+        "workflow": workflow.prop_type,
+        "market_key": workflow.market_key,
+        "readiness": get_workflow_readiness_diagnostics(workflow),
+    }
+
+    try:
+        history_df = load_workflow_history_artifact(workflow)
+        model = load_workflow_model_artifact(workflow)
+        metadata = load_model_metadata(workflow)
+    except FileNotFoundError:
+        run_status = "degraded"
+        run_message = _build_missing_artifact_message(workflow)
+        workflow_diagnostics["status"] = run_status
+        workflow_diagnostics["message"] = run_message
+        print(f"WARNING: {run_message}")
+        empty_preds = _annotate_workflow_provenance(
+            _tag_workflow_frame(pd.DataFrame(), workflow),
+            workflow=workflow,
+            metadata=None,
+            game_date=pd.to_datetime(starters_df["game_date"], errors="coerce").min(),
+        )
+        empty_joined = _annotate_workflow_provenance(
+            _tag_workflow_frame(empty_joined_odds_df(), workflow),
+            workflow=workflow,
+            metadata=None,
+            game_date=pd.to_datetime(starters_df["game_date"], errors="coerce").min(),
+        )
+        empty_picks = _annotate_workflow_provenance(
+            _tag_workflow_frame(empty_final_picks_df(), workflow),
+            workflow=workflow,
+            metadata=None,
+            game_date=pd.to_datetime(starters_df["game_date"], errors="coerce").min(),
+        )
+        return empty_preds, empty_joined, empty_picks, empty_picks.copy(), run_status, run_message, workflow_diagnostics
 
     today_preds = build_today_predictions_for_workflow(
         starters_df=starters_df,
@@ -2589,7 +2698,13 @@ def run_workflow_daily_card(
     today_preds = apply_metadata_uncertainty(today_preds, metadata, workflow)
 
     if today_preds.empty:
-        raise ValueError("No today predictions were generated.")
+        raise ValueError(
+            _build_no_predictions_message(
+                workflow=workflow,
+                starters_df=starters_df,
+                today_preds=today_preds,
+            )
+        )
 
     today_preds = _adapt_predictions_for_output(today_preds, workflow)
     workflow_game_date = pd.to_datetime(starters_df["game_date"], errors="coerce").min()
@@ -2602,6 +2717,10 @@ def run_workflow_daily_card(
     selected_market = market or workflow.market_key
     run_status = "success"
     run_message: str | None = None
+    workflow_diagnostics["starter_count"] = int(len(starters_df))
+    workflow_diagnostics["prediction_rows"] = int(len(today_preds))
+    workflow_diagnostics["model_version"] = _resolve_model_version(workflow, metadata)
+    workflow_diagnostics["policy_version"] = workflow.pick_ranking_policy.version
 
     try:
         joined_df, _, edge_diagnostics = run_edge_pipeline(
@@ -2613,6 +2732,7 @@ def run_workflow_daily_card(
             odds_join_key=workflow.projection_odds_join_keys.odds,
             sport=workflow.sport,
         )
+        workflow_diagnostics["edge_pipeline"] = edge_diagnostics
         if not joined_df.empty and workflow.prop_fields.shared_prediction not in joined_df.columns:
             joined_df[workflow.prop_fields.shared_prediction] = _prediction_value_from_frame(joined_df)
         joined_df = _tag_workflow_frame(joined_df, workflow)
@@ -2628,6 +2748,8 @@ def run_workflow_daily_card(
                 workflow=workflow,
                 diagnostics=edge_diagnostics,
             )
+            workflow_diagnostics["status"] = run_status
+            workflow_diagnostics["message"] = run_message
             print(f"WARNING: {run_message}")
             joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)
             picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
@@ -2681,6 +2803,12 @@ def run_workflow_daily_card(
             f"Live odds fetch failed for {workflow.prop_type}; projections were saved but no edges "
             f"or picks were generated. Reason: {exc.__class__.__name__}: {exc}"
         )
+        workflow_diagnostics["status"] = run_status
+        workflow_diagnostics["message"] = run_message
+        workflow_diagnostics["edge_pipeline_error"] = {
+            "error_type": exc.__class__.__name__,
+            "message": str(exc),
+        }
         print(f"WARNING: {run_message}")
         joined_df = _tag_workflow_frame(empty_joined_odds_df(), workflow)
         picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
@@ -2737,7 +2865,13 @@ def run_workflow_daily_card(
                 f"{workflow_game_date}: {exc.__class__.__name__}: {exc}"
             )
 
-    return today_preds, joined_df, picks_df, post_df, run_status, run_message
+    workflow_diagnostics.setdefault("status", run_status)
+    workflow_diagnostics.setdefault("message", run_message or "")
+    workflow_diagnostics["joined_rows"] = int(len(joined_df))
+    workflow_diagnostics["pick_rows"] = int(len(picks_df))
+    workflow_diagnostics["postable_rows"] = int(len(post_df))
+
+    return today_preds, joined_df, picks_df, post_df, run_status, run_message, workflow_diagnostics
 
 
 def run_daily_card(
@@ -2766,6 +2900,7 @@ def run_daily_card(
     post_frames: list[pd.DataFrame] = []
     run_status = "success"
     run_messages: list[str] = []
+    workflow_diagnostics: list[dict[str, object]] = []
 
     for active_workflow in selected_workflows:
         (
@@ -2775,6 +2910,7 @@ def run_daily_card(
             workflow_post_df,
             workflow_status,
             workflow_message,
+            workflow_report,
         ) = run_workflow_daily_card(
             starters_df=starters_df,
             workflow=active_workflow,
@@ -2791,6 +2927,7 @@ def run_daily_card(
             run_status = "degraded"
         if workflow_message:
             run_messages.append(workflow_message)
+        workflow_diagnostics.append(workflow_report)
 
     today_preds = pd.concat(today_preds_frames, ignore_index=True) if today_preds_frames else pd.DataFrame()
     joined_df = pd.concat(joined_frames, ignore_index=True) if joined_frames else empty_joined_odds_df()
@@ -2806,6 +2943,7 @@ def run_daily_card(
         post_df=post_df,
         run_status=run_status,
         run_message=run_message,
+        workflow_diagnostics=workflow_diagnostics,
     )
 
     return starters_df, today_preds, picks_df, post_df

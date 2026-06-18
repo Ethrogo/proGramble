@@ -503,7 +503,7 @@ def test_run_daily_card_raises_when_today_predictions_are_empty(monkeypatch, tmp
     with pytest.raises(ValueError, match="No today predictions were generated."):
         daily_card.run_daily_card()
 
-def test_run_daily_card_raises_when_pitcher_games_artifact_is_missing(monkeypatch, tmp_path):
+def test_run_daily_card_degrades_when_pitcher_games_artifact_is_missing(monkeypatch, tmp_path):
     starters_df = pd.DataFrame(
         [
             {
@@ -539,9 +539,22 @@ def test_run_daily_card_raises_when_pitcher_games_artifact_is_missing(monkeypatc
         "OFFICIAL_PICKS_HISTORY_PATH",
         tmp_path / "data" / "tracking" / "official_picks_history.csv",
     )
+    monkeypatch.setattr(
+        daily_card,
+        "RUN_STATUS_PATH",
+        tmp_path / "data" / "outputs" / "run_daily_card_status.json",
+    )
+    monkeypatch.setattr(daily_card, "save_today_starters_csv", lambda df, output_dir=None, filename=None: tmp_path / "today_starters.csv")
 
-    with pytest.raises(FileNotFoundError, match="Missing pitcher_games artifact"):
-        daily_card.run_daily_card()
+    _, result_preds, result_picks, result_post = daily_card.run_daily_card()
+
+    status_payload = daily_card.json.loads(daily_card.RUN_STATUS_PATH.read_text(encoding="utf-8"))
+    assert result_preds.empty
+    assert result_picks.empty
+    assert result_post.empty
+    assert status_payload["status"] == "degraded"
+    assert "Artifacts are not ready for pitcher_k" in status_payload["message"]
+    assert status_payload["workflow_diagnostics"][0]["readiness"]["ready"] is False
 
 
 def test_run_daily_card_uses_workflow_spec_for_market_policy_and_limits(monkeypatch, tmp_path):
@@ -1080,6 +1093,7 @@ def test_run_daily_card_combines_ready_workflow_outputs(monkeypatch, tmp_path):
                 pd.DataFrame([{"player_name": "Jacob deGrom", "prop_type": "pitcher_k", "book": "DraftKings", "pick_side": "over", "line": 5.5, "price": -120, "edge": 1.3, "pick_type": "official", "implied_probability": 0.545, "value_score": 0.59, "confidence_tier": "medium"}]),
                 "success",
                 None,
+                {"workflow": "pitcher_k", "status": "success"},
             )
         return (
             pd.DataFrame([{"player_name": "Tarik Skubal", "predicted_walks": 2.2, "predicted_value": 2.2, "prop_type": "pitcher_bb"}]),
@@ -1088,6 +1102,7 @@ def test_run_daily_card_combines_ready_workflow_outputs(monkeypatch, tmp_path):
             pd.DataFrame([{"player_name": "Tarik Skubal", "prop_type": "pitcher_bb", "book": "FanDuel", "pick_side": "under", "line": 2.5, "price": -105, "edge": 0.3, "pick_type": "lean", "implied_probability": 0.512, "value_score": 0.146, "confidence_tier": "low"}]),
             "success",
             None,
+            {"workflow": "pitcher_bb", "status": "success"},
         )
 
     monkeypatch.setattr(daily_card, "run_workflow_daily_card", fake_run_workflow_daily_card)
@@ -1207,7 +1222,7 @@ def test_run_workflow_daily_card_uses_pitcher_walk_market_and_validates_joined_o
         lambda df, max_official=3, max_leans=1, policy=None: df,
     )
 
-    _, result_joined, result_picks, result_post, result_status, result_message = daily_card.run_workflow_daily_card(
+    _, result_joined, result_picks, result_post, result_status, result_message, result_diagnostics = daily_card.run_workflow_daily_card(
         starters_df=starters_df,
         workflow=MLB_PITCHER_WALK_WORKFLOW,
     )
@@ -1228,6 +1243,7 @@ def test_run_workflow_daily_card_uses_pitcher_walk_market_and_validates_joined_o
     assert result_post.loc[0, "prop_type"] == "pitcher_bb"
     assert result_status == "success"
     assert result_message is None
+    assert result_diagnostics["workflow"] == "pitcher_bb"
 
 
 def test_run_workflow_daily_card_allows_empty_postable_picks(monkeypatch):
@@ -1330,7 +1346,7 @@ def test_run_workflow_daily_card_allows_empty_postable_picks(monkeypatch):
         lambda picks, max_official=3, max_leans=1, policy=None: daily_card.empty_final_picks_df(),
     )
 
-    _, _, result_picks, result_post, result_status, result_message = daily_card.run_workflow_daily_card(
+    _, _, result_picks, result_post, result_status, result_message, result_diagnostics = daily_card.run_workflow_daily_card(
         starters_df=starters_df,
         workflow=daily_card.MLB_PITCHER_STRIKEOUT_WORKFLOW,
     )
@@ -1340,6 +1356,7 @@ def test_run_workflow_daily_card_allows_empty_postable_picks(monkeypatch):
     assert set(daily_card.empty_final_picks_df().columns).issubset(result_post.columns)
     assert result_status == "success"
     assert result_message is None
+    assert result_diagnostics["workflow"] == "pitcher_k"
 
 
 def test_run_daily_card_preserves_other_workflow_picks_when_one_workflow_has_no_postable_rows(monkeypatch, tmp_path):
@@ -1415,6 +1432,7 @@ def test_run_daily_card_preserves_other_workflow_picks_when_one_workflow_has_no_
                 strikeout_picks.copy(),
                 "success",
                 None,
+                {"workflow": "pitcher_k", "status": "success"},
             )
         return (
             pd.DataFrame([{"player_name": "Jacob deGrom", "prop_type": "pitcher_bb"}]),
@@ -1423,6 +1441,7 @@ def test_run_daily_card_preserves_other_workflow_picks_when_one_workflow_has_no_
             walk_picks.copy(),
             "success",
             None,
+            {"workflow": "pitcher_bb", "status": "success"},
         )
 
     monkeypatch.setattr(daily_card, "run_workflow_daily_card", fake_run_workflow_daily_card)
