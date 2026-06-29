@@ -16,6 +16,7 @@ def test_default_policy_preserves_thresholds_and_caps():
     assert policy.classify_pick_type(0.75) == "official"
     assert policy.classify_pick_type(0.40) == "lean"
     assert policy.classify_pick_type(0.39) == "pass"
+    assert policy.classify_pick_type(-0.75) == "pass"
     assert policy.classify_confidence_tier(0.50) == "high"
     assert policy.classify_confidence_tier(0.30) == "medium"
     assert policy.classify_confidence_tier(0.15) == "low"
@@ -91,6 +92,20 @@ def test_policy_can_change_edge_tie_break_preference_and_postable_caps():
     assert limits.max_leans == 1
 
 
+def test_choose_pick_side_returns_empty_when_neither_side_has_positive_edge():
+    policy = DEFAULT_MLB_PITCHER_STRIKEOUT_POLICY
+    best_over = pd.Series({"line": 6.5, "bookmaker": "DraftKings"})
+    best_under = pd.Series({"line": 4.5, "bookmaker": "FanDuel"})
+
+    chosen = policy.choose_pick_side(
+        best_over=best_over,
+        best_under=best_under,
+        predicted=5.0,
+    )
+
+    assert chosen.empty
+
+
 def test_default_pitcher_walks_policy_uses_expected_return_metrics():
     policy = DEFAULT_MLB_PITCHER_WALKS_POLICY
 
@@ -103,3 +118,4 @@ def test_default_pitcher_walks_policy_uses_expected_return_metrics():
     assert policy.classify_pick_type(0.08) == "official"
     assert policy.classify_pick_type(0.02) == "lean"
     assert policy.classify_pick_type(0.01) == "pass"
+    assert policy.classify_pick_type(-0.08) == "pass"
