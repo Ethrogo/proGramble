@@ -2786,17 +2786,41 @@ def run_workflow_daily_card(
                 metadata=metadata,
                 game_date=workflow_game_date,
             )
-            validate_final_picks_contract(picks_df)
+            if picks_df.empty:
+                run_status = "degraded"
+                run_message = _build_no_edges_message(
+                    workflow=workflow,
+                    diagnostics=edge_diagnostics,
+                )
+                workflow_diagnostics["status"] = run_status
+                workflow_diagnostics["message"] = run_message
+                print(f"WARNING: {run_message}")
+                picks_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+                post_df = _tag_workflow_frame(empty_final_picks_df(), workflow)
+                picks_df = _annotate_workflow_provenance(
+                    picks_df,
+                    workflow=workflow,
+                    metadata=metadata,
+                    game_date=workflow_game_date,
+                )
+                post_df = _annotate_workflow_provenance(
+                    post_df,
+                    workflow=workflow,
+                    metadata=metadata,
+                    game_date=workflow_game_date,
+                )
+            else:
+                validate_final_picks_contract(picks_df)
 
-            post_df = filter_postable_picks_fn(picks_df)
-            post_df = _tag_workflow_frame(post_df, workflow)
-            post_df = _annotate_workflow_provenance(
-                post_df,
-                workflow=workflow,
-                metadata=metadata,
-                game_date=workflow_game_date,
-            )
-            validate_final_picks_contract(post_df, require_non_empty_frame=False)
+                post_df = filter_postable_picks_fn(picks_df)
+                post_df = _tag_workflow_frame(post_df, workflow)
+                post_df = _annotate_workflow_provenance(
+                    post_df,
+                    workflow=workflow,
+                    metadata=metadata,
+                    game_date=workflow_game_date,
+                )
+                validate_final_picks_contract(post_df, require_non_empty_frame=False)
     except requests.RequestException as exc:
         run_status = "degraded"
         run_message = (
