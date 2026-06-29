@@ -41,6 +41,9 @@ class PickRankingPolicy:
     postable_limits: PostablePickLimits = field(default_factory=PostablePickLimits)
 
     def classify_pick_type(self, edge: float) -> str:
+        if pd.isna(edge) or float(edge) <= 0:
+            return "pass"
+
         abs_edge = abs(edge)
 
         if abs_edge >= self.official_edge_threshold:
@@ -94,6 +97,8 @@ class PickRankingPolicy:
 
         over_metric = self._resolve_side_choice_metric(best_over, fallback=over_edge)
         under_metric = self._resolve_side_choice_metric(best_under, fallback=under_edge)
+        over_metric = self._positive_metric_or_none(over_metric)
+        under_metric = self._positive_metric_or_none(under_metric)
 
         if over_metric is None and under_metric is None:
             return pd.Series(dtype="object")
@@ -170,6 +175,12 @@ class PickRankingPolicy:
         if self.side_choice_metric_column in row and pd.notna(row[self.side_choice_metric_column]):
             return float(row[self.side_choice_metric_column])
         return fallback
+
+    @staticmethod
+    def _positive_metric_or_none(metric: float | None) -> float | None:
+        if metric is None or pd.isna(metric) or float(metric) <= 0:
+            return None
+        return float(metric)
 
     @staticmethod
     def _finalize_choice(row: pd.Series, *, edge: float, pick_side: str) -> pd.Series:

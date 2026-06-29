@@ -78,6 +78,38 @@ def test_build_daily_picks_selects_best_under_market_when_under_edge_is_stronger
     assert picks.loc[0, "line"] == 3.5
     assert picks.loc[0, "edge"] == 3.5 - 1.2
 
+
+def test_build_daily_picks_returns_empty_when_no_side_has_positive_edge():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Negative Edge Over",
+                "team": "AAA",
+                "opponent": "BBB",
+                "predicted_strikeouts": 5.0,
+                "bookmaker": "DraftKings",
+                "side": "Over",
+                "line": 6.5,
+                "price": 110,
+            },
+            {
+                "player_name_proj": "Negative Edge Over",
+                "team": "AAA",
+                "opponent": "BBB",
+                "predicted_strikeouts": 5.0,
+                "bookmaker": "FanDuel",
+                "side": "Under",
+                "line": 4.5,
+                "price": -110,
+            },
+        ]
+    )
+
+    picks = build_daily_picks(joined_df)
+
+    assert picks.empty
+
+
 def test_build_daily_picks_assigns_official_lean_and_pass():
     joined_df = pd.DataFrame(
         [
@@ -431,7 +463,7 @@ def test_build_daily_picks_exposes_raw_and_adjusted_ranking_fields():
                 "team": "LAD",
                 "opponent": "SFG",
                 "prop_type": "pitcher_k",
-                "predicted_strikeouts": 8.0,
+                "predicted_strikeouts": 7.0,
                 "bookmaker": "FanDuel",
                 "side": "Under",
                 "line": 7.5,
@@ -525,11 +557,10 @@ def test_build_daily_picks_pitcher_walks_policy_prefers_higher_expected_return_o
                 "market_key": "pitcher_walks",
                 "predicted_walks": 2.2,
                 "predicted_value": 2.2,
-                "std_dev": 0.2,
                 "bookmaker": "DraftKings",
                 "side": "Under",
-                "line": 2.5,
-                "price": -220,
+                "line": 3.0,
+                "price": -500,
             },
             {
                 "player_name_proj": "Tarik Skubal",
@@ -539,11 +570,10 @@ def test_build_daily_picks_pitcher_walks_policy_prefers_higher_expected_return_o
                 "market_key": "pitcher_walks",
                 "predicted_walks": 2.2,
                 "predicted_value": 2.2,
-                "std_dev": 0.2,
                 "bookmaker": "FanDuel",
                 "side": "Under",
-                "line": 2.0,
-                "price": 190,
+                "line": 2.5,
+                "price": -220,
             },
         ]
     )
@@ -560,3 +590,46 @@ def test_build_daily_picks_pitcher_walks_policy_prefers_higher_expected_return_o
     assert picks.loc[0, "expected_return"] > 0
     assert picks.loc[0, "selection_expected_return"] == pytest.approx(picks.loc[0, "expected_return"])
     assert picks.loc[0, "pick_type"] in {"official", "lean"}
+
+
+def test_build_daily_picks_pitcher_walks_returns_empty_when_best_expected_return_is_non_positive():
+    joined_df = pd.DataFrame(
+        [
+            {
+                "player_name_proj": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "prop_type": "pitcher_bb",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "std_dev": 0.2,
+                "bookmaker": "DraftKings",
+                "side": "Under",
+                "line": 2.5,
+                "price": -300,
+            },
+            {
+                "player_name_proj": "Tarik Skubal",
+                "team": "DET",
+                "opponent": "CLE",
+                "prop_type": "pitcher_bb",
+                "market_key": "pitcher_walks",
+                "predicted_walks": 2.2,
+                "predicted_value": 2.2,
+                "std_dev": 0.2,
+                "bookmaker": "FanDuel",
+                "side": "Over",
+                "line": 2.0,
+                "price": -300,
+            },
+        ]
+    )
+
+    picks = build_daily_picks(
+        joined_df,
+        policy=DEFAULT_MLB_PITCHER_WALKS_POLICY,
+        prediction_column="predicted_value",
+    )
+
+    assert picks.empty
