@@ -11,7 +11,7 @@
       "units_profit": 1.3951591264503032,
       "win_rate": 0.5561797752808989,
       "roi": 0.007837972620507321,
-      "skipped_rows": 3
+      "skipped_rows": 6
     },
     "current_regime": {
       "books": 3,
@@ -24,7 +24,7 @@
       "units_profit": 0.22195177366417973,
       "win_rate": 0.5511811023622047,
       "roi": 0.0017476517611352735,
-      "skipped_rows": 3
+      "skipped_rows": 6
     }
   },
   "current_regime_rule": {
