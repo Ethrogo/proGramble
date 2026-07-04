@@ -26,8 +26,10 @@ class SportEventsControllerTest {
 
 	@BeforeEach
 	void seedCatalog() {
-		this.jdbcTemplate.execute("delete from event_participants");
 		this.jdbcTemplate.execute("delete from offers");
+		this.jdbcTemplate.execute("delete from event_participants");
+		this.jdbcTemplate.execute("delete from markets");
+		this.jdbcTemplate.execute("delete from sportsbooks");
 		this.jdbcTemplate.execute("delete from events");
 		this.jdbcTemplate.execute("delete from team_players");
 		this.jdbcTemplate.execute("delete from competition_teams");
