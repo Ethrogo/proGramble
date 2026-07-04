@@ -105,18 +105,31 @@ jobs:
         run: |
           set -euo pipefail
           base_url="${API_SMOKE_TEST_URL%/}"
-          health_url="${base_url}/actuator/health"
+          readiness_url="${base_url}/actuator/health/readiness"
+          metrics_url="${base_url}/actuator/metrics/http.server.requests"
           api_root_url="${base_url}/api/v1"
 
-          echo "Checking ${health_url}"
-          health_response="$(curl --fail --silent --show-error \
+          echo "Checking ${readiness_url}"
+          readiness_response="$(curl --fail --silent --show-error \
             --retry 6 \
             --retry-all-errors \
             --retry-delay 10 \
-            "${health_url}")"
-          echo "${health_response}"
-          echo "${health_response}" | grep -q '"status":"UP"' || {
-            echo "Health endpoint did not report UP"
+            "${readiness_url}")"
+          echo "${readiness_response}"
+          echo "${readiness_response}" | grep -q '"status":"UP"' || {
+            echo "Readiness endpoint did not report UP"
+            exit 1
+          }
+
+          echo "Checking ${metrics_url}"
+          metrics_response="$(curl --fail --silent --show-error \
+            --retry 6 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            "${metrics_url}")"
+          echo "${metrics_response}"
+          echo "${metrics_response}" | grep -q '"name":"http.server.requests"' || {
+            echo "Metrics endpoint did not expose http.server.requests"
             exit 1
           }
 

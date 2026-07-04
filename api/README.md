@@ -36,6 +36,8 @@ Verify the expected endpoints:
 
 ```powershell
 curl http://127.0.0.1:8080/actuator/health
+curl http://127.0.0.1:8080/actuator/health/readiness
+curl http://127.0.0.1:8080/actuator/metrics/http.server.requests
 curl http://127.0.0.1:8080/api/v1
 ```
 
@@ -53,6 +55,9 @@ curl http://127.0.0.1:8080/api/v1
 - `GET /api/v1/sports/{sport}/events?date=YYYY-MM-DD`
 - `GET /api/v1/events/{eventId}`
 - `GET /actuator/health`
+- `GET /actuator/health/liveness`
+- `GET /actuator/health/readiness`
+- `GET /actuator/metrics`
 - `GET /actuator/info`
 
 The events/slate endpoints are now backed by JDBC queries over the relational schema. The local default datasource is an in-memory H2 database running in PostgreSQL compatibility mode, while staging should provide PostgreSQL through `PROGRAMBLE_DB_URL`, `PROGRAMBLE_DB_USERNAME`, and `PROGRAMBLE_DB_PASSWORD`.
@@ -101,7 +106,23 @@ The checked-in task definition used by GitHub Actions is `.aws/api-task-definiti
 The default API health surface for container and ECS deployments is:
 
 - `GET /actuator/health`
+- `GET /actuator/health/liveness`
+- `GET /actuator/health/readiness`
+- `GET /actuator/metrics/http.server.requests`
 - `GET /actuator/info`
+
+Request logging is enabled for application endpoints and emits structured JSON logs with:
+
+- `requestId`
+- `method`
+- `path`
+- `status`
+- `durationMs`
+- `clientIp`
+
+Incoming `X-Request-Id` values are preserved and echoed in the response. Repetitive actuator probe endpoints are intentionally excluded from request logging to reduce CloudWatch noise and cost.
+
+The operational alerting contract for ECS and CloudWatch is documented in [docs/api-observability.md](../docs/api-observability.md).
 
 ## ECR publishing contract
 
