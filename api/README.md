@@ -54,6 +54,8 @@ curl http://127.0.0.1:8080/api/v1
 - `GET /api/v1`
 - `GET /api/v1/sports/{sport}/events?date=YYYY-MM-DD`
 - `GET /api/v1/events/{eventId}`
+- `GET /api/v1/events/{eventId}/offers?sportsbook={book}&marketType={market}&playerId={playerId}`
+- `GET /api/v1/players/{playerId}/offers?sportsbook={book}&marketType={market}`
 - `GET /actuator/health`
 - `GET /actuator/health/liveness`
 - `GET /actuator/health/readiness`
@@ -61,6 +63,13 @@ curl http://127.0.0.1:8080/api/v1
 - `GET /actuator/info`
 
 The events/slate endpoints are now backed by JDBC queries over the relational schema. The local default datasource is an in-memory H2 database running in PostgreSQL compatibility mode, while staging should provide PostgreSQL through `PROGRAMBLE_DB_URL`, `PROGRAMBLE_DB_USERNAME`, and `PROGRAMBLE_DB_PASSWORD`.
+
+Offer listings are also backed directly by JDBC over the `sportsbooks`, `markets`, `offers`, and `event_participants` tables. The current contract supports filtering by:
+
+- event
+- player
+- sportsbook code or slug
+- market code, slug, or stat type
 
 ## Initial schema
 
