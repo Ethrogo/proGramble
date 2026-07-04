@@ -29,6 +29,9 @@ public class ApiRootController {
 				"links", Map.of(
 						"self", apiProperties.api().basePath(),
 						"health", "/actuator/health",
+						"liveness", "/actuator/health/liveness",
+						"readiness", "/actuator/health/readiness",
+						"metrics", "/actuator/metrics",
 						"info", "/actuator/info"
 				)
 		));
