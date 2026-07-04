@@ -56,6 +56,9 @@ curl http://127.0.0.1:8080/api/v1
 - `GET /api/v1/events/{eventId}`
 - `GET /api/v1/events/{eventId}/offers?sportsbook={book}&marketType={market}&playerId={playerId}`
 - `GET /api/v1/players/{playerId}/offers?sportsbook={book}&marketType={market}`
+- `GET /api/v1/admin/jobs`
+- `GET /api/v1/admin/jobs/{jobKey}`
+- `POST /api/v1/admin/jobs/{jobKey}/run`
 - `GET /actuator/health`
 - `GET /actuator/health/liveness`
 - `GET /actuator/health/readiness`
@@ -70,6 +73,26 @@ Offer listings are also backed directly by JDBC over the `sportsbooks`, `markets
 - player
 - sportsbook code or slug
 - market code, slug, or stat type
+
+## Background refresh jobs
+
+The API now includes a small background job framework for future sports ingestion and refresh work.
+
+Current placeholder jobs:
+
+- `refresh-sports-data`
+- `refresh-odds`
+- `refresh-derived-site-data`
+
+Current behavior:
+
+- scheduled execution is available through Spring scheduling
+- all schedules are disabled by default to avoid accidental local or staging load
+- each job can be triggered manually through `POST /api/v1/admin/jobs/{jobKey}/run`
+- job state is kept in memory only for now, including last run timestamps, counts, summaries, and errors
+- overlapping runs of the same job are rejected
+
+This is intentionally a thin framework. It is ready for real ingestion logic to be added behind each placeholder job without changing the external trigger surface.
 
 ## Initial schema
 
@@ -104,6 +127,10 @@ The schema stays sport-agnostic by:
 - `PROGRAMBLE_DB_URL`
 - `PROGRAMBLE_DB_USERNAME`
 - `PROGRAMBLE_DB_PASSWORD`
+- `PROGRAMBLE_JOBS_TIME_ZONE`
+- `PROGRAMBLE_JOBS_REFRESH_SPORTS_DATA_CRON`
+- `PROGRAMBLE_JOBS_REFRESH_ODDS_CRON`
+- `PROGRAMBLE_JOBS_REFRESH_DERIVED_SITE_DATA_CRON`
 - `CONSOLE_LOG_STRUCTURED_FORMAT`
 
 ## AWS deploy contract
@@ -159,4 +186,4 @@ For example, a push on `staging` publishes tags like:
 - add `/api/v1` controllers for sports, slates, events, and yesterday results
 - add Postgres integration
 - add Redis-backed caching where justified
-- add admin refresh endpoints behind auth
+- put admin refresh endpoints behind auth

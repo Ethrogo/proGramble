@@ -27,6 +27,7 @@ class ApiRootControllerTest {
 				.andExpect(jsonPath("$.environment").value("test"))
 				.andExpect(jsonPath("$.version").value("v1"))
 				.andExpect(jsonPath("$.links.self").value("/api/v1"))
+				.andExpect(jsonPath("$.links.jobs").value("/api/v1/admin/jobs"))
 				.andExpect(jsonPath("$.links.health").value("/actuator/health"));
 	}
 
