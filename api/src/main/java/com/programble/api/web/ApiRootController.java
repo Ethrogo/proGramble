@@ -28,6 +28,7 @@ public class ApiRootController {
 				"timestamp", Instant.now().toString(),
 				"links", Map.of(
 						"self", apiProperties.api().basePath(),
+						"jobs", apiProperties.api().basePath() + "/admin/jobs",
 						"health", "/actuator/health",
 						"liveness", "/actuator/health/liveness",
 						"readiness", "/actuator/health/readiness",
