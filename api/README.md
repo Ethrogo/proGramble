@@ -47,6 +47,9 @@ curl http://127.0.0.1:8080/api/v1
 - Spring Boot 3.5.0
 - Spring Web
 - Spring Boot Actuator
+- Spring Security
+- Spring JDBC
+- Flyway
 - Spring Validation
 
 ## Base endpoints
@@ -76,23 +79,34 @@ Offer listings are also backed directly by JDBC over the `sportsbooks`, `markets
 
 ## Background refresh jobs
 
-The API now includes a small background job framework for future sports ingestion and refresh work.
+The API now includes a small background job framework for ingestion and refresh work.
 
-Current placeholder jobs:
+Current jobs:
 
-- `refresh-sports-data`
-- `refresh-odds`
-- `refresh-derived-site-data`
+- `refresh-sports-data` placeholder
+- `refresh-odds` real MLB pitcher strikeouts refresh
+- `refresh-derived-site-data` placeholder
 
 Current behavior:
 
-- scheduled execution is available through Spring scheduling
-- all schedules are disabled by default to avoid accidental local or staging load
+- admin job endpoints require `Authorization: Bearer <PROGRAMBLE_ADMIN_API_TOKEN>`
+- all public API routes remain public
+- `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness` remain public
+- scheduled execution is available through Spring scheduling, but `PROGRAMBLE_JOBS_SCHEDULER_ENABLED` defaults to `false`
+- the current cheapest safe deployment pattern is to keep scheduling disabled on the shared ECS web service and only enable it on one dedicated single-replica scheduler task if or when automatic schedules are needed
 - each job can be triggered manually through `POST /api/v1/admin/jobs/{jobKey}/run`
 - job state is kept in memory only for now, including last run timestamps, counts, summaries, and errors
 - overlapping runs of the same job are rejected
 
-This is intentionally a thin framework. It is ready for real ingestion logic to be added behind each placeholder job without changing the external trigger surface.
+The current `refresh-odds` implementation:
+
+- fetches MLB events and pitcher strikeout markets from The Odds API
+- resolves probable starters through the MLB Stats API
+- matches against existing `events` rows by sport, date, and full home/away team names
+- upserts `sportsbooks`, a global `PITCHER_STRIKEOUTS` market, `players`, pitcher `event_participants`, and `offers`
+- removes stale offers that disappeared from the same sportsbook for the same event and market
+
+This keeps the external trigger surface stable while replacing one placeholder job with a real write path.
 
 ## Initial schema
 
@@ -127,6 +141,11 @@ The schema stays sport-agnostic by:
 - `PROGRAMBLE_DB_URL`
 - `PROGRAMBLE_DB_USERNAME`
 - `PROGRAMBLE_DB_PASSWORD`
+- `PROGRAMBLE_ADMIN_API_TOKEN`
+- `PROGRAMBLE_ODDS_API_KEY` or `ODDS_API_KEY`
+- `PROGRAMBLE_ODDS_BOOKMAKERS`
+- `PROGRAMBLE_MLB_STATS_API_BASE_URL`
+- `PROGRAMBLE_JOBS_SCHEDULER_ENABLED`
 - `PROGRAMBLE_JOBS_TIME_ZONE`
 - `PROGRAMBLE_JOBS_REFRESH_SPORTS_DATA_CRON`
 - `PROGRAMBLE_JOBS_REFRESH_ODDS_CRON`
@@ -181,9 +200,9 @@ For example, a push on `staging` publishes tags like:
 - `staging`
 - `staging-a1b2c3d`
 
-## Next implementation targets
+## Admin job auth example
 
-- add `/api/v1` controllers for sports, slates, events, and yesterday results
-- add Postgres integration
-- add Redis-backed caching where justified
-- put admin refresh endpoints behind auth
+```bash
+curl -H "Authorization: Bearer $PROGRAMBLE_ADMIN_API_TOKEN" \
+  -X POST http://127.0.0.1:8080/api/v1/admin/jobs/refresh-odds/run
+```

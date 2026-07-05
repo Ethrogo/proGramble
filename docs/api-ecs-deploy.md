@@ -30,6 +30,18 @@ The repo task definition should stay aligned with the live ECS service on the fo
   - `SERVER_PORT=8080`
   - `PROGRAMBLE_API_BASE_PATH=/api/v1`
   - `PROGRAMBLE_ENV=staging`
+  - `SPRING_PROFILES_ACTIVE=staging`
+  - `PROGRAMBLE_DB_URL=jdbc:postgresql://programble-staging-postgres.ce5gw80qs7nd.us-east-1.rds.amazonaws.com:5432/programble`
+  - `PROGRAMBLE_JOBS_SCHEDULER_ENABLED=false`
+
+The current task definition also needs these ECS secret injections:
+
+- `PROGRAMBLE_DB_USERNAME`
+- `PROGRAMBLE_DB_PASSWORD`
+- `PROGRAMBLE_ADMIN_API_TOKEN`
+- `PROGRAMBLE_ODDS_API_KEY`
+
+Use real Secrets Manager references in ECS for those values. Do not commit placeholder ARNs that do not exist in AWS.
 
 The deploy workflow renders the pushed ECR image into the task definition at runtime, so the checked-in JSON should keep a placeholder image value and should not be edited for each new tag or digest.
 
@@ -79,3 +91,17 @@ The checked-in staging task definition currently uses:
 - `SPRING_PROFILES_ACTIVE=staging`
 
 That is now the correct pairing for the current ECS service because the runtime depends on `application-staging.properties` for PostgreSQL and observability settings.
+
+## Scheduler note
+
+`PROGRAMBLE_JOBS_SCHEDULER_ENABLED` should stay `false` on the shared web-facing ECS service.
+
+Reason:
+
+- ECS canary deployments temporarily run old and new tasks side by side
+- in-process scheduling on both revisions can double-run jobs
+
+The current cheapest approach is:
+
+- keep admin-triggered jobs available in the main API service
+- if scheduled execution becomes necessary, run one dedicated single-replica scheduler task or service with `PROGRAMBLE_JOBS_SCHEDULER_ENABLED=true`

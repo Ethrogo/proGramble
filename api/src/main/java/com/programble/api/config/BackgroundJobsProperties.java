@@ -6,6 +6,7 @@ import org.springframework.util.StringUtils;
 
 @ConfigurationProperties(prefix = "programble.jobs")
 public record BackgroundJobsProperties(
+		boolean schedulerEnabled,
 		String timeZone,
 		JobSchedule refreshSportsData,
 		JobSchedule refreshOdds,
