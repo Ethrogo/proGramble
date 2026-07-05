@@ -4,44 +4,56 @@ import { PageHero } from "../components/page-hero";
 import { SectionCard } from "../components/section-card";
 
 const sports = [
-  { href: "/mlb", label: "MLB", note: "Pitcher props, live slates, and yesterday's tracked strikeout and walk results." },
-  { href: "/nba", label: "NBA", note: "Lineup-sensitive player markets and fast slate views for game day." },
-  { href: "/nfl", label: "NFL", note: "Weekly game boards, player markets, and injury-aware context." },
-  { href: "/tennis", label: "Tennis", note: "ATP and WTA match pages with player-focused market structure." },
-  { href: "/golf", label: "Golf", note: "PGA and LPGA tournament, round, and matchup market shells." }
+  { href: "/mlb", label: "MLB", note: "Daily pitcher props, featured matchups, and baseball boards built for fast reads." },
+  { href: "/nba", label: "NBA", note: "Game-night player markets and star-driven slate browsing that keeps the focus on the plays people care about." },
+  { href: "/nfl", label: "NFL", note: "Weekly boards for marquee matchups, player props, and weekend planning." },
+  { href: "/tennis", label: "Tennis", note: "ATP and WTA match pages designed around the players, props, and moments fans want first." },
+  { href: "/golf", label: "Golf", note: "Tournament and round boards that make golfer matchups and prop angles easier to follow." }
 ];
 
 const featuredPaths = [
   {
     href: "/mlb",
-    title: "Open today's MLB slate",
-    description: "Start with pitcher-focused MLB pages, then move into player prop detail and yesterday's tracked results."
+    title: "Start with MLB",
+    description: "Jump into pitcher-focused baseball pages built around today's games, featured arms, and popular props."
   },
   {
-    href: "/tennis",
-    title: "Browse ATP/WTA markets",
-    description: "Individual-sport routing is already shaped for match slates, player pages, and competition-specific context."
+    href: "/nba",
+    title: "Browse NBA boards",
+    description: "See how ProGramble is shaping a faster game-night experience for player props and headline matchups."
   },
   {
     href: "/golf",
-    title: "Review featured golf boards",
-    description: "Tournament and round structures are part of the same navigation system as team-sport slates."
+    title: "Preview golf coverage",
+    description: "Explore how tournament pages, round angles, and golfer matchups fit into the same clean experience."
   }
 ];
 
 const productPillars = [
   {
-    title: "Live slates",
-    body: "The site surfaces sport-level slates first, then lets users drill into games, matches, or rounds without exposing raw provider payloads."
+    title: "See the board faster",
+    body: "ProGramble is built to help users get from homepage to the most interesting games and props without digging through clutter."
   },
   {
-    title: "Featured markets",
-    body: "Each sport route is designed to promote the highest-signal player and event markets instead of dumping undifferentiated odds tables."
+    title: "Start with popular props",
+    body: "Each sport page is designed around the markets fans naturally look for first, from pitcher strikeouts to star-player props."
   },
   {
-    title: "Tracked results",
-    body: "MLB starts with yesterday's `pitcher_k` and `pitcher_bb` outcomes sourced from internal tracking data and served through the website API."
+    title: "One brand across sports",
+    body: "Whether the sport is daily, weekly, match-based, or tournament-based, the experience stays familiar and easy to revisit."
   }
+];
+
+const userBenefits = [
+  "Cleaner daily browsing across major sports",
+  "Faster access to featured games and props",
+  "A more welcoming entry point for repeat visits"
+];
+
+const whyNow = [
+  "Follow the sports you already care about in one place",
+  "Build a daily habit around featured slates and popular props",
+  "Get familiar with the experience before deeper pages roll out"
 ];
 
 export default function HomePage() {
@@ -49,33 +61,33 @@ export default function HomePage() {
     <>
       <PageHero
         eyebrow="ProGramble"
-        title="A multi-sport front door for slates, player props, and tracked betting results."
-        description="ProGramble is building a clean public surface for sports betting research across MLB, NBA, NFL, ATP, WTA, PGA, and LPGA. The website routes users into live slates, featured player markets, and yesterday's modeled results without coupling the browser to internal odds or model pipelines."
+        title="Find the games and props worth your attention faster."
+        description="ProGramble is shaping a cleaner sports experience around featured slates, popular player props, and the matchups fans want to check first across MLB, NBA, NFL, tennis, and golf."
         actions={[
-          { href: "/mlb", label: "Open live MLB slate", variant: "primary" },
-          { href: "/about", label: "View product and stack notes", variant: "secondary" }
+          { href: "/mlb", label: "Explore MLB", variant: "primary" },
+          { href: "/about", label: "Why ProGramble", variant: "secondary" }
         ]}
-        sideTitle="Current MVP focus"
-        sideDescription="The initial release centers on public discovery pages, sport-level navigation, featured market entry points, and a backend bridge for yesterday's MLB pitcher results."
+        sideTitle="Built for repeat visits"
+        sideDescription="From first glance to final card, the site is meant to help users move quickly, stay oriented, and keep coming back for the next board."
         stats={[
-          { label: "Supported routes", value: "Home + 6 sport pages" },
-          { label: "Primary backend", value: "Spring Boot API" },
-          { label: "Tracked results", value: "pitcher_k and pitcher_bb" }
+          { label: "Sports in focus", value: "5" },
+          { label: "Best for", value: "Featured props" },
+          { label: "Experience", value: "Fast daily browsing" }
         ]}
       />
 
       <section className="page-block">
         <div className="section-heading">
-          <p className="eyebrow">What the site does</p>
-          <h2 className="section-title">Public product pages first, deeper data behind the API.</h2>
+          <p className="eyebrow">Why users will care</p>
+          <h2 className="section-title">A sharper, simpler way to browse sports props.</h2>
         </div>
         <div className="section-grid">
           {productPillars.map((pillar) => (
             <SectionCard key={pillar.title} title={pillar.title}>
               <p>{pillar.body}</p>
               <div className="pill-row">
-                <span className="pill">SEO-friendly pages</span>
-                <span className="pill">Internal API only</span>
+                <span className="pill">Cleaner boards</span>
+                <span className="pill">Less clutter</span>
               </div>
             </SectionCard>
           ))}
@@ -84,8 +96,8 @@ export default function HomePage() {
 
       <section className="page-block">
         <div className="section-heading">
-          <p className="eyebrow">Supported sports</p>
-          <h2 className="section-title">One navigation system across team sports and individual sports.</h2>
+          <p className="eyebrow">Pick your sport</p>
+          <h2 className="section-title">Start where you already spend your attention.</h2>
         </div>
         <div className="section-grid">
           {sports.map((sport) => (
@@ -98,7 +110,7 @@ export default function HomePage() {
               </div>
               <p>
                 <Link href={sport.href} className="mini-link">
-                  Explore {sport.label}
+                  Browse {sport.label}
                 </Link>
               </p>
             </SectionCard>
@@ -108,7 +120,7 @@ export default function HomePage() {
 
       <section className="page-block split-layout">
         <div className="info-list">
-          <h3>Featured launch paths</h3>
+          <h3>Where to start</h3>
           <div className="feature-stack">
             {featuredPaths.map((path) => (
               <div key={path.href} className="feature-row">
@@ -124,30 +136,30 @@ export default function HomePage() {
           </div>
         </div>
         <div className="info-list">
-          <h3>Why the backend boundary matters</h3>
+          <h3>What makes the experience better</h3>
           <ul className="simple-list">
-            <li>Frontend routes stay stable even as odds providers, models, and grading pipelines change.</li>
-            <li>Yesterday's results can come from tracked internal artifacts without teaching the browser about file layout.</li>
-            <li>Future live slates and featured markets can share one API namespace across every supported sport.</li>
+            <li>Featured pages keep the focus on the best boards instead of endless tables.</li>
+            <li>Prop discovery feels faster when the important games and players are easier to find.</li>
+            <li>The same clear experience carries from daily baseball to weekly football and beyond.</li>
           </ul>
         </div>
       </section>
 
       <section className="page-block split-layout">
         <div className="info-list">
-          <h3>Immediate MVP deliverables</h3>
+          <h3>What new users can expect</h3>
           <ul className="feature-list">
-            <li>Explain the product clearly on the homepage.</li>
-            <li>Route users into sports, slates, and player prop pages.</li>
-            <li>Expose MLB pitcher strikeout and walk results from yesterday through the API layer.</li>
+            {userBenefits.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
         </div>
         <div className="info-list">
-          <h3>Next implementation targets</h3>
+          <h3>Why start now</h3>
           <ul className="simple-list">
-            <li>Add `/api/v1/sports`, `/api/v1/events`, and `/api/v1/results/yesterday`.</li>
-            <li>Back the API with Postgres using the initial cross-sport schema.</li>
-            <li>Introduce admin refresh pages once auth is in place.</li>
+            {whyNow.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
         </div>
       </section>

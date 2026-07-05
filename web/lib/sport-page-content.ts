@@ -18,421 +18,421 @@ export const sportPageContent: Record<string, SportPageContent> = {
   mlb: {
     slug: "mlb",
     sport: "MLB",
-    title: "Pitcher props, game slates, and tracked baseball results.",
+    title: "Your faster way into today's MLB pitcher props and baseball storylines.",
     description:
-      "The MLB entry point is designed around daily starting pitchers, slate-level odds comparison, player prop pages, and yesterday's tracked outcomes for pitcher strikeouts and pitcher walks.",
-    marketFocus: ["Pitcher strikeouts", "Pitcher walks", "Starter slate", "Yesterday's tracked results"],
+      "Start with the starters, rivalry matchups, and pitcher markets baseball fans care about most without getting lost in a crowded board.",
+    marketFocus: ["Pitcher strikeouts", "Pitcher walks", "Starter spotlights", "Game-night favorites"],
     searchSummary:
-      "Future MLB search should let users jump directly to pitchers, teams, and today's most relevant starter-driven props.",
-    searchExamples: ["Search all sports", "Find a pitcher", "Jump to a team slate"],
+      "Jump straight from a favorite team or pitcher into the matchups and prop angles that matter most on the day's card.",
+    searchExamples: ["Find a pitcher", "Jump to tonight's games", "Track your team"],
     recentEvents: [
       {
-        title: "Today's starter slate",
-        detail: "Probable starters, first-pitch windows, and book coverage for the active board.",
-        status: "Live slate placeholder"
+        title: "Today's starter spotlight",
+        detail: "A fast way to scan the arms shaping the board before first pitch.",
+        status: "Today"
       },
       {
-        title: "Yesterday's tracked pitcher results",
-        detail: "Bridge `pitcher_k` and `pitcher_bb` outcomes from internal tracking into the public results flow.",
-        status: "API-backed target"
+        title: "Featured rivalry board",
+        detail: "Bring the most interesting same-day matchup to the front so users know where to start.",
+        status: "Popular"
       },
       {
-        title: "Featured series board",
-        detail: "Cluster same-day games by matchup so users can move from slate to event to pitcher prop cleanly.",
-        status: "Design stub"
+        title: "Yesterday's baseball storylines",
+        detail: "Keep recent results and standout performances close enough to spark the next visit.",
+        status: "Coming soon"
       }
     ],
     featuredProps: [
       {
         title: "Pitcher strikeouts",
-        detail: "Lead market for model-backed MLB discovery and event-level entry points.",
-        signal: "Primary launch market"
+        detail: "The signature baseball prop for users who want a quick read on the day's best pitcher spots.",
+        signal: "Fan favorite"
       },
       {
         title: "Pitcher walks",
-        detail: "Supports the `pitcher_bb` workflow and yesterday-results storytelling.",
-        signal: "Tracked market"
+        detail: "A sharper secondary angle for users who like pitching volatility and matchup nuance.",
+        signal: "Smart add-on"
       },
       {
         title: "Starter outs recorded",
-        detail: "Useful extension once the game slate and pitcher pages are stable.",
-        signal: "Next expansion"
+        detail: "A natural next stop for users who want more depth once the main pitcher page is open.",
+        signal: "On deck"
       }
     ],
     rankingsPlaceholder: [
       {
-        title: "Top projected strikeout spots",
-        detail: "Future ranking block for the strongest same-day pitcher strikeout edges."
+        title: "Know where to start",
+        detail: "A baseball page should quickly surface the pitchers and games most worth a first click."
       },
       {
-        title: "Most active books",
-        detail: "Placeholder for where MLB prop coverage is deepest on a given slate."
+        title: "Stay close to the daily rhythm",
+        detail: "Baseball rewards repeat visits, so the page should feel useful every afternoon and night."
       }
     ],
     trendingPlaceholder: [
       {
         title: "Trending pitchers",
-        detail: "Will highlight the most-viewed pitchers and props on the board."
+        detail: "Highlight the starters and props drawing the most attention on a busy slate."
       },
       {
-        title: "Market movement watch",
-        detail: "Reserved for later line-movement and freshness indicators."
+        title: "Watch list matchups",
+        detail: "Keep the biggest series and same-day pitching spots easy to spot."
       }
     ],
     modules: [
       {
-        title: "Game slate page",
-        body: "Show today's MLB slate with probable starters, books posting live lines, and links into event and prop detail pages."
+        title: "Daily slate first",
+        body: "Lead with the games and starters people want to scan before they settle on a prop."
       },
       {
-        title: "Player prop page",
-        body: "Display market offers, model context, and later historical movement for a single pitcher prop market."
+        title: "Pitcher pages that feel worth opening",
+        body: "Make every featured pitcher page feel like a natural destination instead of another long list."
       },
       {
-        title: "Tracked results bridge",
-        body: "Expose yesterday's pitcher_k and pitcher_bb outcomes through the Spring Boot API instead of reading tracking files from the browser."
+        title: "Recent baseball context",
+        body: "Keep yesterday's takeaways and recent momentum close enough to support the next decision."
       }
     ],
     adminNotes: [
-      "Refresh starter slate and live odds",
-      "Publish yesterday tracked MLB results",
-      "Inspect API quota and fallback diagnostics"
+      "Featured pitcher pages worth revisiting every day",
+      "Cleaner game cards built around top matchups",
+      "More baseball prop depth as the experience expands"
     ]
   },
   nba: {
     slug: "nba",
     sport: "NBA",
-    title: "Fast-moving player markets with lineup-sensitive slate views.",
+    title: "A cleaner way to scan NBA player props and game-night boards.",
     description:
-      "The NBA shell is structured for same-day game slates, player prop discovery, and eventual injury-aware projections served through a stable internal API.",
+      "The NBA experience is built for people who want the big games, star props, and nightly storylines in front of them quickly.",
     marketFocus: ["Points", "Rebounds", "Assists", "Combo props"],
     searchSummary:
-      "NBA search will need both a site-wide entry point and a sport-specific jump path for teams, players, and same-day games.",
-    searchExamples: ["Search all sports", "Find a player", "Open today's slate"],
+      "Go straight to a player, team, or game-night board without bouncing through a dozen pages first.",
+    searchExamples: ["Find a player", "Open tonight's slate", "Track a matchup"],
     recentEvents: [
       {
-        title: "Tonight's slate window",
-        detail: "Game cards ordered around start times, lineup certainty, and prop availability.",
-        status: "Live slate placeholder"
+        title: "Tonight's headline slate",
+        detail: "Put the best games and most popular player markets at the front of the experience.",
+        status: "Tonight"
       },
       {
-        title: "Late injury swing board",
-        detail: "Reserve a section for games where status changes materially affect prop relevance.",
-        status: "Design stub"
+        title: "Late-news watch list",
+        detail: "Help users quickly spot where the board could change the feel of the night.",
+        status: "Popular"
       },
       {
         title: "Spotlight matchup",
-        detail: "Single event module for marquee games with concentrated player prop demand.",
-        status: "Featured event placeholder"
+        detail: "Create an obvious entry point for the game everyone wants to check first.",
+        status: "Coming soon"
       }
     ],
     featuredProps: [
       {
         title: "Points",
-        detail: "Primary player-market entry path for star-driven game discovery.",
+        detail: "The fastest path into the star-player props that drive most NBA browsing.",
         signal: "Core market"
       },
       {
         title: "Rebounds + assists",
-        detail: "Combo markets should group cleanly under the same player page framework.",
+        detail: "A natural second look for fans who want more than the headline scoring line.",
         signal: "High-interest combo"
       },
       {
         title: "Three-pointers made",
-        detail: "Natural candidate for featured-market rotation on busy slates.",
-        signal: "Expansion market"
+        detail: "A fun, high-attention market that keeps the page feeling active on busy nights.",
+        signal: "On deck"
       }
     ],
     rankingsPlaceholder: [
       {
-        title: "Top projection risers",
-        detail: "Placeholder for players moving up due to lineup or usage changes."
+        title: "Built for quick reads",
+        detail: "NBA pages should help users pick up the shape of the slate at a glance."
       },
       {
-        title: "Most active games",
-        detail: "Future ranking for games drawing the deepest market coverage."
+        title: "Strong for repeat use",
+        detail: "The right mix of star power and nightly motion keeps people checking back."
       }
     ],
     trendingPlaceholder: [
       {
         title: "Trending players",
-        detail: "Most-viewed player pages and props on the current slate."
+        detail: "Show which players and props are pulling the most attention right now."
       },
       {
-        title: "News-sensitive spots",
-        detail: "Placeholder for highlighting markets affected by late injury reports."
+        title: "Games heating up",
+        detail: "Keep the loudest game-night storylines close to the front."
       }
     ],
     modules: [
       {
         title: "Slate-first browsing",
-        body: "Prioritize today's games, tip times, and featured player markets before deeper player and event detail pages."
+        body: "Let the night's best games lead the page before users dive deeper into player props."
       },
       {
-        title: "Player market clusters",
-        body: "Group props by player and by market family so a single page can support points, rebounds, assists, and combinations."
+        title: "Star-player prop hubs",
+        body: "Group the most relevant markets together so a player page feels focused instead of scattered."
       },
       {
-        title: "Admin placeholders",
-        body: "Reserve room for lineup refresh status, odds snapshots, and manual refresh controls."
+        title: "Energy all night",
+        body: "The page should feel alive enough to support quick pre-tip visits and second checks later on."
       }
     ],
     adminNotes: [
-      "Track lineup refresh lag",
-      "Flag books with missing player markets",
-      "Surface game-level data staleness"
+      "Nightly featured-player pages",
+      "Clearer game cards for big national spots",
+      "More prop variety as basketball coverage grows"
     ]
   },
   nfl: {
     slug: "nfl",
     sport: "NFL",
-    title: "Weekly game boards, player props, and clean event navigation.",
+    title: "Weekly NFL boards built for marquee matchups and player props.",
     description:
-      "NFL routes should support a wider weekly planning cadence than MLB or NBA while keeping the same website shell and API boundaries.",
+      "The NFL experience should help fans move from the weekly board into the biggest games and most interesting props without wasting time.",
     marketFocus: ["Passing yards", "Receiving yards", "Rushing yards", "Touchdowns"],
     searchSummary:
-      "NFL search should prioritize weekly navigation, letting users jump to teams, players, and the current week board without browsing every matchup.",
-    searchExamples: ["Search all sports", "Find a team", "Open Week 1 board"],
+      "Jump to a favorite team, a star player, or the week's most important game without scanning the full schedule first.",
+    searchExamples: ["Find a team", "Open this week's board", "Spotlight a player"],
     recentEvents: [
       {
-        title: "Current week slate",
-        detail: "Group games by week first, then expose featured matchups and prop-heavy spots.",
-        status: "Weekly slate placeholder"
+        title: "This week's board",
+        detail: "Make the headline games and most bet props the first thing users see.",
+        status: "This week"
       },
       {
         title: "Prime-time spotlight",
-        detail: "Dedicated slot for the highest-interest standalone game on the board.",
-        status: "Featured event placeholder"
+        detail: "Give the biggest standalone matchup a front-row spot on the page.",
+        status: "Fan favorite"
       },
       {
-        title: "Injury-report watchlist",
-        detail: "Future event rail for games where injuries materially affect prop value.",
-        status: "Design stub"
+        title: "Weekend watch list",
+        detail: "Keep the players and games people are most likely to check again before kickoff.",
+        status: "Coming soon"
       }
     ],
     featuredProps: [
       {
         title: "Passing yards",
-        detail: "Anchor market for quarterback discovery and weekly slate sorting.",
+        detail: "The cleanest way to lead users from the weekly board into quarterback-driven matchups.",
         signal: "Core market"
       },
       {
         title: "Receiving yards",
-        detail: "High-traffic player page candidate for featured-matchup browsing.",
+        detail: "A natural skill-position entry point when fans want star names first.",
         signal: "Primary skill-position market"
       },
       {
         title: "Anytime touchdown",
-        detail: "Good candidate for trending modules and market-group experimentation.",
+        detail: "A high-interest market that adds energy and broad appeal to weekly browsing.",
         signal: "Engagement driver"
       }
     ],
     rankingsPlaceholder: [
       {
-        title: "Top weekly looks",
-        detail: "Reserved for best-rated games or props once ranking logic is live."
+        title: "Fits the weekly habit",
+        detail: "NFL users often plan ahead, so the page should make the whole week feel approachable."
       },
       {
-        title: "Most covered books",
-        detail: "Future view of where weekly prop coverage is broadest."
+        title: "Built around the big games",
+        detail: "A strong NFL page should always make the marquee spots feel easy to find."
       }
     ],
     trendingPlaceholder: [
       {
         title: "Trending skill players",
-        detail: "Most-viewed props and player pages for the current week."
+        detail: "Surface the names and props getting the most weekly attention."
       },
       {
-        title: "Line movement watch",
-        detail: "Placeholder for late-week market changes worth surfacing."
+        title: "Weekend buzz",
+        detail: "Keep the conversation around the biggest games close to the front."
       }
     ],
     modules: [
       {
-        title: "Weekly slate structure",
-        body: "Support browsing by week, then by game, then by player market with stable URL patterns."
+        title: "Weekly board first",
+        body: "Lead with the shape of the week, then pull users into the games and props worth extra attention."
       },
       {
-        title: "Prop pages with context",
-        body: "Leave room for matchup context, book comparison, and later tracked outcomes."
+        title: "Player pages with purpose",
+        body: "Make prop pages feel like focused destinations for quarterbacks, stars, and breakout names."
       },
       {
-        title: "Controlled expansion",
-        body: "Reuse the same internal API contract shapes rather than special-casing the frontend for every sport."
+        title: "Built for the weekend cycle",
+        body: "Support early-week planning, midweek check-ins, and final pregame visits without losing clarity."
       }
     ],
     adminNotes: [
-      "Publish weekly slate status",
-      "Track inactive-report updates",
-      "Record missing market coverage by event"
+      "Big-game pages that feel worth sharing",
+      "Cleaner player-prop discovery for weekends",
+      "More weekly depth as football coverage expands"
     ]
   },
   tennis: {
     slug: "tennis",
     sport: "Tennis",
-    title: "Match-centric browsing for ATP and WTA player markets.",
+    title: "Match-first tennis browsing for ATP and WTA fans.",
     description:
-      "Tennis is modeled as a shared shell for ATP and WTA with match pages, player pages, and tour-aware sport landing content.",
+      "The tennis experience is meant to feel quick, player-led, and easy to browse whether the attention is on ATP, WTA, or a single headline match.",
     marketFocus: ["Aces", "Double faults", "Match winner", "Games won"],
     searchSummary:
-      "Tennis search should help users jump by player, tournament, and tour while keeping ATP and WTA under one top-level shell.",
-    searchExamples: ["Search all sports", "Find a player", "Filter ATP or WTA"],
+      "Move from a player or tournament into the matchups and prop angles worth watching without overcomplicating the path.",
+    searchExamples: ["Find a player", "Browse today's matches", "Filter ATP or WTA"],
     recentEvents: [
       {
         title: "Today's match slate",
-        detail: "Upcoming matches grouped by tournament, tour, and start window.",
-        status: "Live slate placeholder"
+        detail: "Give users a clean starting point for the day's most interesting tennis matches.",
+        status: "Today"
       },
       {
         title: "Featured court matches",
-        detail: "Highlight the most active ATP or WTA matches for quick entry into player markets.",
-        status: "Featured event placeholder"
+        detail: "Pull the biggest ATP and WTA matches to the front for quick access.",
+        status: "Popular"
       },
       {
-        title: "Tournament progress board",
-        detail: "Future section for round progression and carryover interest.",
-        status: "Design stub"
+        title: "Tournament momentum",
+        detail: "Keep standout runs and ongoing tournament storylines easy to revisit.",
+        status: "Coming soon"
       }
     ],
     featuredProps: [
       {
         title: "Aces",
-        detail: "Player-centric prop category that maps cleanly to individual match pages.",
+        detail: "A natural prop-first entry point for fans who follow individual player tendencies.",
         signal: "Core prop"
       },
       {
         title: "Double faults",
-        detail: "Useful secondary market for surfacing match-specific player tendencies.",
+        detail: "A strong secondary angle that makes tennis pages feel richer without feeling crowded.",
         signal: "Secondary prop"
       },
       {
         title: "Games won",
-        detail: "Good bridge between match outcome and player-level market browsing.",
+        detail: "A smart bridge between overall match interest and player-focused browsing.",
         signal: "Expansion market"
       }
     ],
     rankingsPlaceholder: [
       {
-        title: "Top players to watch",
-        detail: "Placeholder for ranking the most interesting ATP and WTA spots."
+        title: "Player-led by design",
+        detail: "Tennis users often think in players first, so the experience should reflect that naturally."
       },
       {
-        title: "Tournament depth",
-        detail: "Future comparison of where market coverage is strongest."
+        title: "Built for repeat checks",
+        detail: "Tournaments evolve quickly, and the page should reward people who come back through the round."
       }
     ],
     trendingPlaceholder: [
       {
         title: "Trending matches",
-        detail: "Most-viewed ATP and WTA event pages on the current slate."
+        detail: "Spotlight the ATP and WTA matches pulling the most interest."
       },
       {
         title: "Player watchlist",
-        detail: "Reserved for frequently searched players and matchups."
+        detail: "Keep the names and matchups people want most near the top."
       }
     ],
     modules: [
       {
-        title: "Tour split",
-        body: "Use the tennis landing page as the shared top-level entry, then branch to ATP and WTA filters through the API."
+        title: "One tennis home",
+        body: "Let ATP and WTA live under one clean entry point so users stay oriented while browsing."
       },
       {
-        title: "Match-first event model",
-        body: "The shell assumes event detail pages are match-centric instead of team-centric."
+        title: "Match-first flow",
+        body: "Build around the live appeal of single matches and the players driving them."
       },
       {
-        title: "Unified player identity",
-        body: "Keep the backend responsible for player identity and normalization across tours."
+        title: "Tournament feel",
+        body: "The page should make round progression and recurring match interest easy to follow."
       }
     ],
     adminNotes: [
-      "Refresh tournament slate",
-      "Flag suspended or delayed matches",
-      "Track ATP vs WTA market coverage separately"
+      "Featured-player pages for ATP and WTA fans",
+      "Cleaner tournament browsing across rounds",
+      "More tennis prop depth as coverage expands"
     ]
   },
   golf: {
     slug: "golf",
     sport: "Golf",
-    title: "Tournament and round views for PGA and LPGA markets.",
+    title: "Tournament and round pages built for golf fans who want a cleaner board.",
     description:
-      "Golf uses the same shell but needs tournament and round framing instead of single-game slates. The route is intentionally broad enough for PGA and LPGA expansion.",
+      "Golf should feel calm and organized, giving users a better way to move through tournaments, rounds, golfer matchups, and prop angles.",
     marketFocus: ["Round score", "Birdies", "Matchups", "Placement markets"],
     searchSummary:
-      "Golf search should let users move directly to a golfer, tournament, or round market while still working under one PGA/LPGA top-level route.",
-    searchExamples: ["Search all sports", "Find a golfer", "Open the current tournament"],
+      "Move straight to a golfer, current tournament, or round board without feeling buried in a long event menu.",
+    searchExamples: ["Find a golfer", "Open the tournament", "Jump to round props"],
     recentEvents: [
       {
         title: "Tournament overview",
-        detail: "Shared entry point for the active PGA or LPGA event with round-aware navigation.",
-        status: "Tournament placeholder"
+        detail: "A calmer front door into the active event, the top names, and the best places to start.",
+        status: "This event"
       },
       {
         title: "Round board",
-        detail: "Surface the current round and featured golfer matchups without forcing users through deep navigation.",
-        status: "Round module stub"
+        detail: "Keep the current round and featured golfer angles close enough for quick check-ins.",
+        status: "Popular"
       },
       {
         title: "Leaderboard spotlight",
-        detail: "Future section for players near the top of the board once live event data is wired.",
-        status: "Design stub"
+        detail: "Highlight the golfers and storylines people will want to follow through the weekend.",
+        status: "Coming soon"
       }
     ],
     featuredProps: [
       {
         title: "Round score",
-        detail: "Baseline golfer-market entry point for round-based browsing.",
+        detail: "A clean starting point for fans who want round-by-round golfer focus.",
         signal: "Core market"
       },
       {
         title: "Birdies",
-        detail: "A natural featured prop for highlighting aggressive scoring spots.",
+        detail: "A more personality-driven prop angle that adds life to tournament browsing.",
         signal: "Player prop"
       },
       {
         title: "Head-to-head matchups",
-        detail: "Useful for balancing golfer pages with event-level tournament views.",
+        detail: "A familiar comparison market that helps users move naturally between golfers and the event page.",
         signal: "Comparison market"
       }
     ],
     rankingsPlaceholder: [
       {
-        title: "Top round positions",
-        detail: "Reserved for strongest same-round golfer opportunities."
+        title: "Built for calmer browsing",
+        detail: "Golf pages should feel organized enough to support longer sessions without becoming noisy."
       },
       {
-        title: "Most active tournaments",
-        detail: "Future ranking of events with the broadest market coverage."
+        title: "Good for weekend follow-through",
+        detail: "The right tournament page gives users a reason to check back round after round."
       }
     ],
     trendingPlaceholder: [
       {
         title: "Trending golfers",
-        detail: "Most-viewed golfer pages and matchup markets."
+        detail: "Keep the golfers and matchups pulling the most attention easy to find."
       },
       {
-        title: "Movement watch",
-        detail: "Placeholder for notable changes across round and placement markets."
+        title: "Weekend watch",
+        detail: "Surface the moments that make a tournament feel alive across several days."
       }
     ],
     modules: [
       {
-        title: "Tournament overview",
-        body: "Surface event-level context first, then expose round and player pages underneath."
+        title: "Tournament first",
+        body: "Let the main event page set the stage before users choose golfer-specific paths."
       },
       {
-        title: "Round-specific props",
-        body: "Leave room for round-by-round availability and later leaderboard-aware presentation."
+        title: "Round-specific flow",
+        body: "Keep round props and golfer angles easy to revisit as the event progresses."
       },
       {
-        title: "Future split support",
-        body: "Keep PGA and LPGA as backend filters rather than separate top-level shells at the MVP stage."
+        title: "Built to stretch across tours",
+        body: "Support PGA and LPGA fans with one clear experience that does not feel fragmented."
       }
     ],
     adminNotes: [
-      "Publish tournament feed status",
-      "Track round refresh timing",
-      "Surface incomplete book coverage"
+      "Cleaner tournament pages for repeat weekend visits",
+      "Featured golfer pages and matchup paths",
+      "More round-based depth as golf coverage grows"
     ]
   }
 };

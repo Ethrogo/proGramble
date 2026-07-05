@@ -13,12 +13,12 @@ export default function MlbPage() {
   return (
     <SportLandingPage
       content={content}
-      sideTitle="Initial MLB website modules"
-      sideDescription="The MLB route is the first production-facing sport shell because it already has tracked pitcher results and a daily workflow."
+      sideTitle="Why MLB fans start here"
+      sideDescription="Baseball moves every day, so the page is built to get users into featured starters, strong matchups, and pitcher props fast."
       stats={[
-        { label: "Primary tracked markets", value: "pitcher_k / pitcher_bb" },
-        { label: "Core routes next", value: "Slate | Event | Prop" },
-        { label: "Backend source", value: "Spring Boot + tracking adapter" }
+        { label: "Best for", value: "Daily pitcher props" },
+        { label: "Watch first", value: "Starter spots" },
+        { label: "Visit style", value: "Quick game-day scan" }
       ]}
     />
   );

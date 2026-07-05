@@ -13,12 +13,12 @@ export default function NbaPage() {
   return (
     <SportLandingPage
       content={content}
-      sideTitle="NBA shell focus"
-      sideDescription="The NBA shell is built for rapidly changing same-day markets, where lineup status and sportsbook coverage drive the user experience."
+      sideTitle="Why NBA fans use it"
+      sideDescription="Basketball nights move fast, so the page is designed to make top games and star-player props easier to spot."
       stats={[
-        { label: "Primary UX axis", value: "Slate first" },
-        { label: "Key dependency", value: "Lineup freshness" },
-        { label: "API shape", value: "Events | Players | Offers" }
+        { label: "Best for", value: "Game-night props" },
+        { label: "Watch first", value: "Star players" },
+        { label: "Visit style", value: "Nightly check-in" }
       ]}
     />
   );

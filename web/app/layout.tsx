@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | ProGramble"
   },
   description:
-    "A multi-sport shell for projections, slates, props, and yesterday's model-tracked results."
+    "ProGramble helps sports fans find featured slates, popular props, and game-day storylines faster across the sports they follow most."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
