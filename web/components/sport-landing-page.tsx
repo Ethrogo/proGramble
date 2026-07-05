@@ -20,8 +20,8 @@ export function SportLandingPage({
         title={content.title}
         description={content.description}
         actions={[
-          { href: `/${content.slug}`, label: `Open ${content.sport} board`, variant: "primary" },
-          { href: "/about", label: "View product notes", variant: "secondary" }
+          { href: `/${content.slug}`, label: `Browse ${content.sport}`, variant: "primary" },
+          { href: "/about", label: "Why ProGramble", variant: "secondary" }
         ]}
         sideTitle={sideTitle}
         sideDescription={sideDescription}
@@ -30,8 +30,8 @@ export function SportLandingPage({
 
       <section className="page-block split-layout">
         <div className="info-list">
-          <p className="eyebrow">Future search</p>
-          <h3>Global and {content.sport}-specific search should both live here.</h3>
+          <p className="eyebrow">Quick start</p>
+          <h3>Find the right board faster.</h3>
           <p>{content.searchSummary}</p>
           <div className="pill-row">
             {content.searchExamples.map((example) => (
@@ -42,8 +42,8 @@ export function SportLandingPage({
           </div>
         </div>
         <div className="info-list">
-          <p className="eyebrow">Market focus</p>
-          <h3>Featured market families</h3>
+          <p className="eyebrow">Popular angles</p>
+          <h3>What fans come here to track first</h3>
           <div className="pill-row">
             {content.marketFocus.map((item) => (
               <span key={item} className="pill">
@@ -56,8 +56,8 @@ export function SportLandingPage({
 
       <section className="page-block">
         <div className="section-heading">
-          <p className="eyebrow">Recent events</p>
-          <h2 className="section-title">Reusable event modules for each sport landing page.</h2>
+          <p className="eyebrow">Featured boards</p>
+          <h2 className="section-title">Start with the matchups and moments drawing attention.</h2>
         </div>
         <div className="section-grid">
           {content.recentEvents.map((event) => (
@@ -73,8 +73,8 @@ export function SportLandingPage({
 
       <section className="page-block">
         <div className="section-heading">
-          <p className="eyebrow">Featured props</p>
-          <h2 className="section-title">Entry points for the prop pages that matter most.</h2>
+          <p className="eyebrow">Popular props</p>
+          <h2 className="section-title">The prop categories people naturally want first.</h2>
         </div>
         <div className="section-grid">
           {content.featuredProps.map((prop) => (
@@ -90,8 +90,8 @@ export function SportLandingPage({
 
       <section className="page-block split-layout">
         <div className="info-list">
-          <p className="eyebrow">Rankings placeholder</p>
-          <h3>Reserved for model-driven ranking modules.</h3>
+          <p className="eyebrow">Reasons to return</p>
+          <h3>Why this sport page should become part of a routine.</h3>
           <div className="feature-stack">
             {content.rankingsPlaceholder.map((item) => (
               <div key={item.title} className="feature-row">
@@ -104,8 +104,8 @@ export function SportLandingPage({
           </div>
         </div>
         <div className="info-list">
-          <p className="eyebrow">Trending placeholder</p>
-          <h3>Reserved for high-interest markets and pages.</h3>
+          <p className="eyebrow">What's catching on</p>
+          <h3>Highlights that keep the page feeling active.</h3>
           <div className="feature-stack">
             {content.trendingPlaceholder.map((item) => (
               <div key={item.title} className="feature-row">
@@ -119,17 +119,23 @@ export function SportLandingPage({
         </div>
       </section>
 
-      <section className="page-block section-grid">
-        {content.modules.map((module) => (
-          <SectionCard key={module.title} title={module.title}>
-            <p>{module.body}</p>
-          </SectionCard>
-        ))}
+      <section className="page-block">
+        <div className="section-heading">
+          <p className="eyebrow">The experience</p>
+          <h2 className="section-title">How ProGramble wants this sport to feel.</h2>
+        </div>
+        <div className="section-grid">
+          {content.modules.map((module) => (
+            <SectionCard key={module.title} title={module.title}>
+              <p>{module.body}</p>
+            </SectionCard>
+          ))}
+        </div>
       </section>
 
       <section className="page-block split-layout">
         <div className="info-list">
-          <h3>Operational placeholders</h3>
+          <h3>What users can look forward to</h3>
           <ul className="feature-list">
             {content.adminNotes.map((item) => (
               <li key={item}>{item}</li>
@@ -137,9 +143,9 @@ export function SportLandingPage({
           </ul>
         </div>
         <div className="info-list">
-          <h3>Backend boundary</h3>
+          <h3>Why ProGramble fits this sport</h3>
           <p>
-            These landing pages are UI shells. Real recent events, featured props, rankings, and search results should come from the Spring Boot API rather than static browser-side provider calls.
+            The goal is not to overwhelm people with everything at once. Each sport page is being shaped to spotlight the right boards, the right props, and the right reasons to come back tomorrow.
           </p>
         </div>
       </section>

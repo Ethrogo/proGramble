@@ -7,7 +7,7 @@ This document captures the currently working AWS deployment contract for the Spr
 - AWS Region: `us-east-1`
 - ECS cluster: `default`
 - ECS service: `programble-api-9045`
-- ECS task definition family: `default-programble-api-9045`
+- ECS task definition family: `programble-api`
 - ECR repository: `programble-api`
 - Task definition source in repo: `.aws/api-task-definition.json`
 - Deploy workflow in repo: `.github/workflows/api-ecs-deploy.yml`
@@ -22,14 +22,26 @@ The repo task definition should stay aligned with the live ECS service on the fo
 - container port: `8080`
 - network mode: `awsvpc`
 - launch type compatibility: `FARGATE`
-- task CPU: `1024`
-- task memory: `2048`
+- task CPU: `512`
+- task memory: `1024`
 - execution role ARN: `arn:aws:iam::440373532734:role/service-role/ecsTaskExecutionRole`
-- log group: `/aws/ecs/default/programble-api-9045-e07d`
+- log group: `/ecs/programble-api`
 - environment variables:
   - `SERVER_PORT=8080`
   - `PROGRAMBLE_API_BASE_PATH=/api/v1`
-  - `PROGRAMBLE_ENV=main`
+  - `PROGRAMBLE_ENV=staging`
+  - `SPRING_PROFILES_ACTIVE=staging`
+  - `PROGRAMBLE_DB_URL=jdbc:postgresql://programble-staging-postgres.ce5gw80qs7nd.us-east-1.rds.amazonaws.com:5432/programble`
+  - `PROGRAMBLE_JOBS_SCHEDULER_ENABLED=false`
+
+The current task definition also needs these ECS secret injections:
+
+- `PROGRAMBLE_DB_USERNAME`
+- `PROGRAMBLE_DB_PASSWORD`
+- `PROGRAMBLE_ADMIN_API_TOKEN`
+- `PROGRAMBLE_ODDS_API_KEY`
+
+Use real Secrets Manager references in ECS for those values. Do not commit placeholder ARNs that do not exist in AWS.
 
 The deploy workflow renders the pushed ECR image into the task definition at runtime, so the checked-in JSON should keep a placeholder image value and should not be edited for each new tag or digest.
 
@@ -65,25 +77,31 @@ In practical terms, the deploy role needs permissions covering at least:
 
 After ECS reports service stability, the deploy workflow verifies:
 
-- `GET ${API_SMOKE_TEST_URL}/actuator/health`
+- `GET ${API_SMOKE_TEST_URL}/actuator/health/readiness`
+- `GET ${API_SMOKE_TEST_URL}/actuator/metrics/http.server.requests`
 - `GET ${API_SMOKE_TEST_URL}/api/v1`
 
-The health endpoint must report `{"status":"UP"}` and the API root response must include `"service":"programble-api"`.
+The readiness endpoint must report `{"status":"UP"}`, the metrics endpoint must expose `http.server.requests`, and the API root response must include `"service":"programble-api"`.
 
 ## Environment and profile notes
 
-`PROGRAMBLE_ENV=main` is currently safe to keep. Today it drives application metadata and structured logs through `programble.environment`; it does not select a Spring profile on its own.
+The checked-in staging task definition currently uses:
 
-The container image default is `SPRING_PROFILES_ACTIVE=container`. There is currently no `application-container.properties`, so the active `container` profile does not introduce separate runtime overrides. That is why the service can run successfully even though `PROGRAMBLE_ENV=main`.
+- `PROGRAMBLE_ENV=staging`
+- `SPRING_PROFILES_ACTIVE=staging`
 
-The only issue with the current setup is naming drift:
+That is now the correct pairing for the current ECS service because the runtime depends on `application-staging.properties` for PostgreSQL and observability settings.
 
-- structured logs and `/api/v1` metadata report environment `main`
-- Spring reports active profile `container`
+## Scheduler note
 
-That is not a functional problem today, but it can become confusing once profile-specific config is added. When the service moves beyond the current Express setup, either:
+`PROGRAMBLE_JOBS_SCHEDULER_ENABLED` should stay `false` on the shared web-facing ECS service.
 
-- keep `PROGRAMBLE_ENV=main` and explicitly set `SPRING_PROFILES_ACTIVE=main`, or
-- keep `SPRING_PROFILES_ACTIVE=container` and treat `container` as the canonical runtime profile
+Reason:
 
-Until then, leaving `PROGRAMBLE_ENV=main` as-is is acceptable.
+- ECS canary deployments temporarily run old and new tasks side by side
+- in-process scheduling on both revisions can double-run jobs
+
+The current cheapest approach is:
+
+- keep admin-triggered jobs available in the main API service
+- if scheduled execution becomes necessary, run one dedicated single-replica scheduler task or service with `PROGRAMBLE_JOBS_SCHEDULER_ENABLED=true`

@@ -25,6 +25,6 @@ COPY --from=builder /workspace/target/*.jar /app/app.jar
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD wget --quiet --tries=1 --spider "http://127.0.0.1:${SERVER_PORT}/actuator/health" || exit 1
+  CMD wget --quiet --tries=1 --spider "http://127.0.0.1:${SERVER_PORT}/actuator/health/readiness" || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

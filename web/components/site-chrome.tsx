@@ -10,18 +10,18 @@ const navItems = [
   { href: "/nfl", label: "NFL" },
   { href: "/tennis", label: "Tennis" },
   { href: "/golf", label: "Golf" },
-  { href: "/about", label: "About" }
+  { href: "/about", label: "Why ProGramble" }
 ];
 
 export function SiteChrome({ children }: { children: ReactNode }) {
   return (
     <div className="site-shell">
-      <div className="topband">ProGramble website shell | Next.js frontend | Spring Boot API boundary</div>
+      <div className="topband">Featured slates, popular props, and cleaner game-day browsing</div>
       <header className="site-header">
         <div className="site-header-inner">
           <Link href="/" className="brand" aria-label="ProGramble home">
             <span className="brand-mark">ProGramble</span>
-            <span className="brand-copy">Multi-sport slates, props, and tracked results</span>
+            <span className="brand-copy">A simpler way to discover the games, props, and storylines worth your attention</span>
           </Link>
           <nav className="site-nav" aria-label="Primary">
             {navItems.map((item) => (
@@ -37,22 +37,22 @@ export function SiteChrome({ children }: { children: ReactNode }) {
 
       <footer className="site-footer">
         <div className="site-footer-inner">
-          <div>
-            <strong>ProGramble</strong>
-            <p>
-              A calmer public surface for sports research, featured markets, and tracked results backed by a Spring Boot API.
-            </p>
-          </div>
-          <div className="footer-links">
-            <Link href="/mlb">MLB</Link>
-            <Link href="/nba">NBA</Link>
-            <Link href="/nfl">NFL</Link>
-            <Link href="/tennis">Tennis</Link>
-            <Link href="/golf">Golf</Link>
-            <Link href="/about">About</Link>
-          </div>
+        <div>
+          <strong>ProGramble</strong>
+          <p>
+              Built for sports fans who want faster access to featured boards, player props, and the moments that shape the day.
+          </p>
         </div>
-      </footer>
-    </div>
+        <div className="footer-links">
+          <Link href="/mlb">MLB</Link>
+          <Link href="/nba">NBA</Link>
+          <Link href="/nfl">NFL</Link>
+          <Link href="/tennis">Tennis</Link>
+          <Link href="/golf">Golf</Link>
+            <Link href="/about">Why ProGramble</Link>
+        </div>
+      </div>
+    </footer>
+  </div>
   );
 }

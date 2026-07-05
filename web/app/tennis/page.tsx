@@ -13,12 +13,12 @@ export default function TennisPage() {
   return (
     <SportLandingPage
       content={content}
-      sideTitle="Shared ATP/WTA shell"
-      sideDescription="The top-level tennis route stays broad so the backend can expose ATP and WTA distinctions without fragmenting the public shell too early."
+      sideTitle="Why tennis fans use it"
+      sideDescription="Tennis is a player-first sport, so the page is built to make standout matches and prop angles feel fast to reach."
       stats={[
-        { label: "Tours", value: "ATP + WTA" },
-        { label: "Primary unit", value: "Match event" },
-        { label: "Identity model", value: "Player-centric" }
+        { label: "Best for", value: "Match-first browsing" },
+        { label: "Watch first", value: "Featured players" },
+        { label: "Visit style", value: "Tournament follow-through" }
       ]}
     />
   );

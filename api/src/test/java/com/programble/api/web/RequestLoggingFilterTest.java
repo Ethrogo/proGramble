@@ -1,7 +1,9 @@
 package com.programble.api.web;
 
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.blankOrNullString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -14,27 +16,29 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-class ApiRootControllerTest {
+class RequestLoggingFilterTest {
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@Test
-	void apiRootExposesVersionedNamespace() throws Exception {
+	void applicationRequestsReceiveGeneratedRequestId() throws Exception {
 		mockMvc.perform(get("/api/v1"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.service").value("programble-api"))
-				.andExpect(jsonPath("$.environment").value("test"))
-				.andExpect(jsonPath("$.version").value("v1"))
-				.andExpect(jsonPath("$.links.self").value("/api/v1"))
-				.andExpect(jsonPath("$.links.jobs").value("/api/v1/admin/jobs"))
-				.andExpect(jsonPath("$.links.health").value("/actuator/health"));
+				.andExpect(header().string("X-Request-Id", not(blankOrNullString())));
 	}
 
 	@Test
-	void actuatorHealthEndpointIsAvailable() throws Exception {
+	void applicationRequestsPreserveCallerRequestId() throws Exception {
+		mockMvc.perform(get("/api/v1").header("X-Request-Id", "req-12345"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Request-Id", "req-12345"));
+	}
+
+	@Test
+	void actuatorProbeRequestsSkipRequestIdDecoration() throws Exception {
 		mockMvc.perform(get("/actuator/health"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("UP"));
+				.andExpect(header().doesNotExist("X-Request-Id"));
 	}
 }

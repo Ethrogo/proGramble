@@ -13,12 +13,12 @@ export default function GolfPage() {
   return (
     <SportLandingPage
       content={content}
-      sideTitle="PGA and LPGA shell"
-      sideDescription="The golf route supports tournament-centric browsing while keeping PGA and LPGA as filters and API dimensions rather than separate shells in the MVP."
+      sideTitle="Why golf fans use it"
+      sideDescription="Golf asks for a calmer layout, so the page is shaped to make tournaments, rounds, and golfer angles easier to follow."
       stats={[
-        { label: "Tours", value: "PGA + LPGA" },
-        { label: "Primary unit", value: "Tournament / round" },
-        { label: "Later extension", value: "Leaderboard-aware pages" }
+        { label: "Best for", value: "Tournament boards" },
+        { label: "Watch first", value: "Round angles" },
+        { label: "Visit style", value: "Weekend tracking" }
       ]}
     />
   );

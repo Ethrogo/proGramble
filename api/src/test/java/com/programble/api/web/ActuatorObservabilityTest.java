@@ -14,27 +14,29 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
-class ApiRootControllerTest {
+class ActuatorObservabilityTest {
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@Test
-	void apiRootExposesVersionedNamespace() throws Exception {
-		mockMvc.perform(get("/api/v1"))
+	void livenessAndReadinessProbesAreAvailable() throws Exception {
+		mockMvc.perform(get("/actuator/health/liveness"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.service").value("programble-api"))
-				.andExpect(jsonPath("$.environment").value("test"))
-				.andExpect(jsonPath("$.version").value("v1"))
-				.andExpect(jsonPath("$.links.self").value("/api/v1"))
-				.andExpect(jsonPath("$.links.jobs").value("/api/v1/admin/jobs"))
-				.andExpect(jsonPath("$.links.health").value("/actuator/health"));
+				.andExpect(jsonPath("$.status").value("UP"));
+
+		mockMvc.perform(get("/actuator/health/readiness"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("UP"));
 	}
 
 	@Test
-	void actuatorHealthEndpointIsAvailable() throws Exception {
-		mockMvc.perform(get("/actuator/health"))
+	void metricsEndpointExposesHttpServerRequests() throws Exception {
+		mockMvc.perform(get("/api/v1"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/actuator/metrics/http.server.requests"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("UP"));
+				.andExpect(jsonPath("$.name").value("http.server.requests"));
 	}
 }
