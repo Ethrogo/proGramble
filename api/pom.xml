@@ -63,6 +63,11 @@
 			<artifactId>postgresql</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-csv</artifactId>
+			<version>1.10.0</version>
+		</dependency>
+		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<scope>runtime</scope>
@@ -76,6 +81,28 @@
 	</dependencies>
 
 	<build>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+			</resource>
+			<resource>
+				<directory>../MLB/data/artifacts/latest</directory>
+				<includes>
+					<include>historical_lines.csv</include>
+				</includes>
+				<targetPath>bootstrap/mlb</targetPath>
+				<filtering>false</filtering>
+			</resource>
+			<resource>
+				<directory>../MLB/data/tracking</directory>
+				<includes>
+					<include>pitcher_k_shadow_predictions.csv</include>
+					<include>official_picks_history.csv</include>
+				</includes>
+				<targetPath>bootstrap/mlb</targetPath>
+				<filtering>false</filtering>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

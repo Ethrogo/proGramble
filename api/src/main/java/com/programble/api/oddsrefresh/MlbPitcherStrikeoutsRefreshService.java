@@ -1,7 +1,6 @@
 package com.programble.api.oddsrefresh;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -24,19 +23,25 @@ public class MlbPitcherStrikeoutsRefreshService {
 	private final OddsApiClient oddsApiClient;
 	private final MlbScheduleClient mlbScheduleClient;
 	private final OddsRefreshRepository repository;
+	private final MlbSportsDataRefreshService sportsDataRefreshService;
 
 	public MlbPitcherStrikeoutsRefreshService(
 			OddsApiClient oddsApiClient,
 			MlbScheduleClient mlbScheduleClient,
-			OddsRefreshRepository repository
+			OddsRefreshRepository repository,
+			MlbSportsDataRefreshService sportsDataRefreshService
 	) {
 		this.oddsApiClient = oddsApiClient;
 		this.mlbScheduleClient = mlbScheduleClient;
 		this.repository = repository;
+		this.sportsDataRefreshService = sportsDataRefreshService;
 	}
 
 	public BackgroundJobResult refresh() {
+		BackgroundJobResult baselineSportsData = this.sportsDataRefreshService.refresh();
 		List<OddsApiClient.MlbPitcherStrikeoutEvent> oddsEvents = this.oddsApiClient.fetchMlbPitcherStrikeoutEvents();
+		MlbSportsDataRefreshService.ScheduleRefreshSummary oddsEventScheduleRefresh =
+				this.sportsDataRefreshService.ensureScheduleForOddsEvents(oddsEvents);
 		Map<LocalDate, List<MlbScheduleClient.MlbScheduledGame>> schedulesByDate = new HashMap<>();
 
 		int matchedEvents = 0;
@@ -88,7 +93,7 @@ public class MlbPitcherStrikeoutsRefreshService {
 						|| offer.americanPrice() == null
 						|| !hasText(offer.pitcherName())
 						|| !hasText(offer.side())
-						|| !isSupportedSide(offer.side())) {
+						|| !PitcherStrikeoutOfferSupport.isSupportedSide(offer.side())) {
 					continue;
 				}
 
@@ -127,7 +132,7 @@ public class MlbPitcherStrikeoutsRefreshService {
 				);
 				participantKeysTouched.add(matchedEvent.eventId() + "|" + playerId);
 
-				String normalizedSide = normalizeSide(offer.side());
+				String normalizedSide = PitcherStrikeoutOfferSupport.normalizeSide(offer.side());
 				String sourceOfferId = buildSourceOfferId(
 						oddsEvent.sourceEventId(),
 						externalRef,
@@ -143,8 +148,8 @@ public class MlbPitcherStrikeoutsRefreshService {
 						eventParticipantId,
 						offer.line(),
 						offer.americanPrice(),
-						toDecimalPrice(offer.americanPrice()),
-						buildSelectionLabel(pitcher.fullName(), normalizedSide, offer.line()),
+						PitcherStrikeoutOfferSupport.toDecimalPrice(offer.americanPrice()),
+						PitcherStrikeoutOfferSupport.buildSelectionLabel(pitcher.fullName(), normalizedSide, offer.line()),
 						normalizedSide.toUpperCase(Locale.US),
 						"PROP",
 						offer.availableAt() == null ? OffsetDateTime.now() : offer.availableAt(),
@@ -166,22 +171,29 @@ public class MlbPitcherStrikeoutsRefreshService {
 			}
 		}
 
-		Map<String, Object> details = Map.of(
-				"marketKey", MARKET_KEY,
-				"eventsExamined", oddsEvents.size(),
-				"matchedEvents", matchedEvents,
-				"unmatchedEvents", unmatchedEvents,
-				"unmatchedPitchers", unmatchedPitchers,
-				"sportsbooksTouched", sportsbookIdsTouched.size(),
-				"playersUpserted", playerRefsTouched.size(),
-				"participantsEnsured", participantKeysTouched.size(),
-				"offersUpserted", offersUpserted,
-				"offersRemoved", offersRemoved
-		);
+		Map<String, Object> details = new java.util.LinkedHashMap<>();
+		details.put("marketKey", MARKET_KEY);
+		details.put("eventsExamined", oddsEvents.size());
+		details.put("matchedEvents", matchedEvents);
+		details.put("unmatchedEvents", unmatchedEvents);
+		details.put("unmatchedPitchers", unmatchedPitchers);
+		details.put("sportsbooksTouched", sportsbookIdsTouched.size());
+		details.put("playersUpserted", playerRefsTouched.size());
+		details.put("participantsEnsured", participantKeysTouched.size());
+		details.put("offersUpserted", offersUpserted);
+		details.put("offersRemoved", offersRemoved);
+		details.put("bootstrapSportsData", baselineSportsData.details());
+		details.put("oddsEventSchedule", Map.of(
+				"datesRequested", oddsEventScheduleRefresh.datesRequested(),
+				"datesFetched", oddsEventScheduleRefresh.datesFetched(),
+				"gamesProcessed", oddsEventScheduleRefresh.gamesProcessed(),
+				"teamsTouched", oddsEventScheduleRefresh.teamsTouched(),
+				"probablePitchersEnsured", oddsEventScheduleRefresh.probablePitchersEnsured()
+		));
 
 		return new BackgroundJobResult(
 				"MLB pitcher strikeout odds refresh completed",
-				details
+				Map.copyOf(details)
 		);
 	}
 
@@ -193,8 +205,8 @@ public class MlbPitcherStrikeoutsRefreshService {
 		String normalizedHome = normalizeName(homeTeam);
 		String normalizedAway = normalizeName(awayTeam);
 		return scheduleGames.stream()
-				.filter(game -> normalizeName(game.homeTeam()).equals(normalizedHome))
-				.filter(game -> normalizeName(game.awayTeam()).equals(normalizedAway))
+				.filter(game -> game.homeTeam() != null && normalizeName(game.homeTeam().fullName()).equals(normalizedHome))
+				.filter(game -> game.awayTeam() != null && normalizeName(game.awayTeam().fullName()).equals(normalizedAway))
 				.findFirst();
 	}
 
@@ -220,24 +232,6 @@ public class MlbPitcherStrikeoutsRefreshService {
 		return Optional.empty();
 	}
 
-	private static BigDecimal toDecimalPrice(Integer americanPrice) {
-		if (americanPrice == null || americanPrice == 0) {
-			return null;
-		}
-		BigDecimal result;
-		if (americanPrice > 0) {
-			result = BigDecimal.ONE.add(BigDecimal.valueOf(americanPrice).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
-		}
-		else {
-			result = BigDecimal.ONE.add(BigDecimal.valueOf(100).divide(BigDecimal.valueOf(Math.abs(americanPrice)), 4, RoundingMode.HALF_UP));
-		}
-		return result.setScale(4, RoundingMode.HALF_UP);
-	}
-
-	private static String buildSelectionLabel(String pitcherName, String side, BigDecimal line) {
-		return pitcherName + " " + capitalize(side) + " " + line.stripTrailingZeros().toPlainString() + " Strikeouts";
-	}
-
 	private static String buildSourceOfferId(
 			String eventSourceId,
 			String externalRef,
@@ -257,10 +251,6 @@ public class MlbPitcherStrikeoutsRefreshService {
 		);
 	}
 
-	private static String normalizeSide(String side) {
-		return side == null ? "" : side.trim().toLowerCase(Locale.US);
-	}
-
 	private static String normalizeName(String value) {
 		return value == null ? "" : Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
 				.replaceAll("\\p{M}", "")
@@ -273,18 +263,6 @@ public class MlbPitcherStrikeoutsRefreshService {
 
 	private static boolean hasText(String value) {
 		return value != null && !value.isBlank();
-	}
-
-	private static boolean isSupportedSide(String side) {
-		String normalized = normalizeSide(side);
-		return "over".equals(normalized) || "under".equals(normalized);
-	}
-
-	private static String capitalize(String value) {
-		if (value == null || value.isBlank()) {
-			return "";
-		}
-		return value.substring(0, 1).toUpperCase(Locale.US) + value.substring(1).toLowerCase(Locale.US);
 	}
 
 	private record ResolvedPitcher(

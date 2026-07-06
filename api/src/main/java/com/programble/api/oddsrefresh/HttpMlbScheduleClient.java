@@ -1,10 +1,12 @@
 package com.programble.api.oddsrefresh;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.programble.api.config.MlbStatsApiProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.ResponseEntity;
@@ -46,10 +48,17 @@ public class HttpMlbScheduleClient implements MlbScheduleClient {
 				continue;
 			}
 			for (ScheduleGame game : dateBlock.games()) {
+				if (game.teams() == null || game.teams().home() == null || game.teams().away() == null) {
+					continue;
+				}
 				games.add(new MlbScheduledGame(
 						String.valueOf(game.gamePk()),
-						game.teams().home().team().name(),
-						game.teams().away().team().name(),
+						game.gameDate(),
+						game.gameType(),
+						mapStatus(game.status()),
+						mapVenue(game.venue()),
+						mapTeam(game.teams().home().team()),
+						mapTeam(game.teams().away().team()),
 						mapPitcher(game.teams().home().probablePitcher()),
 						mapPitcher(game.teams().away().probablePitcher())
 				));
@@ -64,6 +73,46 @@ public class HttpMlbScheduleClient implements MlbScheduleClient {
 			return null;
 		}
 		return new ScheduledPitcher(pitcher.id(), pitcher.fullName());
+	}
+
+	private static ScheduledTeam mapTeam(ScheduleTeam team) {
+		if (team == null || team.id() == null || team.name() == null) {
+			return null;
+		}
+		String abbreviation = team.abbreviation() == null ? MlbTeamMappings.canonicalCode(team.name()) : MlbTeamMappings.canonicalCode(team.abbreviation());
+		return new ScheduledTeam(
+				team.id(),
+				team.name(),
+				abbreviation,
+				team.locationName()
+		);
+	}
+
+	private static ScheduledVenue mapVenue(ScheduleVenue venue) {
+		if (venue == null) {
+			return new ScheduledVenue(null, null, null);
+		}
+		return new ScheduledVenue(
+				venue.name(),
+				venue.location() == null ? null : venue.location().city(),
+				venue.location() == null ? null : venue.location().countryCode()
+		);
+	}
+
+	private static String mapStatus(ScheduleStatus status) {
+		if (status == null) {
+			return "SCHEDULED";
+		}
+		String abstractState = status.abstractGameState();
+		if (abstractState == null) {
+			return "SCHEDULED";
+		}
+		return switch (abstractState.trim().toLowerCase()) {
+			case "preview", "scheduled", "pre-game" -> "SCHEDULED";
+			case "live", "in progress", "manager challenge", "delayed" -> "IN_PROGRESS";
+			case "final", "game over" -> "FINAL";
+			default -> abstractState.trim().toUpperCase().replace(' ', '_');
+		};
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -81,6 +130,11 @@ public class HttpMlbScheduleClient implements MlbScheduleClient {
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	private record ScheduleGame(
 			Integer gamePk,
+			@JsonProperty("gameDate")
+			OffsetDateTime gameDate,
+			String gameType,
+			ScheduleStatus status,
+			ScheduleVenue venue,
 			ScheduleTeams teams
 	) {
 	}
@@ -101,7 +155,30 @@ public class HttpMlbScheduleClient implements MlbScheduleClient {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	private record ScheduleTeam(
+			Long id,
+			String abbreviation,
+			String locationName,
 			String name
+	) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	private record ScheduleStatus(
+			String abstractGameState
+	) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	private record ScheduleVenue(
+			String name,
+			ScheduleVenueLocation location
+	) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	private record ScheduleVenueLocation(
+			String city,
+			String countryCode
 	) {
 	}
 

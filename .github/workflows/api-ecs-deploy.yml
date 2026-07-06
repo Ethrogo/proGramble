@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - "api/**"
+      - "MLB/data/artifacts/latest/historical_lines.csv"
+      - "MLB/data/tracking/pitcher_k_shadow_predictions.csv"
+      - "MLB/data/tracking/official_picks_history.csv"
       - ".aws/api-task-definition.json"
       - ".github/workflows/api-ecs-deploy.yml"
   workflow_dispatch:
@@ -77,7 +80,7 @@ jobs:
       - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
-          context: api
+          context: .
           file: api/Dockerfile
           push: true
           tags: |

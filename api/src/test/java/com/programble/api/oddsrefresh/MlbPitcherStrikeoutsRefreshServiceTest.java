@@ -2,12 +2,14 @@ package com.programble.api.oddsrefresh;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.any;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.programble.api.jobs.BackgroundJobResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,8 +36,11 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 	@MockBean
 	private MlbScheduleClient mlbScheduleClient;
 
+	@MockBean
+	private MlbTrackedOfferBackfillService trackedOfferBackfillService;
+
 	@BeforeEach
-	void seedCatalog() {
+	void clearCatalog() {
 		this.jdbcTemplate.execute("delete from offers");
 		this.jdbcTemplate.execute("delete from event_participants");
 		this.jdbcTemplate.execute("delete from markets");
@@ -48,44 +53,16 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		this.jdbcTemplate.execute("delete from competitions");
 		this.jdbcTemplate.execute("delete from sports");
 
-		this.jdbcTemplate.update(
-				"insert into sports (id, code, slug, name, is_active) values (?, ?, ?, ?, ?)",
-				1L, "MLB", "mlb", "Major League Baseball", true
+		given(this.trackedOfferBackfillService.loadTrackedOffers()).willReturn(
+				new MlbTrackedOfferBackfillService.TrackedOfferDataset(List.of(), Set.of(), 0, 0, 0)
 		);
-		this.jdbcTemplate.update(
-				"insert into competitions (id, sport_id, code, slug, name, competition_type, is_active) values (?, ?, ?, ?, ?, ?, ?)",
-				11L, 1L, "MLB", "mlb", "MLB Regular Season", "TEAM", true
-		);
-		this.jdbcTemplate.update(
-				"insert into teams (id, sport_id, slug, code, short_name, full_name, is_active) values (?, ?, ?, ?, ?, ?, ?)",
-				101L, 1L, "boston-red-sox", "BOS", "BOS", "Boston Red Sox", true
-		);
-		this.jdbcTemplate.update(
-				"insert into teams (id, sport_id, slug, code, short_name, full_name, is_active) values (?, ?, ?, ?, ?, ?, ?)",
-				102L, 1L, "new-york-yankees", "NYY", "NYY", "New York Yankees", true
-		);
-		this.jdbcTemplate.update(
-				"""
-				insert into events (
-				    id, sport_id, competition_id, slug, external_ref, event_type, status, season_label, round_label,
-				    scheduled_start, start_time_confirmed, venue_name, venue_city, venue_country_code
-				) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				""",
-				1001L, 1L, 11L, "red-sox-yankees-2026-06-13", "mlb-20260613-bos-nyy", "GAME", "SCHEDULED", "2026", "Regular Season",
-				"2026-06-13T23:10:00Z", true, "Fenway Park", "Boston", "US"
-		);
-		this.jdbcTemplate.update(
-				"insert into event_participants (id, event_id, team_id, role_code, sort_order, is_home, is_away) values (?, ?, ?, ?, ?, ?, ?)",
-				9001L, 1001L, 101L, "HOME", 1, true, false
-		);
-		this.jdbcTemplate.update(
-				"insert into event_participants (id, event_id, team_id, role_code, sort_order, is_home, is_away) values (?, ?, ?, ?, ?, ?, ?)",
-				9002L, 1001L, 102L, "AWAY", 2, false, true
+		given(this.trackedOfferBackfillService.backfill(any())).willReturn(
+				new MlbTrackedOfferBackfillService.TrackedOfferBackfillSummary(0, 0, 0, 0)
 		);
 	}
 
 	@Test
-	void refreshesAndUpsertsPitcherStrikeoutOffers() {
+	void ingestsScheduleDataThenUpsertsPitcherStrikeoutOffers() {
 		given(this.oddsApiClient.fetchMlbPitcherStrikeoutEvents()).willReturn(List.of(
 				new OddsApiClient.MlbPitcherStrikeoutEvent(
 						"odds-event-1",
@@ -133,8 +110,12 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		given(this.mlbScheduleClient.fetchGames(LocalDate.of(2026, 6, 13))).willReturn(List.of(
 				new MlbScheduleClient.MlbScheduledGame(
 						"12345",
-						"Boston Red Sox",
-						"New York Yankees",
+						OffsetDateTime.parse("2026-06-13T23:10:00Z"),
+						"R",
+						"SCHEDULED",
+						new MlbScheduleClient.ScheduledVenue("Fenway Park", "Boston", "US"),
+						new MlbScheduleClient.ScheduledTeam(111L, "Boston Red Sox", "BOS", "Boston"),
+						new MlbScheduleClient.ScheduledTeam(147L, "New York Yankees", "NYY", "New York"),
 						new MlbScheduleClient.ScheduledPitcher(555L, "Garrett Crochet"),
 						new MlbScheduleClient.ScheduledPitcher(777L, "Max Fried")
 				)
@@ -155,13 +136,16 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 				"offersUpserted", 3
 		));
 
+		assertThat(count("select count(*) from sports where code = 'MLB'")).isEqualTo(1);
+		assertThat(count("select count(*) from competitions where code = 'MLB'")).isEqualTo(1);
+		assertThat(count("select count(*) from teams where code in ('BOS', 'NYY')")).isEqualTo(2);
+		assertThat(count("select count(*) from events where external_ref = 'mlb_stats_api_game:12345'")).isEqualTo(1);
 		assertThat(count("select count(*) from sportsbooks")).isEqualTo(2);
 		assertThat(count("select count(*) from markets where code = 'PITCHER_STRIKEOUTS'")).isEqualTo(1);
 		assertThat(count("select count(*) from players where external_ref = 'mlbam_player:555'")).isEqualTo(1);
-		assertThat(count("select count(*) from event_participants where event_id = 1001 and player_id is not null")).isEqualTo(1);
-		assertThat(count("select count(*) from offers where event_id = 1001")).isEqualTo(3);
-		assertThat(count("select count(*) from offers where side_code = 'OVER'")).isEqualTo(2);
-		assertThat(count("select count(*) from offers where side_code = 'UNDER'")).isEqualTo(1);
+		assertThat(count("select count(*) from event_participants where team_id is not null")).isEqualTo(2);
+		assertThat(count("select count(*) from event_participants where player_id is not null")).isEqualTo(2);
+		assertThat(count("select count(*) from offers")).isEqualTo(3);
 	}
 
 	@Test
@@ -214,8 +198,12 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		given(this.mlbScheduleClient.fetchGames(LocalDate.of(2026, 6, 13))).willReturn(List.of(
 				new MlbScheduleClient.MlbScheduledGame(
 						"12345",
-						"Boston Red Sox",
-						"New York Yankees",
+						OffsetDateTime.parse("2026-06-13T23:10:00Z"),
+						"R",
+						"SCHEDULED",
+						new MlbScheduleClient.ScheduledVenue("Fenway Park", "Boston", "US"),
+						new MlbScheduleClient.ScheduledTeam(111L, "Boston Red Sox", "BOS", "Boston"),
+						new MlbScheduleClient.ScheduledTeam(147L, "New York Yankees", "NYY", "New York"),
 						new MlbScheduleClient.ScheduledPitcher(555L, "Garrett Crochet"),
 						new MlbScheduleClient.ScheduledPitcher(777L, "Max Fried")
 				)
@@ -225,10 +213,10 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		BackgroundJobResult result = this.refreshService.refresh();
 
 		assertThat(result.details()).containsEntry("offersRemoved", 1);
-		assertThat(count("select count(*) from offers where event_id = 1001")).isEqualTo(1);
+		assertThat(count("select count(*) from offers")).isEqualTo(1);
 		assertThat(count("select count(*) from offers where side_code = 'UNDER'")).isZero();
 		assertThat(singleInteger(
-				"select price_american from offers where event_id = 1001 and side_code = 'OVER'"
+				"select price_american from offers where side_code = 'OVER'"
 		)).isEqualTo(-125);
 	}
 
