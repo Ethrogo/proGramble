@@ -27,7 +27,7 @@ public class OddsRefreshJob implements BackgroundJob {
 
 	@Override
 	public String description() {
-		return "Fetches MLB pitcher strikeout props, resolves scheduled probable pitchers, and upserts sportsbooks, markets, participants, and offers.";
+		return "Refreshes MLB schedule data as needed, backfills tracked historical offer data, and then upserts live pitcher strikeout sportsbooks, participants, and offers.";
 	}
 
 	@Override

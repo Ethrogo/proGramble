@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 
+import { ApiConnectivityCard } from "../../components/api-connectivity-card";
 import { PageHero } from "../../components/page-hero";
 import { SectionCard } from "../../components/section-card";
 
@@ -63,6 +64,10 @@ export default function AboutPage() {
             <li>A strong public surface makes it easier to earn trust and grow an audience.</li>
           </ul>
         </div>
+      </section>
+
+      <section className="page-block">
+        <ApiConnectivityCard />
       </section>
     </>
   );
