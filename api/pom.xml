@@ -86,6 +86,14 @@
 				<directory>src/main/resources</directory>
 			</resource>
 			<resource>
+				<directory>../MLB/data/artifacts/latest</directory>
+				<includes>
+					<include>historical_lines.csv</include>
+				</includes>
+				<targetPath>bootstrap/mlb</targetPath>
+				<filtering>false</filtering>
+			</resource>
+			<resource>
 				<directory>../MLB/data/tracking</directory>
 				<includes>
 					<include>pitcher_k_shadow_predictions.csv</include>
