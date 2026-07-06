@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - "api/**"
-      - "MLB/data/artifacts/latest/historical_lines.csv"
       - "MLB/data/tracking/pitcher_k_shadow_predictions.csv"
       - "MLB/data/tracking/official_picks_history.csv"
       - ".aws/api-task-definition.json"

@@ -31,7 +31,6 @@ public class MlbTrackedOfferBackfillService {
 	private static final Logger log = LoggerFactory.getLogger(MlbTrackedOfferBackfillService.class);
 
 	private static final String MARKET_KEY = "pitcher_strikeouts";
-	private static final Resource HISTORICAL_LINES_RESOURCE = new ClassPathResource("bootstrap/mlb/historical_lines.csv");
 	private static final Resource SHADOW_PREDICTIONS_RESOURCE = new ClassPathResource("bootstrap/mlb/pitcher_k_shadow_predictions.csv");
 	private static final Resource OFFICIAL_PICKS_HISTORY_RESOURCE = new ClassPathResource("bootstrap/mlb/official_picks_history.csv");
 	private static final CSVFormat CSV = CSVFormat.DEFAULT.builder()
@@ -155,7 +154,6 @@ public class MlbTrackedOfferBackfillService {
 
 	private TrackedOfferDataset parseTrackedOffers() {
 		try {
-			Map<String, HistoricalMetadata> metadataByKey = new LinkedHashMap<>();
 			Map<String, TrackedOfferSeed> offersBySourceId = new LinkedHashMap<>();
 			LocalDate today = LocalDate.now(MlbTime.EASTERN_ZONE);
 
@@ -168,37 +166,17 @@ public class MlbTrackedOfferBackfillService {
 				shadowRows++;
 				TrackedOfferSeed seed = offer.get();
 				offersBySourceId.put(seed.sourceOfferId(), seed);
-				metadataByKey.put(metadataKey(
-						seed.gameDate(),
-						seed.trackedEventId(),
-						seed.playerExternalRef(),
-						normalizeName(recordValue(record, "participant_name_norm")),
-						seed.sportsbookKey(),
-						seed.sideCode(),
-						seed.lineValue()
-				), new HistoricalMetadata(seed.teamCode(), seed.opponentCode(), seed.playerExternalRef(), seed.playerDisplayName()));
 			}
 
 			int officialRows = 0;
 			for (CSVRecord record : readCsv(OFFICIAL_PICKS_HISTORY_RESOURCE)) {
-				Optional<HistoricalMetadataEntry> metadata = officialPicksMetadata(record, today);
-				if (metadata.isEmpty()) {
-					continue;
-				}
-				officialRows++;
-				HistoricalMetadataEntry entry = metadata.get();
-				metadataByKey.putIfAbsent(entry.key(), entry.metadata());
-			}
-
-			int historicalRows = 0;
-			for (CSVRecord record : readCsv(HISTORICAL_LINES_RESOURCE)) {
-				Optional<TrackedOfferSeed> offer = historicalOffer(record, metadataByKey, today);
+				Optional<TrackedOfferSeed> offer = officialPickOffer(record, today);
 				if (offer.isEmpty()) {
 					continue;
 				}
-				historicalRows++;
+				officialRows++;
 				TrackedOfferSeed seed = offer.get();
-				offersBySourceId.put(seed.sourceOfferId(), seed);
+				offersBySourceId.putIfAbsent(seed.sourceOfferId(), seed);
 			}
 
 			List<TrackedOfferSeed> offers = List.copyOf(offersBySourceId.values());
@@ -208,7 +186,6 @@ public class MlbTrackedOfferBackfillService {
 					offers,
 					Set.copyOf(dates),
 					shadowRows,
-					historicalRows,
 					officialRows
 			);
 		}
@@ -265,7 +242,7 @@ public class MlbTrackedOfferBackfillService {
 		));
 	}
 
-	private Optional<HistoricalMetadataEntry> officialPicksMetadata(CSVRecord record, LocalDate today) {
+	private Optional<TrackedOfferSeed> officialPickOffer(CSVRecord record, LocalDate today) {
 		String marketKey = recordValue(record, "market_key");
 		String sport = recordValue(record, "sport");
 		LocalDate gameDate = parseLocalDate(recordValue(record, "game_date"));
@@ -280,79 +257,37 @@ public class MlbTrackedOfferBackfillService {
 		String teamCode = MlbTeamMappings.canonicalCode(recordValue(record, "team"));
 		String opponentCode = MlbTeamMappings.canonicalCode(recordValue(record, "opponent"));
 		String trackedEventId = recordValue(record, "event_id");
-		String sportsbookKey = normalizeCode(recordValue(record, "bookmaker_key"));
+		String sportsbookKey = normalizeCode(nonBlank(recordValue(record, "bookmaker_key"), recordValue(record, "book")));
 		String sideCode = PitcherStrikeoutOfferSupport.normalizeSide(recordValue(record, "pick_side"));
 		BigDecimal lineValue = parseBigDecimal(recordValue(record, "line"));
 		String playerExternalRef = normalizePlayerRef(recordValue(record, "participant_join_key"), recordValue(record, "participant_source_id"), recordValue(record, "participant_source_id_type"));
 		String playerName = toDisplayName(recordValue(record, "player_name"));
+		Integer americanPrice = parseInteger(nonBlank(recordValue(record, "price"), recordValue(record, "odds")));
 
 		if (teamCode.isBlank()
 				|| opponentCode.isBlank()
 				|| trackedEventId.isBlank()
 				|| sportsbookKey.isBlank()
 				|| lineValue == null
-				|| !PitcherStrikeoutOfferSupport.isSupportedSide(sideCode)) {
-			return Optional.empty();
-		}
-
-		return Optional.of(new HistoricalMetadataEntry(
-				metadataKey(gameDate, trackedEventId, playerExternalRef, normalizeName(playerName), sportsbookKey, sideCode, lineValue),
-				new HistoricalMetadata(teamCode, opponentCode, playerExternalRef, playerName)
-		));
-	}
-
-	private Optional<TrackedOfferSeed> historicalOffer(
-			CSVRecord record,
-			Map<String, HistoricalMetadata> metadataByKey,
-			LocalDate today
-	) {
-		if (!"MLB".equalsIgnoreCase(recordValue(record, "sport"))
-				|| !MARKET_KEY.equalsIgnoreCase(recordValue(record, "market_key"))) {
-			return Optional.empty();
-		}
-
-		LocalDate gameDate = parseLocalDate(recordValue(record, "game_date"));
-		if (gameDate == null || !gameDate.isBefore(today)) {
-			return Optional.empty();
-		}
-
-		String sportsbookKey = normalizeCode(recordValue(record, "bookmaker_key"));
-		String sideCode = PitcherStrikeoutOfferSupport.normalizeSide(nonBlank(recordValue(record, "side_norm"), recordValue(record, "side")));
-		BigDecimal lineValue = parseBigDecimal(recordValue(record, "line"));
-		Integer americanPrice = parseInteger(recordValue(record, "price"));
-		String trackedEventId = recordValue(record, "event_id");
-		String playerExternalRef = normalizePlayerRef(recordValue(record, "participant_source_key"), recordValue(record, "participant_source_id"), recordValue(record, "participant_source_id_type"));
-		String playerName = toDisplayName(nonBlank(recordValue(record, "participant_name"), recordValue(record, "player_name")));
-
-		if (sportsbookKey.isBlank()
-				|| trackedEventId.isBlank()
-				|| lineValue == null
 				|| americanPrice == null
 				|| !PitcherStrikeoutOfferSupport.isSupportedSide(sideCode)) {
-			return Optional.empty();
-		}
-
-		HistoricalMetadata metadata = metadataByKey.get(
-				metadataKey(gameDate, trackedEventId, playerExternalRef, normalizeName(nonBlank(recordValue(record, "participant_name_norm"), recordValue(record, "player_name_norm"))), sportsbookKey, sideCode, lineValue)
-		);
-		if (metadata == null) {
 			return Optional.empty();
 		}
 
 		return Optional.of(new TrackedOfferSeed(
 				gameDate,
 				trackedEventId,
-				metadata.teamCode(),
-				metadata.opponentCode(),
-				metadata.playerExternalRef() == null ? playerExternalRef : metadata.playerExternalRef(),
-				metadata.playerDisplayName() == null || metadata.playerDisplayName().isBlank() ? playerName : metadata.playerDisplayName(),
+				teamCode,
+				opponentCode,
+				playerExternalRef,
+				playerName,
 				sportsbookKey,
-				nonBlank(recordValue(record, "bookmaker"), sportsbookKey),
+				nonBlank(recordValue(record, "book"), sportsbookKey),
 				sideCode,
 				lineValue,
 				americanPrice,
-				parseOffsetDateTime(nonBlank(recordValue(record, "pulled_at"), recordValue(record, "commence_time"))),
-				buildTrackedSourceOfferId(gameDate, trackedEventId, metadata.playerExternalRef() == null ? playerExternalRef : metadata.playerExternalRef(), normalizeName(playerName), sportsbookKey, sideCode, lineValue)
+				null,
+				buildTrackedSourceOfferId(gameDate, trackedEventId, playerExternalRef, normalizeName(playerName), sportsbookKey, sideCode, lineValue)
 		));
 	}
 
@@ -366,27 +301,6 @@ public class MlbTrackedOfferBackfillService {
 		     CSVParser parser = CSV.parse(reader)) {
 			return parser.getRecords();
 		}
-	}
-
-	private static String metadataKey(
-			LocalDate gameDate,
-			String trackedEventId,
-			String playerExternalRef,
-			String playerNameNorm,
-			String sportsbookKey,
-			String sideCode,
-			BigDecimal lineValue
-	) {
-		String participantKey = playerExternalRef == null || playerExternalRef.isBlank() ? playerNameNorm : playerExternalRef;
-		return String.join(
-				"|",
-				gameDate.toString(),
-				blankSafe(trackedEventId),
-				blankSafe(participantKey),
-				normalizeCode(sportsbookKey),
-				PitcherStrikeoutOfferSupport.normalizeSide(sideCode),
-				lineValue.stripTrailingZeros().toPlainString()
-		);
 	}
 
 	private static String buildTrackedSourceOfferId(
@@ -536,7 +450,6 @@ public class MlbTrackedOfferBackfillService {
 			List<TrackedOfferSeed> offers,
 			Set<LocalDate> dates,
 			int shadowRowsLoaded,
-			int historicalRowsLoaded,
 			int officialRowsLoaded
 	) {
 		public int totalOffers() {
@@ -566,20 +479,6 @@ public class MlbTrackedOfferBackfillService {
 			Integer americanPrice,
 			OffsetDateTime availableAt,
 			String sourceOfferId
-	) {
-	}
-
-	private record HistoricalMetadata(
-			String teamCode,
-			String opponentCode,
-			String playerExternalRef,
-			String playerDisplayName
-	) {
-	}
-
-	private record HistoricalMetadataEntry(
-			String key,
-			HistoricalMetadata metadata
 	) {
 	}
 }

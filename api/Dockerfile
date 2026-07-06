@@ -13,7 +13,6 @@ RUN ./mvnw -B -DskipTests dependency:go-offline
 WORKDIR /workspace
 
 COPY api/src/ api/src/
-COPY MLB/data/artifacts/latest/historical_lines.csv MLB/data/artifacts/latest/historical_lines.csv
 COPY MLB/data/tracking/pitcher_k_shadow_predictions.csv MLB/data/tracking/pitcher_k_shadow_predictions.csv
 COPY MLB/data/tracking/official_picks_history.csv MLB/data/tracking/official_picks_history.csv
 

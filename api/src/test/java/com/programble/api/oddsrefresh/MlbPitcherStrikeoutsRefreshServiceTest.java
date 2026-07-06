@@ -54,7 +54,7 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		this.jdbcTemplate.execute("delete from sports");
 
 		given(this.trackedOfferBackfillService.loadTrackedOffers()).willReturn(
-				new MlbTrackedOfferBackfillService.TrackedOfferDataset(List.of(), Set.of(), 0, 0, 0)
+				new MlbTrackedOfferBackfillService.TrackedOfferDataset(List.of(), Set.of(), 0, 0)
 		);
 		given(this.trackedOfferBackfillService.backfill(any())).willReturn(
 				new MlbTrackedOfferBackfillService.TrackedOfferBackfillSummary(0, 0, 0, 0)
