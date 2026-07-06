@@ -158,7 +158,8 @@ venv.bak/
 .local-jdks/
 .local-jdks/**/*.zip
 MLB/data/artifacts/_staging/
-MLB/data/artifacts/latest/
+MLB/data/artifacts/latest/*
+!MLB/data/artifacts/latest/historical_lines.csv
 MLB/tmp/
 MLB/data/artifacts/previous/
 MLB/data/inputs/starters/today_starters.csv
