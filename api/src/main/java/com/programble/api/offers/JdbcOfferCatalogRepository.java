@@ -257,20 +257,20 @@ public class JdbcOfferCatalogRepository implements OfferCatalogRepository {
 		);
 	}
 
-	private static ProgrambleOffer mapOffer(ResultSet resultSet) throws SQLException {
-		Long eventParticipantId = (Long) resultSet.getObject("event_participant_id");
+	static ProgrambleOffer mapOffer(ResultSet resultSet) throws SQLException {
+		Long eventParticipantId = getNullableLong(resultSet, "event_participant_id");
 		OfferParticipantDescriptor participant = null;
 
 		if (eventParticipantId != null) {
 			participant = new OfferParticipantDescriptor(
 					eventParticipantId,
-					(Long) resultSet.getObject("team_id"),
-					(Long) resultSet.getObject("player_id"),
+					getNullableLong(resultSet, "team_id"),
+					getNullableLong(resultSet, "player_id"),
 					resultSet.getString("participant_type"),
 					resultSet.getString("role_code"),
 					resultSet.getString("participant_display_name"),
 					resultSet.getString("participant_short_name"),
-					(Integer) resultSet.getObject("sort_order"),
+					getNullableInteger(resultSet, "sort_order"),
 					(Boolean) resultSet.getObject("is_home"),
 					(Boolean) resultSet.getObject("is_away")
 			);
@@ -333,5 +333,15 @@ public class JdbcOfferCatalogRepository implements OfferCatalogRepository {
 				resultSet.getObject("available_at", java.time.OffsetDateTime.class),
 				resultSet.getBoolean("is_live")
 		);
+	}
+
+	private static Long getNullableLong(ResultSet resultSet, String columnName) throws SQLException {
+		Number value = (Number) resultSet.getObject(columnName);
+		return value == null ? null : value.longValue();
+	}
+
+	private static Integer getNullableInteger(ResultSet resultSet, String columnName) throws SQLException {
+		Number value = (Number) resultSet.getObject(columnName);
+		return value == null ? null : value.intValue();
 	}
 }
