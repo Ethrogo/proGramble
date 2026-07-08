@@ -6,6 +6,8 @@ import java.util.List;
 
 public interface OddsApiClient {
 
+	boolean isConfigured();
+
 	List<MlbPitcherStrikeoutEvent> fetchMlbPitcherStrikeoutEvents();
 
 	record MlbPitcherStrikeoutEvent(

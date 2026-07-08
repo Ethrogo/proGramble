@@ -100,11 +100,12 @@ Current behavior:
 
 The current `refresh-odds` implementation:
 
-- fetches MLB events and pitcher strikeout markets from The Odds API
+- fetches MLB events and pitcher strikeout markets from The Odds API when `PROGRAMBLE_ODDS_API_KEY` or `ODDS_API_KEY` is configured
+- otherwise falls back to the committed daily-card tracking artifacts in `MLB/data/tracking/` and uses those offer prices as the current stubbed sportsbook values
 - resolves probable starters through the MLB Stats API
 - matches against existing `events` rows by sport, date, and full home/away team names
 - upserts `sportsbooks`, a global `PITCHER_STRIKEOUTS` market, `players`, pitcher `event_participants`, and `offers`
-- removes stale offers that disappeared from the same sportsbook for the same event and market
+- removes stale offers that disappeared from the same sportsbook for the same event and market on the live Odds API path
 
 This keeps the external trigger surface stable while replacing one placeholder job with a real write path.
 
