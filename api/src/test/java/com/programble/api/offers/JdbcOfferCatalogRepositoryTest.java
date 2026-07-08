@@ -19,7 +19,6 @@ class JdbcOfferCatalogRepositoryTest {
 		ResultSet resultSet = mock(ResultSet.class);
 		OffsetDateTime scheduledStart = OffsetDateTime.parse("2026-07-06T23:05:00Z");
 		OffsetDateTime availableAt = OffsetDateTime.parse("2026-07-06T20:15:00Z");
-patched the most likely PostgreSQL-only failure point in the offer mapper by removing the remaining unsafe JDBC getObject() numeric casts in [JdbcOfferCatalogRepository.java](/C:/ProGramble/proGramble/api/src/main/java/com/programble/api/offers/JdbcOfferCatalogRepository.java) and [JdbcEventCatalogRepository.java](/C:/ProGramble/proGramble/api/src/main/java/com/programble/api/events/JdbcEventCatalogRepository.java), and added a regression test in [JdbcOfferCatalogRepositoryTest.java](/C:/ProGramble/proGramble/api/src/test/java/com/programble/api/offers/JdbcOfferCatalogRepositoryTest.java)
 		when(resultSet.getLong("offer_id")).thenReturn(7001L);
 		when(resultSet.getLong("event_id")).thenReturn(405L);
 		when(resultSet.getLong("sport_id")).thenReturn(1L);
