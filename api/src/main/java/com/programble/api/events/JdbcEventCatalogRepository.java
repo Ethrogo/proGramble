@@ -208,8 +208,8 @@ public class JdbcEventCatalogRepository implements EventCatalogRepository {
 								resultSet.getString("role_code"),
 								resultSet.getString("display_name"),
 								resultSet.getString("short_name"),
-								(Integer) resultSet.getObject("seed_value"),
-								(Integer) resultSet.getObject("sort_order"),
+								getNullableInteger(resultSet, "seed_value"),
+								getNullableInteger(resultSet, "sort_order"),
 								(Boolean) resultSet.getObject("is_home"),
 								(Boolean) resultSet.getObject("is_away")
 						)
@@ -260,6 +260,11 @@ public class JdbcEventCatalogRepository implements EventCatalogRepository {
 
 	private static String normalize(String value) {
 		return value == null ? "" : value.trim().toLowerCase(Locale.US);
+	}
+
+	private static Integer getNullableInteger(ResultSet resultSet, String columnName) throws SQLException {
+		Number value = (Number) resultSet.getObject(columnName);
+		return value == null ? null : value.intValue();
 	}
 
 	private record EventBaseRow(

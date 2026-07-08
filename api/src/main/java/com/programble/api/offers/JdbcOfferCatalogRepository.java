@@ -325,7 +325,7 @@ public class JdbcOfferCatalogRepository implements OfferCatalogRepository {
 				),
 				participant,
 				resultSet.getBigDecimal("line_value"),
-				(Integer) resultSet.getObject("price_american"),
+				getNullableInteger(resultSet, "price_american"),
 				resultSet.getBigDecimal("price_decimal"),
 				resultSet.getString("selection_label"),
 				resultSet.getString("side_code"),
