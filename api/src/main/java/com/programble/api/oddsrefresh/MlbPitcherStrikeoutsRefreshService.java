@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,21 +26,28 @@ public class MlbPitcherStrikeoutsRefreshService {
 	private final MlbScheduleClient mlbScheduleClient;
 	private final OddsRefreshRepository repository;
 	private final MlbSportsDataRefreshService sportsDataRefreshService;
+	private final MlbTrackedOfferBackfillService trackedOfferBackfillService;
 
 	public MlbPitcherStrikeoutsRefreshService(
 			OddsApiClient oddsApiClient,
 			MlbScheduleClient mlbScheduleClient,
 			OddsRefreshRepository repository,
-			MlbSportsDataRefreshService sportsDataRefreshService
+			MlbSportsDataRefreshService sportsDataRefreshService,
+			MlbTrackedOfferBackfillService trackedOfferBackfillService
 	) {
 		this.oddsApiClient = oddsApiClient;
 		this.mlbScheduleClient = mlbScheduleClient;
 		this.repository = repository;
 		this.sportsDataRefreshService = sportsDataRefreshService;
+		this.trackedOfferBackfillService = trackedOfferBackfillService;
 	}
 
 	public BackgroundJobResult refresh() {
 		BackgroundJobResult baselineSportsData = this.sportsDataRefreshService.refresh();
+		if (!this.oddsApiClient.isConfigured()) {
+			return refreshFromTrackedArtifacts(baselineSportsData);
+		}
+
 		List<OddsApiClient.MlbPitcherStrikeoutEvent> oddsEvents = this.oddsApiClient.fetchMlbPitcherStrikeoutEvents();
 		MlbSportsDataRefreshService.ScheduleRefreshSummary oddsEventScheduleRefresh =
 				this.sportsDataRefreshService.ensureScheduleForOddsEvents(oddsEvents);
@@ -173,6 +182,8 @@ public class MlbPitcherStrikeoutsRefreshService {
 
 		Map<String, Object> details = new java.util.LinkedHashMap<>();
 		details.put("marketKey", MARKET_KEY);
+		details.put("sourceMode", "live_odds_api");
+		details.put("liveOddsConfigured", true);
 		details.put("eventsExamined", oddsEvents.size());
 		details.put("matchedEvents", matchedEvents);
 		details.put("unmatchedEvents", unmatchedEvents);
@@ -189,6 +200,40 @@ public class MlbPitcherStrikeoutsRefreshService {
 				"gamesProcessed", oddsEventScheduleRefresh.gamesProcessed(),
 				"teamsTouched", oddsEventScheduleRefresh.teamsTouched(),
 				"probablePitchersEnsured", oddsEventScheduleRefresh.probablePitchersEnsured()
+		));
+
+		return new BackgroundJobResult(
+				"MLB pitcher strikeout odds refresh completed",
+				Map.copyOf(details)
+		);
+	}
+
+	private BackgroundJobResult refreshFromTrackedArtifacts(BackgroundJobResult baselineSportsData) {
+		MlbTrackedOfferBackfillService.TrackedOfferDataset trackedDataset = this.trackedOfferBackfillService.loadUpcomingTrackedOffers();
+		Set<LocalDate> trackedDates = new LinkedHashSet<>(trackedDataset.dates());
+		MlbSportsDataRefreshService.ScheduleRefreshSummary trackedScheduleRefresh = this.sportsDataRefreshService.ensureScheduleForDates(trackedDates);
+		MlbTrackedOfferBackfillService.TrackedOfferBackfillSummary backfillSummary =
+				this.trackedOfferBackfillService.backfill(trackedDataset);
+
+		Map<String, Object> details = new LinkedHashMap<>();
+		details.put("marketKey", MARKET_KEY);
+		details.put("sourceMode", "tracked_artifacts");
+		details.put("liveOddsConfigured", false);
+		details.put("eventsExamined", trackedDataset.totalOffers());
+		details.put("trackedDatesExamined", trackedDataset.dates().size());
+		details.put("offersUpserted", backfillSummary.offersImported());
+		details.put("offersSkipped", backfillSummary.offersSkipped());
+		details.put("sportsbooksTouched", backfillSummary.sportsbooksTouched());
+		details.put("playersUpserted", backfillSummary.playersTouched());
+		details.put("trackedOfferRowsLoaded", trackedDataset.totalOffers());
+		details.put("trackedOfferDates", trackedDataset.dates().size());
+		details.put("bootstrapSportsData", baselineSportsData.details());
+		details.put("trackedArtifactSchedule", Map.of(
+				"datesRequested", trackedScheduleRefresh.datesRequested(),
+				"datesFetched", trackedScheduleRefresh.datesFetched(),
+				"gamesProcessed", trackedScheduleRefresh.gamesProcessed(),
+				"teamsTouched", trackedScheduleRefresh.teamsTouched(),
+				"probablePitchersEnsured", trackedScheduleRefresh.probablePitchersEnsured()
 		));
 
 		return new BackgroundJobResult(

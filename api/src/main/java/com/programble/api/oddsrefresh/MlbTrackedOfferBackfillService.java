@@ -42,24 +42,19 @@ public class MlbTrackedOfferBackfillService {
 			.build();
 
 	private final OddsRefreshRepository repository;
-	private volatile TrackedOfferDataset cachedDataset;
+	private volatile TrackedOfferDataset historicalDataset;
+	private volatile TrackedOfferDataset upcomingDataset;
 
 	public MlbTrackedOfferBackfillService(OddsRefreshRepository repository) {
 		this.repository = repository;
 	}
 
 	public TrackedOfferDataset loadTrackedOffers() {
-		TrackedOfferDataset dataset = this.cachedDataset;
-		if (dataset != null) {
-			return dataset;
-		}
+		return loadDataset(TrackedOfferWindow.HISTORICAL_ONLY);
+	}
 
-		synchronized (this) {
-			if (this.cachedDataset == null) {
-				this.cachedDataset = parseTrackedOffers();
-			}
-			return this.cachedDataset;
-		}
+	public TrackedOfferDataset loadUpcomingTrackedOffers() {
+		return loadDataset(TrackedOfferWindow.TODAY_AND_FUTURE);
 	}
 
 	public TrackedOfferBackfillSummary backfill(TrackedOfferDataset dataset) {
@@ -153,7 +148,30 @@ public class MlbTrackedOfferBackfillService {
 		);
 	}
 
-	private TrackedOfferDataset parseTrackedOffers() {
+	private TrackedOfferDataset loadDataset(TrackedOfferWindow window) {
+		TrackedOfferDataset cached = window == TrackedOfferWindow.HISTORICAL_ONLY
+				? this.historicalDataset
+				: this.upcomingDataset;
+		if (cached != null) {
+			return cached;
+		}
+
+		synchronized (this) {
+			if (window == TrackedOfferWindow.HISTORICAL_ONLY) {
+				if (this.historicalDataset == null) {
+					this.historicalDataset = parseTrackedOffers(window);
+				}
+				return this.historicalDataset;
+			}
+
+			if (this.upcomingDataset == null) {
+				this.upcomingDataset = parseTrackedOffers(window);
+			}
+			return this.upcomingDataset;
+		}
+	}
+
+	private TrackedOfferDataset parseTrackedOffers(TrackedOfferWindow window) {
 		try {
 			Map<String, HistoricalMetadata> metadataByKey = new LinkedHashMap<>();
 			Map<String, TrackedOfferSeed> offersBySourceId = new LinkedHashMap<>();
@@ -161,7 +179,7 @@ public class MlbTrackedOfferBackfillService {
 
 			int shadowRows = 0;
 			for (CSVRecord record : readCsv(SHADOW_PREDICTIONS_RESOURCE)) {
-				Optional<TrackedOfferSeed> offer = shadowOffer(record, today);
+				Optional<TrackedOfferSeed> offer = shadowOffer(record, today, window);
 				if (offer.isEmpty()) {
 					continue;
 				}
@@ -181,7 +199,7 @@ public class MlbTrackedOfferBackfillService {
 
 			int officialRows = 0;
 			for (CSVRecord record : readCsv(OFFICIAL_PICKS_HISTORY_RESOURCE)) {
-				Optional<TrackedOfferSeed> offer = officialPickOffer(record, today);
+				Optional<TrackedOfferSeed> offer = officialPickOffer(record, today, window);
 				if (offer.isEmpty()) {
 					continue;
 				}
@@ -204,7 +222,7 @@ public class MlbTrackedOfferBackfillService {
 
 			int historicalRows = 0;
 			for (CSVRecord record : readCsv(HISTORICAL_LINES_RESOURCE)) {
-				Optional<TrackedOfferSeed> offer = historicalOffer(record, metadataByKey, today);
+				Optional<TrackedOfferSeed> offer = historicalOffer(record, metadataByKey, today, window);
 				if (offer.isEmpty()) {
 					continue;
 				}
@@ -229,14 +247,14 @@ public class MlbTrackedOfferBackfillService {
 		}
 	}
 
-	private Optional<TrackedOfferSeed> shadowOffer(CSVRecord record, LocalDate today) {
+	private Optional<TrackedOfferSeed> shadowOffer(CSVRecord record, LocalDate today, TrackedOfferWindow window) {
 		if (!"MLB".equalsIgnoreCase(recordValue(record, "sport"))
 				|| !MARKET_KEY.equalsIgnoreCase(recordValue(record, "market_key"))) {
 			return Optional.empty();
 		}
 
 		LocalDate gameDate = parseLocalDate(recordValue(record, "game_date"));
-		if (gameDate == null || !gameDate.isBefore(today)) {
+		if (gameDate == null || !window.includes(gameDate, today)) {
 			return Optional.empty();
 		}
 
@@ -277,7 +295,7 @@ public class MlbTrackedOfferBackfillService {
 		));
 	}
 
-	private Optional<TrackedOfferSeed> officialPickOffer(CSVRecord record, LocalDate today) {
+	private Optional<TrackedOfferSeed> officialPickOffer(CSVRecord record, LocalDate today, TrackedOfferWindow window) {
 		String marketKey = recordValue(record, "market_key");
 		String sport = recordValue(record, "sport");
 		LocalDate gameDate = parseLocalDate(recordValue(record, "game_date"));
@@ -285,7 +303,7 @@ public class MlbTrackedOfferBackfillService {
 		if (!"MLB".equalsIgnoreCase(sport)
 				|| !MARKET_KEY.equalsIgnoreCase(marketKey)
 				|| gameDate == null
-				|| !gameDate.isBefore(today)) {
+				|| !window.includes(gameDate, today)) {
 			return Optional.empty();
 		}
 
@@ -329,7 +347,8 @@ public class MlbTrackedOfferBackfillService {
 	private Optional<TrackedOfferSeed> historicalOffer(
 			CSVRecord record,
 			Map<String, HistoricalMetadata> metadataByKey,
-			LocalDate today
+			LocalDate today,
+			TrackedOfferWindow window
 	) {
 		if (!"MLB".equalsIgnoreCase(recordValue(record, "sport"))
 				|| !MARKET_KEY.equalsIgnoreCase(recordValue(record, "market_key"))) {
@@ -337,7 +356,7 @@ public class MlbTrackedOfferBackfillService {
 		}
 
 		LocalDate gameDate = parseLocalDate(recordValue(record, "game_date"));
-		if (gameDate == null || !gameDate.isBefore(today)) {
+		if (gameDate == null || !window.includes(gameDate, today)) {
 			return Optional.empty();
 		}
 
@@ -617,5 +636,22 @@ public class MlbTrackedOfferBackfillService {
 			String playerExternalRef,
 			String playerDisplayName
 	) {
+	}
+
+	private enum TrackedOfferWindow {
+		HISTORICAL_ONLY {
+			@Override
+			boolean includes(LocalDate gameDate, LocalDate today) {
+				return gameDate.isBefore(today);
+			}
+		},
+		TODAY_AND_FUTURE {
+			@Override
+			boolean includes(LocalDate gameDate, LocalDate today) {
+				return !gameDate.isBefore(today);
+			}
+		};
+
+		abstract boolean includes(LocalDate gameDate, LocalDate today);
 	}
 }

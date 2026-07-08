@@ -56,9 +56,13 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		given(this.trackedOfferBackfillService.loadTrackedOffers()).willReturn(
 				new MlbTrackedOfferBackfillService.TrackedOfferDataset(List.of(), Set.of(), 0, 0, 0)
 		);
+		given(this.trackedOfferBackfillService.loadUpcomingTrackedOffers()).willReturn(
+				new MlbTrackedOfferBackfillService.TrackedOfferDataset(List.of(), Set.of(), 0, 0, 0)
+		);
 		given(this.trackedOfferBackfillService.backfill(any())).willReturn(
 				new MlbTrackedOfferBackfillService.TrackedOfferBackfillSummary(0, 0, 0, 0)
 		);
+		given(this.oddsApiClient.isConfigured()).willReturn(true);
 	}
 
 	@Test
@@ -218,6 +222,54 @@ class MlbPitcherStrikeoutsRefreshServiceTest {
 		assertThat(singleInteger(
 				"select price_american from offers where side_code = 'OVER'"
 		)).isEqualTo(-125);
+	}
+
+	@Test
+	void fallsBackToTrackedArtifactsWhenLiveOddsAreUnavailable() {
+		given(this.oddsApiClient.isConfigured()).willReturn(false);
+		given(this.trackedOfferBackfillService.loadUpcomingTrackedOffers()).willReturn(
+				new MlbTrackedOfferBackfillService.TrackedOfferDataset(List.of(
+						new MlbTrackedOfferBackfillService.TrackedOfferSeed(
+								LocalDate.of(2026, 6, 13),
+								"tracked-event-1",
+								"BOS",
+								"NYY",
+								"mlbam_player:555",
+								"Garrett Crochet",
+								"draftkings",
+								"DraftKings",
+								"over",
+								new BigDecimal("6.5"),
+								-120,
+								OffsetDateTime.parse("2026-06-13T18:00:00Z"),
+								"tracked|pitcher_strikeouts|2026-06-13|tracked-event-1|mlbam_player:555|draftkings|over|6.5"
+						)
+				), Set.of(LocalDate.of(2026, 6, 13)), 1, 0, 0)
+		);
+		given(this.trackedOfferBackfillService.backfill(any())).willReturn(
+				new MlbTrackedOfferBackfillService.TrackedOfferBackfillSummary(1, 0, 1, 1)
+		);
+		given(this.mlbScheduleClient.fetchGames(LocalDate.of(2026, 6, 13))).willReturn(List.of(
+				new MlbScheduleClient.MlbScheduledGame(
+						"12345",
+						OffsetDateTime.parse("2026-06-13T23:10:00Z"),
+						"R",
+						"SCHEDULED",
+						new MlbScheduleClient.ScheduledVenue("Fenway Park", "Boston", "US"),
+						new MlbScheduleClient.ScheduledTeam(111L, "Boston Red Sox", "BOS", "Boston"),
+						new MlbScheduleClient.ScheduledTeam(147L, "New York Yankees", "NYY", "New York"),
+						new MlbScheduleClient.ScheduledPitcher(555L, "Garrett Crochet"),
+						new MlbScheduleClient.ScheduledPitcher(777L, "Max Fried")
+				)
+		));
+
+		BackgroundJobResult result = this.refreshService.refresh();
+
+		assertThat(result.summary()).isEqualTo("MLB pitcher strikeout odds refresh completed");
+		assertThat(result.details()).containsEntry("sourceMode", "tracked_artifacts");
+		assertThat(result.details()).containsEntry("liveOddsConfigured", false);
+		assertThat(result.details()).containsEntry("offersUpserted", 1);
+		assertThat(result.details()).containsEntry("trackedOfferRowsLoaded", 1);
 	}
 
 	private long count(String sql) {

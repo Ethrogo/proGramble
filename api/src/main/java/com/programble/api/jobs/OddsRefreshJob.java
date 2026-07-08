@@ -27,7 +27,7 @@ public class OddsRefreshJob implements BackgroundJob {
 
 	@Override
 	public String description() {
-		return "Refreshes MLB schedule data as needed, backfills tracked historical offer data, and then upserts live pitcher strikeout sportsbooks, participants, and offers.";
+		return "Refreshes MLB pitcher strikeout offers from live Odds API data when configured, or falls back to tracked daily-card artifacts when live odds are unavailable.";
 	}
 
 	@Override

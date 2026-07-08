@@ -31,6 +31,11 @@ public class HttpOddsApiClient implements OddsApiClient {
 	}
 
 	@Override
+	public boolean isConfigured() {
+		return StringUtils.hasText(this.properties.apiKey());
+	}
+
+	@Override
 	public List<MlbPitcherStrikeoutEvent> fetchMlbPitcherStrikeoutEvents() {
 		String apiKey = this.properties.apiKey();
 		if (!StringUtils.hasText(apiKey)) {
