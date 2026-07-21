@@ -7,29 +7,29 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 201,
-    "wins": 109,
+    "picks": 204,
+    "wins": 112,
     "losses": 91,
     "pushes": 1,
-    "decisions": 200,
-    "units_risked": 200.0,
-    "units_profit": -3.1056940231760986,
-    "win_rate": 0.545,
-    "roi": -0.015528470115880494,
+    "decisions": 203,
+    "units_risked": 203.0,
+    "units_profit": -0.6904570950715234,
+    "win_rate": 0.5517241379310345,
+    "roi": -0.0034012664781848446,
     "skipped_rows": 12
   },
   "by_book": [
     {
       "book": "DraftKings",
-      "picks": 76,
-      "wins": 43,
+      "picks": 79,
+      "wins": 46,
       "losses": 32,
       "pushes": 1,
-      "decisions": 75,
-      "units_risked": 75.0,
-      "units_profit": 3.952523790778196,
-      "win_rate": 0.5733333333333334,
-      "roi": 0.05270031721037595
+      "decisions": 78,
+      "units_risked": 78.0,
+      "units_profit": 6.367760718882771,
+      "win_rate": 0.5897435897435898,
+      "roi": 0.0816379579343945
     },
     {
       "book": "BetMGM",
