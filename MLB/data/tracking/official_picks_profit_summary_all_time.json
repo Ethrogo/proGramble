@@ -7,16 +7,16 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 286,
-    "wins": 149,
-    "losses": 136,
+    "picks": 289,
+    "wins": 151,
+    "losses": 137,
     "pushes": 1,
-    "decisions": 285,
-    "units_risked": 285.0,
-    "units_profit": -12.62461222591461,
-    "win_rate": 0.5228070175438596,
-    "roi": -0.044296885003209156,
-    "skipped_rows": 13
+    "decisions": 288,
+    "units_risked": 288.0,
+    "units_profit": -11.923711325013713,
+    "win_rate": 0.5243055555555556,
+    "roi": -0.04140177543407539,
+    "skipped_rows": 14
   },
   "by_book": [
     {
@@ -45,15 +45,15 @@
     },
     {
       "book": "FanDuel",
-      "picks": 93,
-      "wins": 45,
-      "losses": 48,
+      "picks": 96,
+      "wins": 47,
+      "losses": 49,
       "pushes": 0,
-      "decisions": 93,
-      "units_risked": 93.0,
-      "units_profit": -11.852765714705864,
-      "win_rate": 0.4838709677419355,
-      "roi": -0.12744909370651467
+      "decisions": 96,
+      "units_risked": 96.0,
+      "units_profit": -11.151864813804963,
+      "win_rate": 0.4895833333333333,
+      "roi": -0.11616525847713503
     }
   ],
   "reproducibility": {
