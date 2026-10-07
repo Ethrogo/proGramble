@@ -7,53 +7,53 @@
   },
   "summary_metrics": {
     "books": 3,
-    "picks": 327,
-    "wins": 168,
-    "losses": 159,
+    "picks": 332,
+    "wins": 170,
+    "losses": 162,
     "pushes": 0,
-    "decisions": 327,
-    "units_risked": 327.0,
-    "units_profit": -14.36149458838426,
-    "win_rate": 0.5137614678899083,
-    "roi": -0.04391894369536471,
-    "skipped_rows": 17
+    "decisions": 332,
+    "units_risked": 332.0,
+    "units_profit": -16.02220887409855,
+    "win_rate": 0.5120481927710844,
+    "roi": -0.048259665283429364,
+    "skipped_rows": 16
   },
   "by_book": [
     {
       "book": "DraftKings",
-      "picks": 136,
+      "picks": 138,
       "wins": 75,
-      "losses": 61,
+      "losses": 63,
       "pushes": 0,
-      "decisions": 136,
-      "units_risked": 136.0,
-      "units_profit": 9.488949647111564,
-      "win_rate": 0.5514705882352942,
-      "roi": 0.06977168858170268
+      "decisions": 138,
+      "units_risked": 138.0,
+      "units_profit": 7.488949647111564,
+      "win_rate": 0.5434782608695652,
+      "roi": 0.05426775106602583
     },
     {
       "book": "FanDuel",
-      "picks": 113,
+      "picks": 114,
       "wins": 57,
-      "losses": 56,
+      "losses": 57,
       "pushes": 0,
-      "decisions": 113,
-      "units_risked": 113.0,
-      "units_profit": -8.059392644383333,
-      "win_rate": 0.504424778761062,
-      "roi": -0.07132205879985251
+      "decisions": 114,
+      "units_risked": 114.0,
+      "units_profit": -9.059392644383333,
+      "win_rate": 0.5,
+      "roi": -0.07946835652967836
     },
     {
       "book": "BetMGM",
-      "picks": 78,
-      "wins": 36,
+      "picks": 80,
+      "wins": 38,
       "losses": 42,
       "pushes": 0,
-      "decisions": 78,
-      "units_risked": 78.0,
-      "units_profit": -15.791051591112488,
-      "win_rate": 0.46153846153846156,
-      "roi": -0.20244937937323704
+      "decisions": 80,
+      "units_risked": 80.0,
+      "units_profit": -14.451765876826775,
+      "win_rate": 0.475,
+      "roi": -0.18064707346033468
     }
   ],
   "reproducibility": {
