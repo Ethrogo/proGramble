@@ -2,29 +2,29 @@
   "summary_views": {
     "all_time": {
       "books": 3,
-      "picks": 388,
-      "wins": 202,
+      "picks": 389,
+      "wins": 203,
       "losses": 185,
       "pushes": 1,
-      "decisions": 387,
-      "units_risked": 387.0,
-      "units_profit": -12.470199126102841,
-      "win_rate": 0.5219638242894057,
-      "roi": -0.03222273675995566,
-      "skipped_rows": 13
+      "decisions": 388,
+      "units_risked": 388.0,
+      "units_profit": -11.785267619253526,
+      "win_rate": 0.5231958762886598,
+      "roi": -0.030374401080550326,
+      "skipped_rows": 12
     },
     "current_regime": {
       "books": 3,
-      "picks": 336,
-      "wins": 173,
+      "picks": 337,
+      "wins": 174,
       "losses": 163,
       "pushes": 0,
-      "decisions": 336,
-      "units_risked": 336.0,
-      "units_profit": -13.643406478888966,
-      "win_rate": 0.5148809523809523,
-      "roi": -0.04060537642526478,
-      "skipped_rows": 13
+      "decisions": 337,
+      "units_risked": 337.0,
+      "units_profit": -12.958474972039653,
+      "win_rate": 0.516320474777448,
+      "roi": -0.03845244798824823,
+      "skipped_rows": 12
     }
   },
   "current_regime_rule": {
@@ -52,15 +52,15 @@
       },
       "run_daily_card": {
         "books": 3,
-        "picks": 357,
-        "wins": 186,
+        "picks": 358,
+        "wins": 187,
         "losses": 171,
         "pushes": 0,
-        "decisions": 357,
-        "units_risked": 357.0,
-        "units_profit": -11.955704030975992,
-        "win_rate": 0.5210084033613446,
-        "roi": -0.0334893670335462,
+        "decisions": 358,
+        "units_risked": 358.0,
+        "units_profit": -11.270772524126677,
+        "win_rate": 0.5223463687150838,
+        "roi": -0.0314826048159963,
         "skipped_rows": 0
       }
     },
@@ -93,15 +93,15 @@
       },
       "pitcher_k_model_v1": {
         "books": 3,
-        "picks": 266,
-        "wins": 137,
+        "picks": 267,
+        "wins": 138,
         "losses": 129,
         "pushes": 0,
-        "decisions": 266,
-        "units_risked": 266.0,
-        "units_profit": -17.590109159724967,
-        "win_rate": 0.5150375939849624,
-        "roi": -0.06612822992377808,
+        "decisions": 267,
+        "units_risked": 267.0,
+        "units_profit": -16.90517765287565,
+        "win_rate": 0.5168539325842697,
+        "roi": -0.06331527210814851,
         "skipped_rows": 0
       },
       "workflow_unversioned": {
@@ -134,15 +134,15 @@
       },
       "mlb_pitcher_props_policy_v1": {
         "books": 3,
-        "picks": 271,
-        "wins": 139,
+        "picks": 272,
+        "wins": 140,
         "losses": 132,
         "pushes": 0,
-        "decisions": 271,
-        "units_risked": 271.0,
-        "units_profit": -19.49936130279325,
-        "win_rate": 0.5129151291512916,
-        "roi": -0.0719533627409345,
+        "decisions": 272,
+        "units_risked": 272.0,
+        "units_profit": -18.814429795943933,
+        "win_rate": 0.5147058823529411,
+        "roi": -0.06917069777920563,
         "skipped_rows": 0
       },
       "mlb_pitcher_walks_ev_policy_v1": {
@@ -175,15 +175,15 @@
     "tracking_regime": {
       "current_workflow": {
         "books": 3,
-        "picks": 336,
-        "wins": 173,
+        "picks": 337,
+        "wins": 174,
         "losses": 163,
         "pushes": 0,
-        "decisions": 336,
-        "units_risked": 336.0,
-        "units_profit": -13.643406478888966,
-        "win_rate": 0.5148809523809523,
-        "roi": -0.04060537642526478,
+        "decisions": 337,
+        "units_risked": 337.0,
+        "units_profit": -12.958474972039653,
+        "win_rate": 0.516320474777448,
+        "roi": -0.03845244798824823,
         "skipped_rows": 0
       },
       "legacy_workflow": {
